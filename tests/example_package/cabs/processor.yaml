@@ -1,0 +1,43 @@
+cabs:
+  example_processor:
+    flavour: python
+    command: (tests.example_package.processor)process
+    info: Process astronomical data with specified parameters.
+    policies:
+      pass_missing_as_none: true
+    inputs:
+      input_file:
+        dtype: File
+        info: Input File containing data
+        required: true
+        policies:
+          positional: true
+      output_dir:
+        dtype: Directory
+        info: Output Directory for results
+        required: false
+        default: ./output
+      threshold:
+        dtype: float
+        info: Threshold value for processing
+        required: false
+        default: 0.5
+      iterations:
+        dtype: int
+        info: Number of iterations
+        required: false
+        default: 10
+      verbose:
+        dtype: bool
+        info: Enable verbose output
+        required: false
+        default: false
+    outputs:
+      log_file:
+        dtype: File
+        info: '{output_dir}/processing.log'
+        required: false
+      output_file:
+        dtype: File
+        info: '{input_file}.processed'
+        required: true
