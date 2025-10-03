@@ -7,6 +7,9 @@ import sys
 from pathlib import Path
 from typing import Any, get_args, get_origin, get_type_hints
 
+from typing_extensions import Annotated
+from typing_extensions import get_origin as get_origin_ext
+
 
 def get_function_from_module(module_path: str) -> tuple[Any, str]:
     """
@@ -22,7 +25,6 @@ def get_function_from_module(module_path: str) -> tuple[Any, str]:
         ImportError: If module cannot be imported
         ValueError: If no decorated function is found
     """
-
     # Add current working directory to Python path if not already there
     # This allows importing modules relative to where the command is run
     cwd = str(Path.cwd())
@@ -85,6 +87,54 @@ def extract_cab_info(func: Any) -> dict[str, Any]:
     return cab_def
 
 
+def _extract_typer_metadata(param_type: Any, default_value: Any) -> tuple[Any, Any, bool, bool]:
+    """
+    Extract Typer metadata from either Annotated type hint or default value.
+
+    Args:
+        param_type: The type hint (may be Annotated)
+        default_value: The default value (may be Typer object)
+
+    Returns:
+        Tuple of (actual_type, typer_metadata, is_argument, is_option)
+    """
+    typer_metadata = None
+    is_argument = False
+    is_option = False
+    actual_type = param_type
+
+    # Check if type hint is Annotated
+    if get_origin_ext(param_type) is Annotated:
+        args = get_args(param_type)
+        if args:
+            actual_type = args[0]  # First arg is the actual type
+            # Look for Typer metadata in the remaining args
+            for metadata in args[1:]:
+                if hasattr(metadata, "__class__"):
+                    class_name = metadata.__class__.__name__
+                    if class_name == "ArgumentInfo":
+                        is_argument = True
+                        typer_metadata = metadata
+                        break
+                    elif class_name == "OptionInfo":
+                        is_option = True
+                        typer_metadata = metadata
+                        break
+
+    # Check default value for Typer metadata (old style)
+    if typer_metadata is None and default_value != inspect.Parameter.empty:
+        if hasattr(default_value, "__class__"):
+            class_name = default_value.__class__.__name__
+            if class_name == "ArgumentInfo":
+                is_argument = True
+                typer_metadata = default_value
+            elif class_name == "OptionInfo":
+                is_option = True
+                typer_metadata = default_value
+
+    return actual_type, typer_metadata, is_argument, is_option
+
+
 def extract_inputs(func: Any) -> dict[str, Any]:
     """
     Extract input schema from function signature.
@@ -96,7 +146,7 @@ def extract_inputs(func: Any) -> dict[str, Any]:
         Dictionary of input parameters
     """
     sig = inspect.signature(func)
-    type_hints = get_type_hints(func)
+    type_hints = get_type_hints(func, include_extras=True)
 
     # Parse docstring for parameter descriptions
     docstring = inspect.getdoc(func) or ""
@@ -111,30 +161,29 @@ def extract_inputs(func: Any) -> dict[str, Any]:
         # Get type hint
         param_type = type_hints.get(param_name, str)
 
+        # Extract Typer metadata from Annotated or default value
+        actual_type, typer_metadata, is_argument, is_option = _extract_typer_metadata(
+            param_type, param.default
+        )
+
         # Get parameter description from docstring
         param_info = param_docs.get(param_name, "")
 
         # Determine dtype
-        dtype = _python_type_to_stimela_dtype(param_type, param_info)
+        dtype = _python_type_to_stimela_dtype(actual_type, param_info)
 
-        # Check if parameter has a default
-        has_default = param.default != inspect.Parameter.empty
-        default_value = param.default if has_default else None
-
-        # Handle Typer-specific defaults
-        is_typer_argument = False
+        # Get default value
         actual_default = None
+        has_default = False
 
-        if has_default:
-            # Check if it's a Typer Argument or Option
-            if hasattr(default_value, "__class__"):
-                class_name = default_value.__class__.__name__
-                if class_name == "ArgumentInfo":
-                    is_typer_argument = True
-                    # Typer Argument with ... means required
-                    actual_default = getattr(default_value, "default", ...)
-                elif class_name == "OptionInfo":
-                    actual_default = getattr(default_value, "default", None)
+        if typer_metadata is not None:
+            # Get default from Typer metadata
+            actual_default = getattr(typer_metadata, "default", ...)
+            has_default = actual_default is not ...
+        elif param.default != inspect.Parameter.empty:
+            # Regular Python default
+            actual_default = param.default
+            has_default = True
 
         # Determine if required
         required = not has_default or actual_default is ...
@@ -151,7 +200,7 @@ def extract_inputs(func: Any) -> dict[str, Any]:
             input_def["default"] = actual_default
 
         # Add policies based on type and Typer decorator
-        policies = _infer_parameter_policies(param_type, param_info, is_typer_argument)
+        policies = _infer_parameter_policies(actual_type, param_info, is_argument)
         if policies:
             input_def["policies"] = policies
 

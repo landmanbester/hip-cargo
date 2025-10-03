@@ -1,0 +1,31 @@
+cabs:
+  example_processor_annotated:
+    flavour: python
+    command: (tests.example_package.processor_annotated)process
+    info: Process astronomical data with specified parameters.
+    policies:
+      pass_missing_as_none: true
+    inputs:
+      input_file:
+        dtype: File
+        info: Input File containing data
+        required: true
+        policies:
+          positional: true
+      output_dir:
+        dtype: Directory
+        info: Output Directory for results
+        required: true
+      threshold:
+        dtype: float
+        info: Threshold value for processing
+        required: true
+      verbose:
+        dtype: bool
+        info: Enable verbose output
+        required: true
+    outputs:
+      output_file:
+        dtype: File
+        info: '{input_file}.processed'
+        required: true
