@@ -3,7 +3,7 @@
 from pathlib import Path
 
 import typer
-
+from hip_cargo.cab_to_function import cab_to_function_cli
 from hip_cargo.introspector import (
     extract_cab_info,
     extract_inputs,
@@ -72,6 +72,52 @@ def generate_cab(
             f"✗ Error: Could not import module '{module}': {e}", fg=typer.colors.RED, err=True
         )
         raise typer.Exit(code=1)
+    except ValueError as e:
+        typer.secho(f"✗ Error: {e}", fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=1)
+    except Exception as e:
+        typer.secho(f"✗ Unexpected error: {e}", fg=typer.colors.RED, err=True)
+        raise typer.Exit(code=1)
+
+
+@app.command()
+def generate_function(
+    cab_file: Path = typer.Argument(
+        ...,
+        help="Path to Stimela cab YAML file",
+    ),
+    output: Path = typer.Option(
+        None,
+        "--output",
+        "-o",
+        help="Output Python file (prints to stdout if not specified)",
+    ),
+):
+    """
+    Generate a Python function from a Stimela cab definition.
+
+    This reverse-engineers a cab YAML file to create a Python function
+    with @stimela_cab decorators. Useful for migrating existing cabs
+    to the hip-cargo pattern.
+    """
+    try:
+        if not cab_file.exists():
+            typer.secho(
+                f"✗ Error: Cab file not found: {cab_file}",
+                fg=typer.colors.RED,
+                err=True,
+            )
+            raise typer.Exit(code=1)
+
+        typer.echo(f"Reading cab definition from: {cab_file}")
+        cab_to_function_cli(cab_file, output)
+
+        if output:
+            typer.secho(
+                f"✓ Successfully generated Python function: {output}",
+                fg=typer.colors.GREEN,
+            )
+
     except ValueError as e:
         typer.secho(f"✗ Error: {e}", fg=typer.colors.RED, err=True)
         raise typer.Exit(code=1)
