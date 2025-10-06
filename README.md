@@ -16,18 +16,16 @@ cd hip-cargo
 uv sync
 ```
 
-## Usage
+## Quick Start
 
 ### 1. Decorate your Python function
 
 ```python
 import typer
 from pathlib import Path
+from typing_extensions import Annotated
 from hip_cargo import stimela_cab, stimela_output
 
-app = typer.Typer()
-
-@app.command()
 @stimela_cab(
     name="my_processor",
     info="Process data files",
@@ -39,17 +37,12 @@ app = typer.Typer()
     required=True,
 )
 def process(
-    input_file: Path = typer.Argument(..., help="Input File to process"),
-    output_dir: Path = typer.Option("./output", help="Output Directory for results"),
-    threshold: float = typer.Option(0.5, help="Threshold value"),
+    input_file: Annotated[Path, typer.Argument(help="Input File to process")],
+    output_dir: Annotated[Path, typer.Option(help="Output Directory for results")] = Path("./output"),
+    threshold: Annotated[float, typer.Option(help="Threshold value")] = 0.5,
 ):
     """
     Process a data file.
-    
-    Args:
-        input_file: Input File to process
-        output_dir: Output Directory for results
-        threshold: Threshold value for processing
     """
     # Your implementation here
     pass
@@ -59,6 +52,197 @@ def process(
 
 ```bash
 cargo generate-cab mypackage.mymodule /path/to/output.yaml
+```
+
+### 3. Generate Python function from existing cab (reverse)
+
+```bash
+cargo generate-function /path/to/existing_cab.yaml -o myfunction.py
+```
+
+## Project Structure for hip-cargo Packages
+
+Packages following the hip-cargo pattern should be structured to enable both lightweight cab definitions and full execution environments:
+
+```
+my-scientific-package/
+├── src/
+│   └── mypackage/
+│       ├── __init__.py
+│       ├── operators/           # Heavy algorithms
+│       │   ├── __init__.py
+│       │   └── core_algorithm.py
+│       ├── workers/             # Original implementations (optional)
+│       └── cli/                 # Lightweight CLI layer
+│           ├── __init__.py      # Main Typer app
+│           ├── process.py       # Individual commands
+│           └── analyze.py
+├── cabs/                        # Generated cab definitions (at root)
+│   ├── __init__.py
+│   ├── process.yaml
+│   └── analyze.yaml
+├── scripts/
+│   └── generate_cabs.py        # Automation script
+├── Dockerfile                   # For containerization
+├── pyproject.toml
+└── README.md
+```
+
+### Key Principles
+
+1. **Separate CLI from implementation**: Keep CLI modules lightweight with lazy imports
+2. **Cabs at root level**: Place generated cab definitions in `cabs/` directory at project root
+3. **Single app, multiple commands**: Use one Typer app that registers all commands
+4. **Lazy imports**: Import heavy dependencies (NumPy, JAX, Dask) only when executing
+
+### Example Structure
+
+**`src/mypackage/cli/__init__.py`:**
+```python
+"""Lightweight CLI for mypackage."""
+
+import typer
+
+app = typer.Typer(
+    name="mypackage",
+    help="Scientific computing package",
+    no_args_is_help=True,
+)
+
+# Register commands
+from mypackage.cli.process import process
+from mypackage.cli.analyze import analyze
+
+app.command(name="process")(process)
+app.command(name="analyze")(analyze)
+
+__all__ = ["app"]
+```
+
+**`src/mypackage/cli/process.py`:**
+```python
+"""Process command - lightweight wrapper."""
+
+from pathlib import Path
+from typing_extensions import Annotated
+import typer
+from hip_cargo import stimela_cab, stimela_output
+
+@stimela_cab(name="mypackage_process", info="Process data")
+@stimela_output(name="output", dtype="File", info="{input_file}.out")
+def process(
+    input_file: Annotated[Path, typer.Argument(help="Input File")],
+    param: Annotated[float, typer.Option(help="Parameter")] = 1.0,
+):
+    """Process data files."""
+    # Lazy import - only loaded when executing
+    from mypackage.operators.core_algorithm import process_data
+    
+    return process_data(input_file, param)
+```
+
+**`pyproject.toml`:**
+```toml
+[project]
+name = "mypackage"
+dependencies = [
+    "typer>=0.12.0",
+    "hip-cargo>=0.1.0",
+]
+
+[project.optional-dependencies]
+# Full scientific stack
+full = [
+    "numpy>=1.24.0",
+    "jax>=0.4.0",
+    # ... heavy dependencies
+]
+
+# For cab definitions only (lightweight)
+cabs = [
+    "hip-cargo>=0.1.0",
+]
+
+[project.scripts]
+mypackage = "mypackage.cli:app"
+```
+
+**`scripts/generate_cabs.py`:**
+```python
+"""Generate all cab definitions."""
+import subprocess
+from pathlib import Path
+
+CLI_MODULES = [
+    "mypackage.cli.process",
+    "mypackage.cli.analyze",
+]
+
+CABS_DIR = Path("cabs")
+CABS_DIR.mkdir(exist_ok=True)
+
+for module in CLI_MODULES:
+    cmd_name = module.split(".")[-1]
+    output = CABS_DIR / f"{cmd_name}.yaml"
+    
+    print(f"Generating {output}...")
+    subprocess.run([
+        "cargo", "generate-cab",
+        module,
+        str(output)
+    ], check=True)
+
+print("✓ All cabs generated")
+```
+
+### Installation Modes
+
+Users can install your package in different ways:
+
+```bash
+# Lightweight (just CLI and cab definitions)
+pip install mypackage
+
+# Full (with all scientific dependencies)
+pip install mypackage[full]
+
+# Development
+pip install -e "mypackage[full,dev]"
+```
+
+### Integration with cult-cargo
+
+For integration with Stimela's cult-cargo:
+
+1. **Make cabs discoverable:**
+```python
+# cabs/__init__.py
+from pathlib import Path
+
+CAB_DIR = Path(__file__).parent
+AVAILABLE_CABS = [p.stem for p in CAB_DIR.glob("*.yml")]
+
+def get_cab_path(name: str) -> Path:
+    """Get path to a cab definition."""
+    return CAB_DIR / f"{name}.yml"
+```
+
+2. **cult-cargo imports lightweight version:**
+```toml
+# In cult-cargo's pyproject.toml
+[tool.poetry.dependencies]
+mypackage = "^1.0.0"  # Not mypackage[full]
+```
+
+3. **Users run with Stimela:**
+```bash
+# Native: requires full installation
+pip install mypackage[full]
+stimela run recipe.yml
+
+# Singularity: uses container (lightweight install sufficient)
+pip install mypackage
+stimela run recipe.yml -S
 ```
 
 ## Type Inference

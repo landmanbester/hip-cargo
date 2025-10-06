@@ -2,7 +2,7 @@
 
 import re
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 import yaml
 
@@ -122,6 +122,7 @@ def load_cab_definition(cab_file: Path) -> dict[str, Any]:
 def generate_parameter_signature(
     param_name: str,
     param_def: dict[str, Any],
+    policies: Optional[dict[str, Any]] = None,
 ) -> str:
     """
     Generate parameter signature for a single parameter using Annotated style.
@@ -141,7 +142,7 @@ def generate_parameter_signature(
     info = extract_info_string(info_raw) if info_raw else ""
     required = param_def.get("required", False)
     default = param_def.get("default")
-    policies = param_def.get("policies", {})
+    policies = param_def.get("policies", policies)
     choices = param_def.get("choices")
 
     # Determine Python type
@@ -187,8 +188,12 @@ def generate_parameter_signature(
     else:
         # Options
         if required:
-            typer_part = f'typer.Option(..., help="{info}")'
-            return f"    {py_param_name}: Annotated[{py_type}, {typer_part}],{choices_comment}"
+            if policies.get("pass_missing_as_none", False):
+                typer_part = f'typer.Option(help="{info}")'
+                return f"    {py_param_name}: Annotated[{py_type} | None, {typer_part}] = None,{choices_comment}"
+            else:
+                typer_part = f'typer.Option(..., help="{info}")'
+                return f"    {py_param_name}: Annotated[{py_type}, {typer_part}],{choices_comment}"
         else:
             # Optional with default - NEVER put None as first arg to typer.Option()
             # The default comes from = value after the annotation
@@ -224,6 +229,7 @@ def generate_function_from_cab(cab_file: Path) -> str:
     else:
         # Generate a reasonable default from cab name
         info = cab_name.replace("_", " ").title()
+    policies = cab_def["policies"]
     inputs = cab_def.get("inputs", {})
     outputs = cab_def.get("outputs", {})
 
@@ -242,10 +248,10 @@ def generate_function_from_cab(cab_file: Path) -> str:
     lines.append("from typing_extensions import Annotated")
     lines.append("from hip_cargo import stimela_cab, stimela_output")
     lines.append("")
-
     lines.append('@stimela_cab(')
     lines.append(f'    name="{cab_name}",')
     lines.append(f'    info="{info}",')
+    lines.append(f'    policies="{policies}",')
     lines.append(')')
 
     # Output decorators
@@ -271,7 +277,7 @@ def generate_function_from_cab(cab_file: Path) -> str:
 
     # Parameters
     for param_name, param_def in inputs.items():
-        param_sig = generate_parameter_signature(param_name, param_def)
+        param_sig = generate_parameter_signature(param_name, param_def, policies=policies)
         lines.append(param_sig)
 
     lines.append("):")
