@@ -190,16 +190,16 @@ def generate_parameter_signature(
             typer_part = f'typer.Option(..., help="{info}")'
             return f"    {py_param_name}: Annotated[{py_type}, {typer_part}],{choices_comment}"
         else:
-            # Optional with default
+            # Optional with default - NEVER put None as first arg to typer.Option()
+            # The default comes from = value after the annotation
+            typer_part = f'typer.Option(help="{info}")'
             if default is not None:
                 default_val = format_default(default)
-                typer_part = f'typer.Option(help="{info}")'
                 return f"    {py_param_name}: Annotated[{py_type}, {typer_part}] = {default_val},{choices_comment}"
             else:
                 # No default provided, use None
-                typer_part = f'typer.Option(None, help="{info}")'
-                # For optional types, might want Optional[type]
-                if not py_type.startswith("Optional"):
+                # For optional types, add | None to type
+                if not py_type.startswith("Optional") and " | None" not in py_type:
                     py_type = f"{py_type} | None"
                 return f"    {py_param_name}: Annotated[{py_type}, {typer_part}] = None,{choices_comment}"
 
@@ -242,11 +242,7 @@ def generate_function_from_cab(cab_file: Path) -> str:
     lines.append("from typing_extensions import Annotated")
     lines.append("from hip_cargo import stimela_cab, stimela_output")
     lines.append("")
-    lines.append("app = typer.Typer()")
-    lines.append("")
 
-    # Decorators
-    lines.append("@app.command()")
     lines.append('@stimela_cab(')
     lines.append(f'    name="{cab_name}",')
     lines.append(f'    info="{info}",')
@@ -297,11 +293,6 @@ def generate_function_from_cab(cab_file: Path) -> str:
     lines.append("    # Lazy import heavy dependencies here")
     lines.append("    # from pfb.operators import my_function")
     lines.append("    pass")
-
-    lines.append("")
-    lines.append("")
-    lines.append('if __name__ == "__main__":')
-    lines.append("    app()")
 
     return "\n".join(lines)
 
