@@ -44,8 +44,6 @@ hip-cargo/
 - **Package Manager**: `uv` (Astral)
 - **Linting/Formatting**: `ruff`
 - **CLI Framework**: `typer`
-- **Testing**: `pytest`
-- **CI/CD**: GitHub Actions
 
 ### Running Tools
 
@@ -56,18 +54,8 @@ uv run ruff format .
 # Check and auto-fix issues
 uv run ruff check . --fix
 
-# Run tests with pytest
-uv run pytest
-
-# Run tests with coverage
-uv run pytest --cov=src/hip_cargo --cov-report=term-missing
-
-# Run specific test file
-uv run pytest tests/test_decorators.py -v
-
-# Run tests by marker
-uv run pytest -m unit
-uv run pytest -m integration
+# Run tests manually
+python tests/test_decorators.py
 ```
 
 ## Coding Standards
@@ -168,8 +156,138 @@ hip-cargo currently supports:
 - Supporting both old-style (`= typer.Option()`) and new-style (`Annotated`) Typer syntax
 - Generating YAML cab definitions with inputs and outputs
 - Multiple `@stimela_output` decorators for multi-output cabs
+- **Reverse generation**: Creating Python function signatures from existing Stimela cab YAML files
+- Automatic sanitization of parameter names (hyphens → underscores)
+- F-string reference sanitization in output definitions
 
-## Future Considerations
+## Tool Architecture
+
+### Core Modules
+
+```
+hip-cargo/
+├── src/hip_cargo/
+│   ├── decorators.py          # @stimela_cab, @stimela_output
+│   ├── introspector.py        # Extract metadata from decorated functions
+│   ├── type_mapper.py         # Python types ↔ Stimela dtypes (embedded in introspector)
+│   ├── yaml_generator.py      # Generate cab YAML from function metadata
+│   ├── cab_to_function.py     # NEW: Generate function from cab YAML (reverse)
+│   └── cli.py                 # Typer CLI with two commands
+└── tests/
+```
+
+### CLI Commands
+
+**`cargo generate-cab`**: Function → YAML cab definition
+```bash
+cargo generate-cab mypackage.module /path/to/cab.yaml
+```
+
+**`cargo generate-function`**: YAML cab → Python function (NEW)
+```bash
+cargo generate-function /path/to/cab.yaml -o function.py
+```
+
+## Target Package Structure
+
+Packages using hip-cargo should follow this structure:
+
+```
+scientific-package/
+├── src/
+│   └── package/
+│       ├── operators/         # Heavy algorithms
+│       ├── workers/          # Original implementations (optional)
+│       └── cli/              # Lightweight CLI wrappers
+│           ├── __init__.py   # Main Typer app, registers commands
+│           └── command.py    # Individual @stimela_cab decorated functions
+├── cabs/                     # Generated cabs at ROOT level (not in src/)
+│   ├── __init__.py
+│   └── *.yaml
+├── scripts/
+│   └── generate_cabs.py      # Automation
+└── pyproject.toml            # Split dependencies: base vs [full]
+```
+
+### Key Patterns
+
+**CLI module structure** (`src/package/cli/__init__.py`):
+```python
+import typer
+
+app = typer.Typer(name="package", help="...", no_args_is_help=True)
+
+from package.cli.command import command_func
+app.command(name="command")(command_func)
+```
+
+**Individual command** (`src/package/cli/command.py`):
+```python
+from typing_extensions import Annotated
+import typer
+from hip_cargo import stimela_cab, stimela_output
+
+@stimela_cab(name="pkg_cmd", info="...")
+@stimela_output(name="output", dtype="File", info="...")
+def command_func(
+    param: Annotated[Type, typer.Option(help="...")] = default,
+):
+    """Command description."""
+    # Lazy import heavy dependencies
+    from package.operators import algorithm
+    return algorithm(param)
+```
+
+**pyproject.toml pattern**:
+```toml
+[project]
+dependencies = ["typer>=0.12.0", "hip-cargo>=0.1.0"]
+
+[project.optional-dependencies]
+full = ["numpy", "jax", ...]  # Heavy scientific stack
+
+[project.scripts]
+package = "package.cli:app"
+```
+
+## Critical Implementation Details
+
+### Typer Option/Argument Syntax (IMPORTANT)
+
+**NEVER** use `None` as a positional argument to `typer.Option()`:
+```python
+# WRONG - causes AttributeError
+param: Annotated[str | None, typer.Option(None, help="...")] = None
+
+# CORRECT
+param: Annotated[str | None, typer.Option(help="...")] = None
+```
+
+**Pattern Summary:**
+- Required: `Annotated[Type, typer.Option(..., help="...")]` (no `= default`)
+- Optional with default: `Annotated[Type, typer.Option(help="...")] = default`
+- Optional None: `Annotated[Type | None, typer.Option(help="...")] = None`
+
+### Parameter Name Sanitization
+
+- Python identifiers cannot contain hyphens
+- All parameter names: hyphens → underscores (`model-name` → `model_name`)
+- F-string references in outputs: `{current.output-filename}` → `{current.output_filename}`
+- This is handled automatically by `cab_to_function.py`
+
+### Lazy Imports Pattern
+
+CLI modules should be lightweight. Import heavy dependencies only when executing:
+
+```python
+def process(...):
+    """Process data."""
+    # Import here, not at top of file
+    from mypackage.operators import heavy_algorithm
+    return heavy_algorithm(...)
+```
+
+This keeps CLI startup fast and allows lightweight installation for cab definitions only.
 
 When adding features, ask:
 1. Is this feature explicitly requested?
@@ -229,37 +347,3 @@ Only proceed if answers align with project philosophy.
 - **Philosophy**: Simple, explicit, lightweight
 
 When in doubt, prefer the simpler solution.
-
-## Continuous Integration
-
-The project uses GitHub Actions for automated testing and quality checks:
-
-### **CI Workflow** (`.github/workflows/ci.yml`)
-- **Code Quality**: Runs `ruff format --check` and `ruff check`
-- **Testing**: Tests against Python 3.10, 3.11, and 3.12
-- **Security**: CodeQL analysis for vulnerability detection
-- **Package Management**: Uses `uv` for fast, reliable dependency management
-
-### **Dependency Management** (`.github/dependabot.yml`)
-- **Weekly Updates**: Automatically creates PRs for dependency updates
-- **Grouped Updates**: Groups related dependencies (dev vs production)
-- **Action Updates**: Keeps GitHub Actions up to date
-
-### **CI Commands**
-All CI operations use `uv` for consistency:
-```bash
-# Install development dependencies
-uv sync --group dev
-
-# Install test dependencies
-uv sync --group test
-
-# Run quality checks (same as CI)
-uv run ruff format --check .
-uv run ruff check .
-
-# Run tests (same as CI)
-uv run pytest -v
-```
-
-The CI pipeline is designed for fast feedback and reliability, typically completing in under 2 minutes.
