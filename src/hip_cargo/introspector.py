@@ -162,9 +162,7 @@ def extract_inputs(func: Any) -> dict[str, Any]:
         param_type = type_hints.get(param_name, str)
 
         # Extract Typer metadata from Annotated or default value
-        actual_type, typer_metadata, is_argument, is_option = _extract_typer_metadata(
-            param_type, param.default
-        )
+        actual_type, typer_metadata, is_argument, is_option = _extract_typer_metadata(param_type, param.default)
 
         # Get parameter description from docstring
         param_info = param_docs.get(param_name, "")
@@ -307,9 +305,7 @@ def _python_type_to_stimela_dtype(python_type: Any, param_info: str) -> str:
         return "List[str]"
 
     # Handle Optional/Union types
-    if origin is type(None) or (
-        hasattr(python_type, "__origin__") and python_type.__origin__ is type(None)
-    ):
+    if origin is type(None) or (hasattr(python_type, "__origin__") and python_type.__origin__ is type(None)):
         return "str"
 
     # Map basic types
@@ -323,9 +319,7 @@ def _python_type_to_stimela_dtype(python_type: Any, param_info: str) -> str:
     return type_map.get(python_type, "str")
 
 
-def _infer_parameter_policies(
-    python_type: Any, param_info: str, is_argument: bool = False
-) -> dict[str, Any]:
+def _infer_parameter_policies(python_type: Any, param_info: str, is_argument: bool = False) -> dict[str, Any]:
     """
     Infer parameter policies from type and info.
 

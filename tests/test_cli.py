@@ -80,9 +80,7 @@ class TestCLI:
         """Test generate-cab command with example module."""
         with tempfile.TemporaryDirectory() as tmpdir:
             output = Path(tmpdir) / "output.yaml"
-            result = runner.invoke(
-                app, ["generate-cab", "tests.example_package.processor", str(output)]
-            )
+            result = runner.invoke(app, ["generate-cab", "tests.example_package.processor", str(output)])
 
             if result.exit_code == 0:
                 assert output.exists()
@@ -123,9 +121,7 @@ class TestCLI:
         """Test generate-cab produces output messages."""
         with tempfile.TemporaryDirectory() as tmpdir:
             output = Path(tmpdir) / "output.yaml"
-            result = runner.invoke(
-                app, ["generate-cab", "tests.example_package.processor", str(output)]
-            )
+            result = runner.invoke(app, ["generate-cab", "tests.example_package.processor", str(output)])
 
             if result.exit_code == 0:
                 # Check that informational messages were printed

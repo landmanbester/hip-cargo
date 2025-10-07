@@ -23,9 +23,7 @@ app = typer.Typer()
 )
 def process(
     input_file: Annotated[Path, typer.Argument(help="Input File containing data")],
-    output_dir: Annotated[Path, typer.Option(help="Output Directory for results")] = Path(
-        "./output"
-    ),
+    output_dir: Annotated[Path, typer.Option(help="Output Directory for results")] = Path("./output"),
     threshold: Annotated[float, typer.Option(help="Threshold value")] = 0.5,
     verbose: Annotated[bool, typer.Option(help="Enable verbose output")] = False,
 ):

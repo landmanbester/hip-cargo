@@ -61,14 +61,10 @@ def multi_output_function():
 
     @stimela_cab(name="multi_processor", info="A processor with multiple outputs")
     @stimela_output(name="output_file", dtype="File", info="{input_file}.processed", required=True)
-    @stimela_output(
-        name="log_file", dtype="File", info="{output_dir}/processing.log", required=False
-    )
+    @stimela_output(name="log_file", dtype="File", info="{output_dir}/processing.log", required=False)
     def process_multi(
         input_file: Annotated[Path, typer.Argument(help="Input File containing data")],
-        output_dir: Annotated[Path, typer.Option(help="Output Directory for results")] = Path(
-            "./output"
-        ),
+        output_dir: Annotated[Path, typer.Option(help="Output Directory for results")] = Path("./output"),
     ):
         """
         Process with multiple outputs.
@@ -90,9 +86,7 @@ class TestDecorators:
         """Test that @stimela_cab adds metadata to function."""
         assert hasattr(sample_function_old_style, "__stimela_cab_config__")
         assert sample_function_old_style.__stimela_cab_config__["name"] == "test_processor"
-        assert (
-            sample_function_old_style.__stimela_cab_config__["info"] == "A test processing function"
-        )
+        assert sample_function_old_style.__stimela_cab_config__["info"] == "A test processing function"
 
     @pytest.mark.unit
     def test_stimela_output_decorator_adds_metadata(self, sample_function_old_style):
