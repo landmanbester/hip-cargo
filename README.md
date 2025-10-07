@@ -1,6 +1,6 @@
 # hip-cargo
 
-Tools for generating Stimela cab definitions from Python functions with type hints.
+A guide to designing self-documenting CLI interfaces using Typer + conversion utilities
 
 ## Installation
 
