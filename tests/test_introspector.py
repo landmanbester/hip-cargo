@@ -102,6 +102,7 @@ class TestParameterExtraction:
     @pytest.mark.unit
     def test_extract_inputs_basic(self):
         """Test extracting inputs from a simple function."""
+
         @stimela_cab(name="test", info="Test")
         def func(
             input_file: Annotated[Path, typer.Argument(help="Input file")],
@@ -124,6 +125,7 @@ class TestParameterExtraction:
     @pytest.mark.unit
     def test_extract_cab_info_basic(self):
         """Test extracting cab info."""
+
         @stimela_cab(name="test_cab", info="Test cab")
         def func():
             """Test function."""
@@ -139,6 +141,7 @@ class TestParameterExtraction:
     @pytest.mark.unit
     def test_extract_outputs_basic(self):
         """Test extracting outputs."""
+
         @stimela_cab(name="test", info="Test")
         @stimela_output(name="result", dtype="File", info="Result file")
         def func():

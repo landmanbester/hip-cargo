@@ -1,7 +1,8 @@
 """CLI application for hip-cargo."""
 
-import typer
 from pathlib import Path
+
+import typer
 
 from hip_cargo.cab_to_function import cab_to_function_cli
 from hip_cargo.introspector import (
@@ -111,6 +112,7 @@ def generate_function(
             f"✓ Successfully generated Python function: {output}",
             fg=typer.colors.GREEN,
         )
+
 
 if __name__ == "__main__":
     app()

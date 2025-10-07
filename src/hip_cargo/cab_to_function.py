@@ -62,11 +62,12 @@ def sanitize_fstring_refs(text: str) -> str:
     Returns:
         String with sanitized references {param_name}
     """
+
     # Find all {something} patterns and replace hyphens with underscores
     def replace_hyphens(match):
         return "{" + match.group(1).replace("-", "_") + "}"
 
-    return re.sub(r'\{([^}]+)\}', replace_hyphens, text)
+    return re.sub(r"\{([^}]+)\}", replace_hyphens, text)
 
 
 def extract_info_string(info: Any) -> str:
@@ -248,11 +249,11 @@ def generate_function_from_cab(cab_file: Path) -> str:
     lines.append("from typing_extensions import Annotated")
     lines.append("from hip_cargo import stimela_cab, stimela_output")
     lines.append("")
-    lines.append('@stimela_cab(')
+    lines.append("@stimela_cab(")
     lines.append(f'    name="{cab_name}",')
     lines.append(f'    info="{info}",')
     lines.append(f'    policies="{policies}",')
-    lines.append(')')
+    lines.append(")")
 
     # Output decorators
     for output_name, output_def in outputs.items():
@@ -265,12 +266,12 @@ def generate_function_from_cab(cab_file: Path) -> str:
         output_info = sanitize_fstring_refs(output_info)
         output_required = output_def.get("required", False)
 
-        lines.append('@stimela_output(')
+        lines.append("@stimela_output(")
         lines.append(f'    name="{py_output_name}",')
         lines.append(f'    dtype="{output_dtype}",')
         lines.append(f'    info="{output_info}",')
-        lines.append(f'    required={output_required},')
-        lines.append(')')
+        lines.append(f"    required={output_required},")
+        lines.append(")")
 
     # Function signature
     lines.append(f"def {func_name}(")
