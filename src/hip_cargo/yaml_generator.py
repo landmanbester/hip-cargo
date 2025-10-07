@@ -63,5 +63,5 @@ def write_cab_yaml(
         output_path.parent.mkdir(parents=True, exist_ok=True)
         with open(output_path, "w") as f:
             f.write(yaml_content)
-    else: # else write to terminal
+    else:  # else write to terminal
         print(yaml_content)

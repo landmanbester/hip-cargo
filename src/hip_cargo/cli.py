@@ -13,7 +13,6 @@ from hip_cargo.introspector import (
     get_function_from_module,
 )
 from hip_cargo.yaml_generator import generate_cab_yaml, write_cab_yaml
-from rich import print
 
 app = typer.Typer(
     name="cargo",
@@ -32,14 +31,18 @@ def callback():
 
 @app.command()
 def generate_cab(
-    module: Annotated[str, typer.Argument(help="Python module path (e.g., package.module)", rich_help_panel="Inputs",)],
+    module: Annotated[
+        str,
+        typer.Argument(
+            help="Python module path (e.g., package.module)",
+            rich_help_panel="Inputs",
+        ),
+    ],
     output: Annotated[
         Path,
-        typer.Argument(
-            help="Output YAML file path (e.g., /path/to/cab.yaml)", rich_help_panel="Outputs"
-        ),
+        typer.Argument(help="Output YAML file path (e.g., /path/to/cab.yaml)", rich_help_panel="Outputs"),
     ] = None,
-    end_message: Annotated[str, typer.Option(hidden=True)] = "✓ Successfully generated cab definition"
+    end_message: Annotated[str, typer.Option(hidden=True)] = "✓ Successfully generated cab definition",
 ):
     """
     Generate a Stimela cab definition from a Python module.
@@ -80,7 +83,10 @@ def generate_cab(
 def generate_function(
     cab_file: Annotated[Path, typer.Argument(help="Path to Stimela cab YAML file", rich_help_panel="Inputs")],
     output: Annotated[
-        Path, typer.Option("--output", "-o", help="Output Python file (prints to stdout if not specified)", rich_help_panel="Outputs")
+        Path,
+        typer.Option(
+            "--output", "-o", help="Output Python file (prints to stdout if not specified)", rich_help_panel="Outputs"
+        ),
     ] = None,
 ):
     """
