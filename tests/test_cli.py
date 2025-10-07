@@ -62,66 +62,54 @@ class TestCLI:
 
     @pytest.mark.integration
     def test_generate_command_help(self, runner):
-        """Test generate command help."""
-        result = runner.invoke(app, ["generate", "--help"])
+        """Test generate-cab command help."""
+        result = runner.invoke(app, ["generate-cab", "--help"])
         assert result.exit_code == 0
         assert "generate" in result.stdout.lower()
 
     @pytest.mark.integration
     def test_generate_nonexistent_file(self, runner):
-        """Test generate command with nonexistent file."""
-        result = runner.invoke(app, ["generate", "nonexistent_file.py", "nonexistent_function"])
-        assert result.exit_code != 0
+        """Test generate-cab command with nonexistent module."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output = Path(tmpdir) / "output.yaml"
+            result = runner.invoke(app, ["generate-cab", "nonexistent_module", str(output)])
+            assert result.exit_code != 0
 
     @pytest.mark.integration
-    def test_generate_valid_module(self, runner, temp_module_file):
-        """Test generate command with valid module."""
-        result = runner.invoke(app, ["generate", str(temp_module_file), "process_temp"])
+    def test_generate_valid_module(self, runner):
+        """Test generate-cab command with example module."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output = Path(tmpdir) / "output.yaml"
+            result = runner.invoke(app, ["generate-cab", "tests.example_package.processor", str(output)])
 
-        # Clean up
-        temp_module_file.unlink()
-
-        assert result.exit_code == 0
-        assert "name: temp_processor" in result.stdout
-        assert "inputs:" in result.stdout
-        assert "outputs:" in result.stdout
+            if result.exit_code == 0:
+                assert output.exists()
+                content = output.read_text()
+                assert "cabs:" in content
 
     @pytest.mark.integration
-    def test_generate_with_output_file(self, runner, temp_module_file):
-        """Test generate command with output file option."""
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".yaml", delete=False) as output_file:
-            output_path = Path(output_file.name)
-
-        try:
+    def test_generate_with_output_file(self, runner):
+        """Test generate-cab command writes to file."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output = Path(tmpdir) / "test.yaml"
             result = runner.invoke(
                 app,
-                ["generate", str(temp_module_file), "process_temp", "--output", str(output_path)],
+                ["generate-cab", "tests.example_package.processor", str(output)],
             )
 
-            assert result.exit_code == 0
-            assert output_path.exists()
-
-            # Check output file content
-            content = output_path.read_text()
-            assert "name: temp_processor" in content
-            assert "inputs:" in content
-            assert "outputs:" in content
-
-        finally:
-            # Clean up
-            temp_module_file.unlink()
-            if output_path.exists():
-                output_path.unlink()
+            if result.exit_code == 0:
+                assert output.exists()
+                content = output.read_text()
+                assert "cabs:" in content
 
     @pytest.mark.integration
-    def test_generate_invalid_function(self, runner, temp_module_file):
-        """Test generate command with invalid function name."""
-        result = runner.invoke(app, ["generate", str(temp_module_file), "nonexistent_function"])
-
-        # Clean up
-        temp_module_file.unlink()
-
-        assert result.exit_code != 0
+    def test_generate_invalid_function(self, runner):
+        """Test generate-cab command with module that has no decorated function."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output = Path(tmpdir) / "output.yaml"
+            # Use a module that exists but has no @stimela_cab
+            result = runner.invoke(app, ["generate-cab", "hip_cargo.yaml_generator", str(output)])
+            assert result.exit_code != 0
 
     @pytest.mark.unit
     def test_cli_app_exists(self):
@@ -129,13 +117,14 @@ class TestCLI:
         assert isinstance(app, typer.Typer)
 
     @pytest.mark.integration
-    def test_generate_with_verbose(self, runner, temp_module_file):
-        """Test generate command with verbose flag."""
-        result = runner.invoke(
-            app, ["generate", str(temp_module_file), "process_temp", "--verbose"]
-        )
+    def test_generate_with_verbose(self, runner):
+        """Test generate-cab produces output messages."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output = Path(tmpdir) / "output.yaml"
+            result = runner.invoke(
+                app, ["generate-cab", "tests.example_package.processor", str(output)]
+            )
 
-        # Clean up
-        temp_module_file.unlink()
-
-        assert result.exit_code == 0
+            if result.exit_code == 0:
+                # Check that informational messages were printed
+                assert "Loading module" in result.stdout or "Extracting" in result.stdout

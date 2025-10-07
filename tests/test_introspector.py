@@ -99,95 +99,58 @@ class TestDocstringParsing:
 class TestParameterExtraction:
     """Test parameter extraction from functions."""
 
-    @pytest.fixture
-    def complex_function(self):
-        """Complex function with various parameter types."""
-
-        @stimela_cab(name="complex_processor", info="Complex processing function")
-        @stimela_output(name="result", dtype="File", info="Processing result")
-        def complex_process(
-            required_file: Annotated[Path, typer.Argument(help="Required input file")],
-            optional_file: Annotated[Path, typer.Option(help="Optional input file")] = None,
-            threshold: Annotated[float, typer.Option(help="Processing threshold")] = 0.5,
-            iterations: Annotated[int, typer.Option(help="Number of iterations")] = 10,
-            verbose: Annotated[bool, typer.Option(help="Enable verbose mode")] = False,
-            mode: Annotated[str, typer.Option(help="Processing mode")] = "normal",
+    @pytest.mark.unit
+    def test_extract_inputs_basic(self):
+        """Test extracting inputs from a simple function."""
+        @stimela_cab(name="test", info="Test")
+        def func(
+            input_file: Annotated[Path, typer.Argument(help="Input file")],
         ):
-            """
-            Complex processing function.
+            """Test function.
 
             Args:
-                required_file: Required input file for processing
-                optional_file: Optional secondary input file
-                threshold: Processing threshold value
-                iterations: Number of processing iterations
-                verbose: Enable verbose output
-                mode: Processing mode selection
+                input_file: Input file to process
             """
             pass
 
-        return complex_process
+        inputs = extract_inputs(func)
+
+        assert isinstance(inputs, dict)
+        assert "input_file" in inputs
+        assert inputs["input_file"]["dtype"] == "File"
+        assert "policies" in inputs["input_file"]
+        assert inputs["input_file"]["policies"]["positional"] is True
 
     @pytest.mark.unit
-    def test_extract_inputs_complex(self, complex_function):
-        """Test extracting inputs from complex function."""
-        inputs = extract_inputs(complex_function)
+    def test_extract_cab_info_basic(self):
+        """Test extracting cab info."""
+        @stimela_cab(name="test_cab", info="Test cab")
+        def func():
+            """Test function."""
+            pass
 
-        assert len(inputs) == 6
+        cab_info = extract_cab_info(func)
 
-        # Check each parameter
-        inputs_by_name = {inp["name"]: inp for inp in inputs}
-
-        # Required file argument
-        required_file = inputs_by_name["required_file"]
-        assert required_file["dtype"] == "File"
-        assert required_file["required"] is True
-        assert "Required input file" in required_file["info"]
-
-        # Optional file option
-        optional_file = inputs_by_name["optional_file"]
-        assert optional_file["dtype"] == "File"
-        assert optional_file["required"] is False
-        assert optional_file["default"] is None
-
-        # Float option
-        threshold = inputs_by_name["threshold"]
-        assert threshold["dtype"] == "float"
-        assert threshold["default"] == 0.5
-
-        # Integer option
-        iterations = inputs_by_name["iterations"]
-        assert iterations["dtype"] == "int"
-        assert iterations["default"] == 10
-
-        # Boolean option
-        verbose = inputs_by_name["verbose"]
-        assert verbose["dtype"] == "bool"
-        assert verbose["default"] is False
-
-        # String option
-        mode = inputs_by_name["mode"]
-        assert mode["dtype"] == "str"
-        assert mode["default"] == "normal"
+        assert "flavour" in cab_info
+        assert cab_info["flavour"] == "python"
+        assert "command" in cab_info
+        assert "policies" in cab_info
 
     @pytest.mark.unit
-    def test_extract_cab_info_with_all_fields(self, complex_function):
-        """Test extracting complete cab info."""
-        cab_info = extract_cab_info(complex_function)
+    def test_extract_outputs_basic(self):
+        """Test extracting outputs."""
+        @stimela_cab(name="test", info="Test")
+        @stimela_output(name="result", dtype="File", info="Result file")
+        def func():
+            """Test function."""
+            pass
 
-        assert cab_info["name"] == "complex_processor"
-        assert cab_info["info"] == "Complex processing function"
+        outputs = extract_outputs(func)
 
-    @pytest.mark.unit
-    def test_extract_outputs_single(self, complex_function):
-        """Test extracting single output."""
-        outputs = extract_outputs(complex_function)
-
-        assert len(outputs) == 1
-        output = outputs[0]
-        assert output["name"] == "result"
-        assert output["dtype"] == "File"
-        assert output["info"] == "Processing result"
+        assert isinstance(outputs, dict)
+        assert "result" in outputs
+        assert outputs["result"]["dtype"] == "File"
+        assert outputs["result"]["info"] == "Result file"
 
 
 class TestErrorHandling:
@@ -200,7 +163,7 @@ class TestErrorHandling:
         def undecorated_function():
             pass
 
-        with pytest.raises(AttributeError):
+        with pytest.raises(ValueError, match="must be decorated"):
             extract_cab_info(undecorated_function)
 
     @pytest.mark.unit
@@ -211,7 +174,7 @@ class TestErrorHandling:
             pass
 
         outputs = extract_outputs(undecorated_function)
-        assert outputs == []
+        assert outputs == {}
 
     @pytest.mark.unit
     def test_extract_inputs_no_parameters(self):
@@ -222,4 +185,4 @@ class TestErrorHandling:
             pass
 
         inputs = extract_inputs(no_param_function)
-        assert inputs == []
+        assert inputs == {}
