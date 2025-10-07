@@ -3,6 +3,7 @@
 from pathlib import Path
 
 import typer
+from typing_extensions import Annotated
 
 from hip_cargo.cab_to_function import cab_to_function_cli
 from hip_cargo.introspector import (
@@ -22,20 +23,21 @@ app = typer.Typer(
 
 @app.callback()
 def callback():
-    """hip-cargo: Generate Stimela cab definitions from Python functions."""
+    """
+    hip-cargo: a guide to designing self-documenting CLI interfaces using Typer + conversion utilities
+    """
     pass
 
 
 @app.command()
 def generate_cab(
-    module: str = typer.Argument(
-        ...,
-        help="Python module path (e.g., package.module)",
-    ),
-    output: Path = typer.Argument(
-        ...,
-        help="Output YAML file path (e.g., /path/to/cab.yaml)",
-    ),
+    module: Annotated[str, typer.Argument(help="Python module path (e.g., package.module)")],
+    output: Annotated[
+        Path,
+        typer.Argument(
+            help="Output YAML file path (e.g., /path/to/cab.yaml)",
+        ),
+    ],
 ):
     """
     Generate a Stimela cab definition from a Python module.
@@ -78,16 +80,10 @@ def generate_cab(
 
 @app.command()
 def generate_function(
-    cab_file: Path = typer.Argument(
-        ...,
-        help="Path to Stimela cab YAML file",
-    ),
-    output: Path = typer.Option(
-        None,
-        "--output",
-        "-o",
-        help="Output Python file (prints to stdout if not specified)",
-    ),
+    cab_file: Annotated[Path, typer.Argument(help="Path to Stimela cab YAML file")],
+    output: Annotated[
+        Path, typer.Option("--output", "-o", help="Output Python file (prints to stdout if not specified)")
+    ] = None,
 ):
     """
     Generate a Python function from a Stimela cab definition.
