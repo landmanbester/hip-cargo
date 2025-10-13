@@ -7,6 +7,7 @@ wildcards in a callback. Users quote the patterns to prevent shell expansion.
 
 from pathlib import Path
 from typing import List, Optional, Tuple
+
 import typer
 
 
@@ -65,6 +66,7 @@ def make_pattern_expander(
             ...
         )
     """
+
     def callback(patterns: Optional[Tuple[str, ...]]) -> List[str]:
         if not patterns:
             return []

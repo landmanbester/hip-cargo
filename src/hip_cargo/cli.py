@@ -3,8 +3,9 @@
 from pathlib import Path
 
 import typer
-from typing_extensions import Annotated
 from rich import print
+from typing_extensions import Annotated
+
 from hip_cargo.cab_to_function import cab_to_function_cli
 from hip_cargo.introspector import (
     extract_cab_info,
@@ -40,9 +41,7 @@ def generate_cab(
     ],
     output: Annotated[
         Path,
-        typer.Argument(help="Output YAML file path (e.g., /path/to/cab.yaml)",
-                        rich_help_panel="Outputs"
-                        ),
+        typer.Argument(help="Output YAML file path (e.g., /path/to/cab.yaml)", rich_help_panel="Outputs"),
     ] = None,
     end_message: Annotated[str, typer.Option(hidden=True)] = "✓ Successfully generated cab definition",
 ):
