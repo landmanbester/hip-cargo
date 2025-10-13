@@ -51,6 +51,7 @@ markers = [
 [dependency-groups]
 dev = [
     "ruff>=0.13.2",
+    "tbump>=6.11.0",
 ]
 test = [
     "pytest>=8.0.0",
