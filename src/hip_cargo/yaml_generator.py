@@ -56,9 +56,12 @@ def write_cab_yaml(
         yaml_content: YAML string to write
         output_path: Path where YAML should be written
     """
-    # Create parent directory if it doesn't exist
-    output_path.parent.mkdir(parents=True, exist_ok=True)
 
     # Write the YAML file
-    with open(output_path, "w") as f:
-        f.write(yaml_content)
+    if output_path:
+        # Create parent directory if it doesn't exist
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(output_path, "w") as f:
+            f.write(yaml_content)
+    else:  # else write to terminal
+        print(yaml_content)
