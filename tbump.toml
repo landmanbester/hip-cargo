@@ -1,0 +1,35 @@
+# tbump configuration for hip-cargo
+# See https://github.com/your-tools/tbump for usage
+
+[version]
+current = "0.1.0"
+
+# Version format: use semantic versioning
+regex = '''
+  (?P<major>\d+)
+  \.
+  (?P<minor>\d+)
+  \.
+  (?P<patch>\d+)
+  '''
+
+[git]
+message_template = "Bump version to {new_version}"
+tag_template = "v{new_version}"
+push = true
+
+# Files to update with the new version
+[[file]]
+src = "pyproject.toml"
+search = 'version = "{current_version}"'
+
+[[file]]
+src = "src/hip_cargo/__init__.py"
+search = '__version__ = "{current_version}"'
+
+# Optional: you can add before/after hooks
+# [[before_push]]
+# name = "Run tests"
+# cmd = "uv run pytest"
+
+# After pushing the tag, GitHub Actions will automatically publish to PyPI
