@@ -16,7 +16,14 @@ regex = '''
 [git]
 message_template = "Bump version to {new_version}"
 tag_template = "v{new_version}"
-push = true
+
+[[before_push]]
+name = "Check working directory is clean"
+cmd = "git diff --quiet"
+
+[[after_push]]
+name = "Push tags"
+cmd = "git push --tags"
 
 # Files to update with the new version
 [[file]]
@@ -26,10 +33,3 @@ search = 'version = "{current_version}"'
 [[file]]
 src = "src/hip_cargo/__init__.py"
 search = '__version__ = "{current_version}"'
-
-# Optional: you can add before/after hooks
-# [[before_push]]
-# name = "Run tests"
-# cmd = "uv run pytest"
-
-# After pushing the tag, GitHub Actions will automatically publish to PyPI
