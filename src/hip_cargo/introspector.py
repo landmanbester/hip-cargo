@@ -257,6 +257,7 @@ def _dtype_to_str(dtype):
 
     def is_none(x):
         return x is not NoneType
+
     mask = list(map(is_none, opts))
     opts = tuple(compress(opts, mask))
 
