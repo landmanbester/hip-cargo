@@ -165,7 +165,7 @@ wheels = [
 
 [[package]]
 name = "hip-cargo"
-version = "0.0.1"
+version = "0.0.2"
 source = { editable = "." }
 dependencies = [
     { name = "pyyaml" },
@@ -175,6 +175,7 @@ dependencies = [
 
 [package.dev-dependencies]
 dev = [
+    { name = "pytest" },
     { name = "ruff" },
     { name = "tbump" },
 ]
@@ -192,6 +193,7 @@ requires-dist = [
 
 [package.metadata.requires-dev]
 dev = [
+    { name = "pytest", specifier = ">=8.4.2" },
     { name = "ruff", specifier = ">=0.13.2" },
     { name = "tbump", specifier = ">=6.11.0" },
 ]

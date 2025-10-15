@@ -39,7 +39,7 @@ def generate_cab(
             rich_help_panel="Inputs",
         ),
     ],
-    output: Annotated[
+    output_name: Annotated[
         Path,
         typer.Argument(help="Output YAML file path (e.g., /path/to/cab.yaml)", rich_help_panel="Outputs"),
     ] = None,
@@ -65,15 +65,21 @@ def generate_cab(
     inputs = extract_inputs(func)
     outputs = extract_outputs(func)
 
+    # remove explicit outputs from inputs
+    for param_name, output in outputs.items():
+        if not output.get("implicit", False):
+            if param_name in inputs:
+                inputs.pop(param_name)
+
     # Generate YAML
     typer.echo("Generating YAML...")
     yaml_content = generate_cab_yaml(cab_name, cab_info, inputs, outputs)
 
     # Write to file
-    typer.echo(f"Writing to: {output}")
-    write_cab_yaml(yaml_content, output)
+    typer.echo(f"Writing to: {output_name}")
+    write_cab_yaml(yaml_content, output_name)
 
-    print(f":boom: [green] {end_message}: {output} [/green]")
+    print(f":boom: [green] {end_message}: {output_name} [/green]")
 
 
 @app.command()

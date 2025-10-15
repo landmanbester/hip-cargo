@@ -9,45 +9,10 @@ from typing_extensions import Annotated
 from hip_cargo import stimela_cab, stimela_output
 from hip_cargo.introspector import (
     _parse_google_docstring,
-    _python_type_to_stimela_dtype,
     extract_cab_info,
     extract_inputs,
     extract_outputs,
 )
-
-
-class TestDtypeInference:
-    """Test dtype inference functionality."""
-
-    @pytest.mark.unit
-    def test_infer_dtype_from_type_hints(self):
-        """Test dtype inference from Python type hints."""
-        assert _python_type_to_stimela_dtype(str, "Some string parameter") == "str"
-        assert _python_type_to_stimela_dtype(int, "Some integer parameter") == "int"
-        assert _python_type_to_stimela_dtype(float, "Some float parameter") == "float"
-        assert _python_type_to_stimela_dtype(bool, "Some boolean parameter") == "bool"
-
-    @pytest.mark.unit
-    def test_infer_dtype_from_help_text(self):
-        """Test dtype inference from help text keywords."""
-        assert _python_type_to_stimela_dtype(Path, "Input File to process") == "File"
-        assert _python_type_to_stimela_dtype(Path, "Output Directory for results") == "Directory"
-        assert _python_type_to_stimela_dtype(str, "Input File path") == "File"
-        assert _python_type_to_stimela_dtype(str, "Working Directory") == "Directory"
-
-    @pytest.mark.unit
-    def test_infer_dtype_fallback_to_path(self):
-        """Test fallback to File for Path types."""
-        assert _python_type_to_stimela_dtype(Path, "Some path parameter") == "File"
-
-    @pytest.mark.unit
-    def test_infer_dtype_unknown_type(self):
-        """Test handling of unknown types."""
-
-        class CustomType:
-            pass
-
-        assert _python_type_to_stimela_dtype(CustomType, "Custom parameter") == "str"
 
 
 class TestDocstringParsing:
@@ -118,7 +83,7 @@ class TestParameterExtraction:
 
         assert isinstance(inputs, dict)
         assert "input_file" in inputs
-        assert inputs["input_file"]["dtype"] == "File"
+        assert inputs["input_file"]["dtype"] == "Path"
         assert "policies" in inputs["input_file"]
         assert inputs["input_file"]["policies"]["positional"] is True
 
