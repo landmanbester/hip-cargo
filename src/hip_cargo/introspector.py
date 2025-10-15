@@ -262,7 +262,7 @@ def _dtype_to_str(dtype):
     opts = tuple(compress(opts, mask))
 
     # convert type1 | type2 to old Union type and discard None
-    if origin is UnionType:
+    if origin is UnionType or origin is Union:  # the latter is required to handle Optional
         if len(opts) == 1:  # discard Union
             dtype = opts[0]
         else:
