@@ -25,6 +25,7 @@ def expand_patterns(patterns: Optional[Tuple[str, ...]]) -> List[str]:
         Input: ('test*.txt', 'exam*.txt')
         Output: ['test1.txt', 'test2.txt', 'exam1.txt', 'exam2.txt']
     """
+    # import ipdb; ipdb.set_trace()
     if not patterns:
         return []
 
