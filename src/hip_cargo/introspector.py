@@ -92,6 +92,35 @@ def extract_cab_info(func: Any) -> dict[str, Any]:
     return cab_def
 
 
+def _unwrap_optional_from_annotated(param_type: Any) -> tuple[Any, bool]:
+    """
+    Unwrap Optional wrapper from Annotated types.
+
+    Python automatically wraps `Annotated[T | None, ...] = None` as `Optional[Annotated[T | None, ...]]`.
+    This function detects and unwraps that pattern.
+
+    Args:
+        param_type: The parameter type hint to unwrap
+
+    Returns:
+        Tuple of (unwrapped_type, was_wrapped)
+    """
+    origin = get_origin(param_type)
+
+    # Check if it's Optional (which is Union[X, None])
+    if origin is Union:
+        args = get_args(param_type)
+        # Check if it's a Union with exactly 2 args where one is NoneType
+        if len(args) == 2 and NoneType in args:
+            # This is Optional[X] - extract the non-None type
+            non_none_arg = args[0] if args[1] is NoneType else args[1]
+            # If the non-None arg is Annotated, we've found our pattern
+            if get_origin_ext(non_none_arg) is Annotated:
+                return non_none_arg, True
+
+    return param_type, False
+
+
 def extract_inputs(func: Any) -> dict[str, Any]:
     """
     Extract input schema from function signature.
@@ -113,6 +142,9 @@ def extract_inputs(func: Any) -> dict[str, Any]:
         # Get type hint
         param_type = type_hints.get(param_name, str)
 
+        # Unwrap Optional[Annotated[...]] to just Annotated[...]
+        param_type, was_wrapped = _unwrap_optional_from_annotated(param_type)
+
         if get_origin_ext(param_type) is Annotated:
             dtype, typer_metadata = get_args(param_type)
             if typer_metadata.__class__.__name__ == "ArgumentInfo":
@@ -127,6 +159,10 @@ def extract_inputs(func: Any) -> dict[str, Any]:
 
         # Get parameter description from docstring
         param_info = typer_metadata.help
+        if "Stimela dtype" in param_info:
+            idx = param_info.find("Stimela")
+            dtype = param_info[idx:].split(":")[-1].strip()
+            param_info = param_info[0:idx]
 
         input_def = {"info": param_info}
 

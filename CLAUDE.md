@@ -289,6 +289,117 @@ def process(...):
 
 This keeps CLI startup fast and allows lightweight installation for cab definitions only.
 
+## Generate-Function Implementation Details
+
+The `cargo generate-function` command creates Python functions from Stimela cab YAML files. This section documents critical implementation patterns.
+
+### Custom Stimela Types
+
+Custom types (File, MS, Directory, URI) require special handling:
+
+1. **NewType Declarations**: Automatically added to imports
+   ```python
+   from typing import NewType
+   File = NewType("File", Path)
+   MS = NewType("MS", Path)
+   ```
+
+2. **Parser Parameters**: Added to typer.Option for custom types
+   ```python
+   beam_model: Annotated[File | None, typer.Option(parser=File, help="...")]
+   ```
+
+3. **Type Preservation**: Custom types are preserved (not converted to Path) in annotations
+
+### Comma-Separated String Conversions
+
+Typer doesn't support variable-length list inputs directly. For `List[int]` and `List[float]` parameters:
+
+1. **CLI Parameter Type**: Always `str` (comma-separated input)
+   ```python
+   channel_freqs: Annotated[str | None, typer.Option(help="...Stimela dtype: List[float]")]
+   ```
+
+2. **Help String Metadata**: Includes `"Stimela dtype: List[type]"` suffix for round-trip conversion
+
+3. **Conversion Code**: Automatically generated in function body
+   ```python
+   channel_freqs_list = None
+   if channel_freqs is not None:
+       channel_freqs_list = [float(x.strip()) for x in channel_freqs.split(",")]
+   ```
+
+4. **Core Function Call**: Uses converted variable name
+   ```python
+   core_func(channel_freqs=channel_freqs_list, ...)
+   ```
+
+**IMPORTANT**: Only `List[int]` and `List[float]` get conversion code. `List[str]` uses the expand_patterns callback for wildcard expansion.
+
+### Round-Trip Conversion Support
+
+Functions can round-trip: `cab → function → cab` with full fidelity.
+
+**Key Implementation**: `introspector.py` has `_unwrap_optional_from_annotated()` helper that handles Python's automatic Optional wrapping:
+
+```python
+# Generated: param: Annotated[Type | None, ...] = None
+# Python sees: Optional[Annotated[Type | None, ...]]
+# Unwrapper extracts: Annotated[Type | None, ...]
+```
+
+The introspector also extracts "Stimela dtype:" metadata from help strings (lines 162-165) to restore the correct dtype in the cab.
+
+### Multi-Line Help Strings
+
+For help text containing newlines (e.g., multi-line descriptions), use triple-quoted strings:
+
+```python
+param: Annotated[
+    str,
+    typer.Option(
+        help="""First line
+Second line
+Third line"""
+    ),
+]
+```
+
+This is a typer quirk - the triple quotes must be on separate lines for proper formatting.
+
+### Function Body Generation
+
+The function body is automatically generated with:
+
+1. **Import Path Parsing**: Extracts from cab's `command` field
+   ```yaml
+   command: (spimple.core.module)function
+   ```
+   Generates:
+   ```python
+   from spimple.core.module import function as function_core
+   ```
+
+2. **Conversion Code**: For comma-separated parameters (as described above)
+
+3. **Complete Function Call**: All parameters passed to core function
+   ```python
+   function_core(
+       param1=param1,
+       param2=param2_list,  # Converted parameter
+       ...
+   )
+   ```
+
+### Parameter Ordering
+
+Python requires all required parameters before optional ones. The generator automatically:
+1. Collects required inputs and outputs
+2. Collects optional inputs and outputs
+3. Emits required parameters first, then optional ones
+
+This ensures generated functions are syntactically valid.
+
 When adding features, ask:
 1. Is this feature explicitly requested?
 2. Can it be implemented in <50 lines?
