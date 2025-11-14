@@ -22,7 +22,7 @@ def generate_cab(
         ),
     ],
     output_name: Annotated[
-        Path,
+        Path | None,
         typer.Argument(help="Output YAML file path (e.g., /path/to/cab.yaml)", rich_help_panel="Outputs"),
     ] = None,
     end_message: Annotated[str, typer.Option(hidden=True)] = "✓ Successfully generated cab definition",

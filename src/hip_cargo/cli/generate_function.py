@@ -15,7 +15,7 @@ from hip_cargo.utils.decorators import stimela_cab
 def generate_function(
     cab_file: Annotated[Path, typer.Argument(help="Path to Stimela cab YAML file", rich_help_panel="Inputs")],
     output: Annotated[
-        Path,
+        Path | None,
         typer.Option(
             "--output", "-o", help="Output Python file (prints to stdout if not specified)", rich_help_panel="Outputs"
         ),
