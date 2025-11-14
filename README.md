@@ -62,6 +62,40 @@ def process(
     return process_core(*args, **kwargs)
 ```
 Note that `*args` and `**kwargs` need to passed explicitly. 
+Then register the command in the `src/mypackage/cli/__init__.py` with something like the following
+```python
+"""Lightweight CLI for mypackage."""
+
+import typer
+
+app = typer.Typer(
+    name="mypackage",
+    help="Scientific computing package",
+    no_args_is_help=True,
+)
+
+# Register commands
+from mypackage.cli.process import process
+
+app.command(name="process")(process)
+
+__all__ = ["app"]
+```
+That's it, if you have something like the following
+```toml
+[project.scripts]
+mypackage = "mypackage.cli:app"
+```
+in your `pyproject.toml` you should now be able to run
+```bash
+app --help
+```
+and
+```bash
+app process --help
+```
+from the command line and have a beautifully formatted CLI for your package.
+Note that you can register multiple commands under `app`. 
 
 ### 2. Generate the Stimela cab definition
 
