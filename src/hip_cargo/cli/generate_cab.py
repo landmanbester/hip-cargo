@@ -33,13 +33,14 @@ def generate_cab(
     @stimela_cab and optionally @stimela_output decorators.
     """
     # Lazy import core logic
-    from hip_cargo.core.generate_cab import generate_cab as generate_cab_core
+    from hip_cargo.core.generate_cab import generate_cab as generate_cab_core  # noqa: E402
 
     # User feedback
     typer.echo(f"Loading module: {module}")
 
     # Import module to get function name for better user feedback
-    from hip_cargo.utils.introspector import get_function_from_module
+    from hip_cargo.utils.introspector import get_function_from_module  # noqa: E402
+
     func, _ = get_function_from_module(module)
     cab_name = func.__stimela_cab_config__["name"]
 

@@ -28,7 +28,7 @@ def generate_function(
     to the hip-cargo pattern.
     """
     # Lazy import core logic
-    from hip_cargo.core.generate_function import generate_function as generate_function_core
+    from hip_cargo.core.generate_function import generate_function as generate_function_core  # noqa: E402
 
     # Validate input
     if not cab_file.exists():

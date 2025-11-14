@@ -16,8 +16,8 @@ def callback():
 
 
 # Register commands
-from hip_cargo.cli.generate_cab import generate_cab
-from hip_cargo.cli.generate_function import generate_function
+from hip_cargo.cli.generate_cab import generate_cab  # noqa: E402
+from hip_cargo.cli.generate_function import generate_function  # noqa: E402
 
 app.command(name="generate-cab")(generate_cab)
 app.command(name="generate-function")(generate_function)
