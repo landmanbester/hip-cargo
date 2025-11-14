@@ -4,14 +4,34 @@ version = "0.0.2"
 description = "Tools for generating Stimela cab definitions from Python functions"
 readme = "README.md"
 requires-python = ">=3.10"
+license = { text = "MIT" }
 authors = [
     { name = "landmanbester", email = "lbester@sarao.ac.za" }
+]
+keywords = ["stimela", "typer", "cli", "yaml", "code-generation", "radio-astronomy"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Code Generators",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Scientific/Engineering :: Astronomy",
 ]
 dependencies = [
     "typer>=0.12.0",
     "pyyaml>=6.0",
     "typing-extensions>=4.15.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/landmanbester/hip-cargo"
+Repository = "https://github.com/landmanbester/hip-cargo"
+"Bug Tracker" = "https://github.com/landmanbester/hip-cargo/issues"
 
 [project.scripts]
 cargo = "hip_cargo.cli:app"
