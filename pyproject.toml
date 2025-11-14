@@ -9,7 +9,6 @@ authors = [
     { name = "landmanbester", email = "lbester@sarao.ac.za" }
 ]
 keywords = ["stimela", "typer", "cli", "yaml", "code-generation", "radio-astronomy"]
-repository = "https://github.com/landmanbester/hip-cargo"
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
@@ -28,6 +27,11 @@ dependencies = [
     "pyyaml>=6.0",
     "typing-extensions>=4.15.0",
 ]
+
+[project.urls]
+Homepage = "https://github.com/landmanbester/hip-cargo"
+Repository = "https://github.com/landmanbester/hip-cargo"
+"Bug Tracker" = "https://github.com/landmanbester/hip-cargo/issues"
 
 [project.scripts]
 cargo = "hip_cargo.cli:app"
