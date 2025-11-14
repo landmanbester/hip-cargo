@@ -159,7 +159,7 @@ def extract_inputs(func: Any) -> dict[str, Any]:
 
         # Get parameter description from docstring
         param_info = typer_metadata.help
-        if "Stimela dtype" in param_info:
+        if param_info and "Stimela dtype" in param_info:
             idx = param_info.find("Stimela")
             dtype = param_info[idx:].split(":")[-1].strip()
             param_info = param_info[0:idx]

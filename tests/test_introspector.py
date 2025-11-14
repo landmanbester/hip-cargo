@@ -7,7 +7,7 @@ import typer
 from typing_extensions import Annotated
 
 from hip_cargo import stimela_cab, stimela_output
-from hip_cargo.introspector import (
+from hip_cargo.utils.introspector import (
     _parse_google_docstring,
     extract_cab_info,
     extract_inputs,

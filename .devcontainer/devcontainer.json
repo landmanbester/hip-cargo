@@ -1,6 +1,6 @@
 {
   "name": "hip-cargo Development",
-  "image": "mcr.microsoft.com/devcontainers/python:1-3.12-bookworm",
+  "image": "mcr.microsoft.com/devcontainers/python:1-3.11-bookworm",
   
   "features": {
     "ghcr.io/devcontainers/features/git:1": {}
@@ -33,7 +33,7 @@
     }
   },
 
-  "postCreateCommand": "pip install uv && uv sync --all-extras",
+  "postCreateCommand": "pip install uv && uv sync --all-groups",
 
   "forwardPorts": [],
 

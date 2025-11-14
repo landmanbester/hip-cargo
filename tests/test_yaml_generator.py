@@ -3,7 +3,7 @@
 import pytest
 import yaml
 
-from hip_cargo.yaml_generator import generate_cab_yaml
+from hip_cargo.utils.yaml_generator import generate_cab_yaml
 
 
 class TestYamlGeneration:
