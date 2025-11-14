@@ -7,8 +7,8 @@ import typer
 from typing_extensions import Annotated
 
 from hip_cargo import stimela_cab, stimela_output
-from hip_cargo.introspector import extract_cab_info, extract_inputs, extract_outputs
-from hip_cargo.yaml_generator import generate_cab_yaml
+from hip_cargo.utils.introspector import extract_cab_info, extract_inputs, extract_outputs
+from hip_cargo.utils.yaml_generator import generate_cab_yaml
 
 
 @pytest.fixture

@@ -1,0 +1,18 @@
+cabs:
+  hip_cargo_generate_function:
+    flavour: python
+    command: (hip_cargo.core.generate_function)generate_function
+    info: Generate a Python function from a Stimela cab definition.
+    policies:
+      pass_missing_as_none: true
+    inputs:
+      cab_file:
+        info: Path to Stimela cab YAML file
+        dtype: Path
+        required: true
+        policies:
+          positional: true
+      output:
+        info: Output Python file (prints to stdout if not specified)
+        dtype: Path
+    outputs: {}

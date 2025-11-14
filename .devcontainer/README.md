@@ -4,7 +4,7 @@ This directory contains the configuration for GitHub Codespaces, allowing you to
 
 ## What's Included
 
-- **Python 3.12** base image
+- **Python 3.11** base image
 - **Git** version control
 - **VS Code Extensions:**
   - Python language support with Pylance
@@ -16,7 +16,7 @@ This directory contains the configuration for GitHub Codespaces, allowing you to
 
 When you launch a Codespace, it will automatically:
 1. Install `uv` package manager
-2. Sync all project dependencies (including dev and test extras)
+2. Sync all project dependencies (including dev and test dependency groups)
 3. Configure the Python interpreter to use the virtual environment
 4. Set up pytest for testing
 5. Enable format-on-save with Ruff
