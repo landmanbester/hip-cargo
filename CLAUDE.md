@@ -114,7 +114,7 @@ def extract_name(func: Any) -> str:
 class FunctionMetadataExtractor:
     def __init__(self, strategy: ExtractionStrategy):
         self._strategy = strategy
-    
+
     def extract(self, func: Any) -> Metadata:
         return self._strategy.apply(func)
 ```
@@ -142,7 +142,7 @@ def generate_yaml(data: dict) -> str:
 class YamlGenerator:
     def __init__(self):
         self._config = {...}
-    
+
     def generate(self, data: dict) -> str:
         return yaml.safe_dump(data, **self._config)
 ```
