@@ -267,11 +267,11 @@ def generate_parameter_signature(
         parser_part = f", parser={dtype}" if needs_parser else ""
         if has_newlines:
             # Multi-line help - use triple quotes on separate lines
-            typer_part = f'typer.Argument({parser_part[2:] if parser_part else ""}help=\n"""{info}\n""")'
+            typer_part = f'typer.Argument({parser_part[2:] + ", " if parser_part else ""}help=\n"""{info}\n""")'
         else:
             # Escape quotes for single-line help
             info_escaped = info.replace('"', '\\"')
-            typer_part = f'typer.Argument({parser_part[2:] if parser_part else ""}help="{info_escaped}")'
+            typer_part = f'typer.Argument({parser_part[2:] + ", " if parser_part else ""}help="{info_escaped}")'
 
         if required:
             return f"    {py_param_name}: Annotated[{py_type}, {typer_part}],"
