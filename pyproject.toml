@@ -1,6 +1,6 @@
 [project]
 name = "hip-cargo"
-version = "0.1.2"
+version = "0.1.1"
 description = "Tools for generating Stimela cab definitions from Python functions"
 readme = "README.md"
 requires-python = ">=3.10"
