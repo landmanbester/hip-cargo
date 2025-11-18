@@ -146,7 +146,8 @@ class TestIntrospection:
 
         # Check required field
         assert outputs["output_file"]["required"] is True
-        assert outputs["log_file"]["required"] is False
+        # When required is False (default), field is omitted
+        assert "required" not in outputs["log_file"]
 
 
 class TestYamlGeneration:

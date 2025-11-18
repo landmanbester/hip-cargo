@@ -1,6 +1,7 @@
 """Function introspection for extracting cab information."""
 
 import importlib
+import importlib.metadata
 import inspect
 import re
 import sys
@@ -12,6 +13,62 @@ from typing import Any, Literal, Union, get_args, get_origin, get_type_hints
 
 from typing_extensions import Annotated
 from typing_extensions import get_origin as get_origin_ext
+
+
+def _get_container_image_url(module_path: str) -> str | None:
+    """
+    Get the container image URL for a package.
+
+    Extracts the package name from the module path, gets the version,
+    and constructs the ghcr.io image URL from the repository metadata.
+
+    Args:
+        module_path: Dotted module path (e.g., 'hip_cargo.cli.generate_cab')
+
+    Returns:
+        Container image URL (e.g., 'ghcr.io/landmanbester/hip-cargo:0.1.1')
+        or None if information cannot be determined
+    """
+    # Extract package name (first component of module path)
+    package_name = module_path.split(".")[0]
+
+    try:
+        # Get package version
+        version = importlib.metadata.version(package_name)
+
+        # Get package metadata to find repository URL
+        metadata = importlib.metadata.metadata(package_name)
+        repository_url = None
+
+        # Try to get Repository URL from project URLs
+        for line in metadata.get_all("Project-URL") or []:
+            if line.startswith("Repository,"):
+                repository_url = line.split(",", 1)[1].strip()
+                break
+
+        # If no Repository URL, try Homepage
+        if not repository_url:
+            for line in metadata.get_all("Project-URL") or []:
+                if line.startswith("Homepage,"):
+                    repository_url = line.split(",", 1)[1].strip()
+                    break
+
+        if not repository_url:
+            return None
+
+        # Extract owner/repo from GitHub URL
+        # Expected format: https://github.com/owner/repo
+        if "github.com" in repository_url:
+            parts = repository_url.rstrip("/").split("/")
+            if len(parts) >= 2:
+                owner = parts[-2]
+                repo = parts[-1].replace(".git", "")
+                return f"ghcr.io/{owner}/{repo}:{version}"
+
+        return None
+
+    except (importlib.metadata.PackageNotFoundError, Exception):
+        return None
 
 
 def get_function_from_module(module_path: str) -> tuple[Any, str]:
@@ -83,10 +140,17 @@ def extract_cab_info(func: Any) -> dict[str, Any]:
         "flavour": "python",
         "command": command,
         "info": info,
-        "policies": {
-            "pass_missing_as_none": True,
-            **cab_config.get("policies", {}),
-        },
+    }
+
+    # Add container image URL if available
+    image_url = _get_container_image_url(func.__module__)
+    if image_url:
+        cab_def["image"] = image_url
+
+    # Add policies
+    cab_def["policies"] = {
+        "pass_missing_as_none": True,
+        **cab_config.get("policies", {}),
     }
 
     return cab_def
@@ -164,7 +228,10 @@ def extract_inputs(func: Any) -> dict[str, Any]:
             dtype = param_info[idx:].split(":")[-1].strip()
             param_info = param_info[0:idx]
 
-        input_def = {"info": param_info}
+        # Only add info field if it has a value (stimela doesn't support null)
+        input_def = {}
+        if param_info:
+            input_def["info"] = param_info
 
         if dtype != "str" and dtype != "NoneType":
             # if it's a Literal we add a choices field and assume param dtype is str
@@ -215,12 +282,21 @@ def extract_outputs(func: Any) -> dict[str, Any]:
 
     outputs = {}
     for output in func.__stimela_outputs__:
-        outputs[output["name"]] = {
-            "dtype": output["dtype"],
-            "info": output["info"],
-            "required": output["required"],
-            "implicit": output["implicit"],
-        }
+        output_def = {"dtype": output["dtype"]}
+
+        # Only include info if it has a value
+        if output["info"]:
+            output_def["info"] = output["info"]
+
+        # Only include required if True (False is default)
+        if output["required"]:
+            output_def["required"] = True
+
+        # Only include implicit if True (False is default)
+        if output["implicit"]:
+            output_def["implicit"] = True
+
+        outputs[output["name"]] = output_def
 
     return outputs
 

@@ -3,6 +3,7 @@ cabs:
     flavour: python
     command: (hip_cargo.core.generate_cab)generate_cab
     info: Generate a Stimela cab definition from a Python module.
+    image: ghcr.io/landmanbester/hip-cargo:0.1.2
     policies:
       pass_missing_as_none: true
     inputs:
@@ -11,12 +12,10 @@ cabs:
         required: true
         policies:
           positional: true
-      output_name:
-        info: Output YAML file path (e.g., /path/to/cab.yaml)
-        dtype: Path
-        policies:
-          positional: true
       end_message:
-        info: null
         default: "\u2713 Successfully generated cab definition"
-    outputs: {}
+    outputs:
+      output_name:
+        dtype: File
+        info: Path to output Stimela cab YAML file
+        required: true

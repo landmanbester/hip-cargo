@@ -3,6 +3,7 @@ cabs:
     flavour: python
     command: (hip_cargo.core.generate_function)generate_function
     info: Generate a Python function from a Stimela cab definition.
+    image: ghcr.io/landmanbester/hip-cargo:0.1.2
     policies:
       pass_missing_as_none: true
     inputs:
@@ -12,7 +13,8 @@ cabs:
         required: true
         policies:
           positional: true
+    outputs:
       output:
-        info: Output Python file (prints to stdout if not specified)
-        dtype: Path
-    outputs: {}
+        dtype: File
+        info: Path to output CLI function
+        required: true

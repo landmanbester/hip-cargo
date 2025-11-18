@@ -6,12 +6,18 @@ import typer
 from rich import print
 from typing_extensions import Annotated
 
-from hip_cargo.utils.decorators import stimela_cab
+from hip_cargo.utils.decorators import stimela_cab, stimela_output
 
 
 @stimela_cab(
     name="hip_cargo_generate_cab",
     info="Generate Stimela cab definition from Python CLI function",
+)
+@stimela_output(
+    dtype="File",
+    name="output_name",
+    info="Path to output Stimela cab YAML file",
+    required=True,
 )
 def generate_cab(
     module: Annotated[
@@ -22,9 +28,9 @@ def generate_cab(
         ),
     ],
     output_name: Annotated[
-        Path | None,
+        Path,
         typer.Argument(help="Output YAML file path (e.g., /path/to/cab.yaml)", rich_help_panel="Outputs"),
-    ] = None,
+    ],
     end_message: Annotated[str, typer.Option(hidden=True)] = "✓ Successfully generated cab definition",
 ):
     """Generate a Stimela cab definition from a Python module.

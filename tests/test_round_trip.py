@@ -556,7 +556,7 @@ class TestEdgeCases:
 
         Hidden parameters (like end_message in generate_cab) should:
         - Be included in the cab
-        - Have null info field
+        - Omit the info field (stimela doesn't support null)
         - Be marked as hidden in Typer
         """
         # Use hip-cargo's own generate_cab which has hidden end_message
@@ -566,7 +566,8 @@ class TestEdgeCases:
         # Verify end_message is in the cab
         inputs = original_cab["cabs"]["hip_cargo_generate_cab"]["inputs"]
         assert "end_message" in inputs
-        assert inputs["end_message"]["info"] is None
+        # Info field should be omitted for hidden parameters (no null values)
+        assert "info" not in inputs["end_message"]
 
         # Generate function from cab
         func_path = temp_workspace / "test_hidden.py"
