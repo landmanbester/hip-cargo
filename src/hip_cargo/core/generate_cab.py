@@ -11,7 +11,7 @@ from hip_cargo.utils.introspector import (
 from hip_cargo.utils.yaml_generator import generate_cab_yaml, write_cab_yaml
 
 
-def generate_cab(module_path: str, output_path: str) -> None:
+def generate_cab(module_path: str, output_path: str, end_message: str | None = None) -> None:
     """Generate a Stimela cab definition from a Python module.
 
     Args:
@@ -44,3 +44,7 @@ def generate_cab(module_path: str, output_path: str) -> None:
 
     # Write to file
     write_cab_yaml(yaml_content, Path(output_path))
+
+    # Success message
+    if end_message:
+        print(f":boom: [green] {end_message}: {output_path} [/green]")
