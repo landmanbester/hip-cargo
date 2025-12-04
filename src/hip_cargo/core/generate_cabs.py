@@ -71,6 +71,10 @@ def generate_cabs(module_paths: list[str], output_dir: str | None, pyprojecttoml
                     param_name, input_def = extract_input(arg, default)
                     cab_def[node.name]["inputs"][param_name] = input_def
 
+                # rerder to place outputs last
+                outputs = cab_def[node.name].pop("outputs")
+                cab_def[node.name]["outputs"] = outputs
+
                 # Generate YAML
                 # Use safe_dump with nice formatting
                 yaml_content = yaml.safe_dump(

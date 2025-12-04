@@ -2,11 +2,6 @@ generate_cabs:
   flavour: python
   command: hip_cargo.core.generate_cabs.generate_cabs
   image: ghcr.io/landmanbester/hip-cargo:0.1.2
-  outputs:
-    output_dir:
-      dtype: Directory
-      info: Path to output directory where cab definitions will be saved. The cab
-        will have the exact same name as the command.
   name: generate_cabs
   info: Generate Stimela cab definition from Python CLI function
   inputs:
@@ -22,3 +17,8 @@ generate_cabs:
       dtype: File
     end_message:
       default: "\u2713 Successfully generated cab definitions in "
+  outputs:
+    output_dir:
+      dtype: Directory
+      info: Path to output directory where cab definitions will be saved. The cab
+        will have the exact same name as the command.
