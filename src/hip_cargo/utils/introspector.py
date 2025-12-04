@@ -1,18 +1,100 @@
 """Function introspection for extracting cab information."""
 
+import ast
 import importlib
 import importlib.metadata
-import inspect
-import re
 import sys
-from ast import literal_eval
 from itertools import compress
 from pathlib import Path
 from types import NoneType, UnionType
-from typing import Any, Literal, Union, get_args, get_origin, get_type_hints
+from typing import Any, Literal, NewType, Union, get_args, get_origin
 
+import typer
 from typing_extensions import Annotated
 from typing_extensions import get_origin as get_origin_ext
+
+MS = NewType("MS", Path)
+Directory = NewType("Directory", Path)
+File = NewType("File", Path)
+URI = NewType("URI", Path)
+
+if sys.version_info >= (3, 11):
+    import tomllib
+else:
+    import tomli as tomllib
+
+
+def generate_container_url(pyproject_path="pyproject.toml"):
+    with open(pyproject_path, "rb") as f:
+        data = tomllib.load(f)
+
+    project = data.get("project", {})
+    version = project.get("version")
+
+    # Repository URL can be in different places
+    urls = project.get("urls", {})
+    repo_url = urls.get("Repository") or urls.get("Source") or urls.get("Homepage")
+
+    container_url = repo_url.replace("https://github.com", "ghcr.io") + f":{version}"
+
+    return container_url
+
+
+def get_safe_namespace():
+    """Create a namespace with allowed types."""
+    namespace = {
+        # Basic Python types
+        "int": int,
+        "str": str,
+        "float": float,
+        "bool": bool,
+        "list": list,
+        "dict": dict,
+        "tuple": tuple,
+        "set": set,
+        "bytes": bytes,
+        "None": None,
+        # Typing module
+        "Optional": __import__("typing").Optional,
+        "Union": __import__("typing").Union,
+        "List": __import__("typing").List,
+        "Dict": __import__("typing").Dict,
+        "Tuple": __import__("typing").Tuple,
+        "Set": __import__("typing").Set,
+        "Any": __import__("typing").Any,
+        "Annotated": __import__("typing").Annotated,
+        "Literal": __import__("typing").Literal,
+        # Typer types
+        "typer": typer,
+        "FileText": typer.FileText,
+        "FileTextWrite": typer.FileTextWrite,
+        "FileBinaryRead": typer.FileBinaryRead,
+        "FileBinaryWrite": typer.FileBinaryWrite,
+        # paths and stimela types
+        "Path": Path,
+        "MS": MS,
+        "Directory": Directory,
+        "File": File,
+        "URI": URI,
+    }
+
+    # Add any other typer types you need
+    for attr in dir(typer):
+        obj = getattr(typer, attr)
+        if isinstance(obj, type) or attr.startswith("File"):
+            namespace[attr] = obj
+
+    return namespace
+
+
+def eval_annotation_safe(annotation_str: str) -> object:
+    """Evaluate annotation with controlled namespace."""
+    namespace = get_safe_namespace()
+    try:
+        return eval(annotation_str, {"__builtins__": {}}, namespace)
+    except Exception as e:
+        print(f"Error evaluating annotation: {annotation_str}")
+        raise e
 
 
 def _get_container_image_url(module_path: str) -> str | None:
@@ -71,91 +153,6 @@ def _get_container_image_url(module_path: str) -> str | None:
         return None
 
 
-def get_function_from_module(module_path: str) -> tuple[Any, str]:
-    """
-    Import a module and find the decorated function.
-
-    Args:
-        module_path: Dotted module path (e.g., 'package.module')
-
-    Returns:
-        Tuple of (function, module_path)
-
-    Raises:
-        ImportError: If module cannot be imported
-        ValueError: If no decorated function is found
-    """
-    # Add current working directory to Python path if not already there
-    # This allows importing modules relative to where the command is run
-    cwd = str(Path.cwd())
-    if cwd not in sys.path:
-        sys.path.insert(0, cwd)
-
-    try:
-        module = importlib.import_module(module_path)
-    except ImportError as e:
-        # Provide a more helpful error message
-        raise ImportError(
-            f"Could not import module '{module_path}'. "
-            f"Make sure the module exists and is importable from the current directory."
-        ) from e
-
-    # Look for a function with __stimela_cab_config__
-    for name, obj in inspect.getmembers(module, inspect.isfunction):
-        if hasattr(obj, "__stimela_cab_config__"):
-            return obj, module_path
-
-    raise ValueError(f"No function decorated with @stimela_cab found in {module_path}")
-
-
-def extract_cab_info(func: Any) -> dict[str, Any]:
-    """
-    Extract cab configuration from a decorated function.
-
-    Args:
-        func: Function decorated with @stimela_cab
-
-    Returns:
-        Dictionary with cab information
-    """
-    if not hasattr(func, "__stimela_cab_config__"):
-        raise ValueError("Function must be decorated with @stimela_cab")
-
-    cab_config = func.__stimela_cab_config__
-
-    # Get the module path for the command
-    module_path = func.__module__
-    # replace .cli. with .core. so stimela calls the core function
-    module_path = module_path.replace(".cli.", ".core.")
-    func_name = func.__name__
-    command = f"({module_path}){func_name}"
-
-    # Extract docstring
-    docstring = inspect.getdoc(func) or cab_config.get("info", "")
-    # Use first line as info if available
-    info = docstring.split("\n")[0] if docstring else cab_config.get("info", "")
-
-    # Start building the cab definition
-    cab_def = {
-        "flavour": "python",
-        "command": command,
-        "info": info,
-    }
-
-    # Add container image URL if available
-    image_url = _get_container_image_url(func.__module__)
-    if image_url:
-        cab_def["image"] = image_url
-
-    # Add policies
-    cab_def["policies"] = {
-        "pass_missing_as_none": True,
-        **cab_config.get("policies", {}),
-    }
-
-    return cab_def
-
-
 def _unwrap_optional_from_annotated(param_type: Any) -> tuple[Any, bool]:
     """
     Unwrap Optional wrapper from Annotated types.
@@ -185,181 +182,85 @@ def _unwrap_optional_from_annotated(param_type: Any) -> tuple[Any, bool]:
     return param_type, False
 
 
-def extract_inputs(func: Any) -> dict[str, Any]:
+def extract_input(arg: ast.arg, default: Any) -> tuple[str, dict[str, Any]]:
     """
-    Extract input schema from function signature.
+    Extract input schema from a single function parameter AST node.
 
     Args:
-        func: Function to analyze
+        arg: AST argument node to analyze
+        default: Default value for this parameter (or inspect._empty if required)
 
     Returns:
-        Dictionary of input parameters
+        Tuple of (param_name, input_def) where input_def is a dictionary
+        with input configuration (dtype, info, required, default, policies)
     """
-    sig = inspect.signature(func)
-    type_hints = get_type_hints(func, include_extras=True)
+    param_name = arg.arg
 
-    inputs = {}
-    for param_name, param in sig.parameters.items():
-        if param_name == "self" or param_name == "cls":
-            continue
+    # Get type annotation
+    if arg.annotation is not None:
+        annotation_str = ast.unparse(arg.annotation)
+        param_type = eval_annotation_safe(annotation_str)
+    else:
+        param_type = str
 
-        # Get type hint
-        param_type = type_hints.get(param_name, str)
+    # Unwrap Optional[Annotated[...]] to just Annotated[...]
+    param_type, was_wrapped = _unwrap_optional_from_annotated(param_type)
 
-        # Unwrap Optional[Annotated[...]] to just Annotated[...]
-        param_type, was_wrapped = _unwrap_optional_from_annotated(param_type)
+    # Extract dtype and typer metadata
+    if get_origin_ext(param_type) is Annotated:
+        dtype, typer_metadata = get_args(param_type)
+    else:  # old style
+        raise ValueError("Only Annotated types are supported")
 
-        if get_origin_ext(param_type) is Annotated:
-            dtype, typer_metadata = get_args(param_type)
-            if typer_metadata.__class__.__name__ == "ArgumentInfo":
-                is_argument = True
-            elif typer_metadata.__class__.__name__ == "OptionInfo":
-                is_argument = False
-        else:  # old style
-            dtype = param_type
-            typer_metadata = param.default
+    # Get parameter description from typer metadata
+    # param_info = typer_metadata.help if hasattr(typer_metadata, 'help') else None
+    param_info = getattr(typer_metadata, "help", None)
 
-        dtype = _dtype_to_str(dtype)
+    # Build input definition
+    input_def = {}
 
-        # Get parameter description from docstring
-        param_info = typer_metadata.help
-        if param_info and "Stimela dtype" in param_info:
-            idx = param_info.find("Stimela")
-            dtype = param_info[idx:].split(":")[-1].strip()
-            param_info = param_info[0:idx]
+    # Only add info field if it has a value (stimela doesn't support null)
+    if param_info:
+        input_def["info"] = param_info
 
-        # Only add info field if it has a value (stimela doesn't support null)
-        input_def = {}
-        if param_info:
-            input_def["info"] = param_info
+    # Convert dtype to string (handling Union, Literal, etc. and converting to old style)
+    dtype = _dtype_to_str(dtype)
 
-        if dtype != "str" and dtype != "NoneType":
-            # if it's a Literal we add a choices field and assume param dtype is str
-            if "Literal" in dtype:
-                input_def["choices"] = literal_eval(dtype.removeprefix("Literal").strip())
-            else:
-                input_def["dtype"] = dtype
-
-        # Get default value (note - only fall back to typer_metadata if the param does not have a default)
-        if param.default is inspect._empty:
-            default = getattr(typer_metadata, "default", None)
+    if dtype != "str" and dtype != "NoneType":
+        # if it's a Literal we add a choices field and assume param dtype is str
+        if "Literal" in dtype:
+            input_def["choices"] = ast.literal_eval(dtype.removeprefix("Literal").strip())
         else:
-            default = param.default
+            input_def["dtype"] = dtype
 
-        # Determine if required
-        required = default is ...
+    # Get default value
+    if default is not None:
+        default = ast.literal_eval(default)
+    elif hasattr(typer_metadata, "default"):
+        # first case deals with flag style options
+        default = getattr(typer_metadata, "default")
+    else:
+        raise RuntimeError("We should not end up here. This is a bug!")
 
-        # Build input definition
-        if required:
-            input_def["required"] = True
+    # Determine if required
+    required = default is ...
 
-        # Add default value if it exists and is not ...
-        if not required and default is not None:
+    # Add required field if True
+    if required:
+        input_def["required"] = True
+        input_def["policies"] = {}
+        input_def["policies"]["positional"] = True
+        if get_origin(dtype) is list:
+            input_def["policies"]["repeat"] = "list"
+    else:
+        # only set default if not required
+        if default is not None:
             input_def["default"] = default
+        if get_origin(dtype) is list:
+            input_def["policies"] = {}
+            input_def["policies"]["repeat"] = "list"
 
-        # Add policies based on type and Typer decorator
-        policies = _infer_parameter_policies(dtype, param_info, is_argument)
-        if policies:
-            input_def["policies"] = policies
-
-        inputs[param_name] = input_def
-
-    return inputs
-
-
-def extract_outputs(func: Any) -> dict[str, Any]:
-    """
-    Extract output schema from @stimela_output decorators.
-
-    Args:
-        func: Function to analyze
-
-    Returns:
-        Dictionary of output parameters
-    """
-    if not hasattr(func, "__stimela_outputs__"):
-        return {}
-
-    outputs = {}
-    for output in func.__stimela_outputs__:
-        output_def = {"dtype": output["dtype"]}
-
-        # Only include info if it has a value
-        if output["info"]:
-            output_def["info"] = output["info"]
-
-        # Only include required if True (False is default)
-        if output["required"]:
-            output_def["required"] = True
-
-        # Only include implicit if True (False is default)
-        if output["implicit"]:
-            output_def["implicit"] = True
-
-        outputs[output["name"]] = output_def
-
-    return outputs
-
-
-def _parse_google_docstring(docstring: str) -> dict[str, str]:
-    """
-    Parse Google-style docstring to extract parameter descriptions.
-
-    Args:
-        docstring: The docstring to parse
-
-    Returns:
-        Dictionary mapping parameter names to descriptions
-    """
-    param_docs = {}
-
-    # Look for Args section
-    args_match = re.search(r"Args:\s*\n(.*?)(?:\n\n|\n[A-Z]|\Z)", docstring, re.DOTALL)
-    if not args_match:
-        return param_docs
-
-    args_section = args_match.group(1)
-
-    # Parse each parameter line
-    for line in args_section.split("\n"):
-        line = line.strip()
-        if not line:
-            continue
-
-        # Match pattern: param_name: description
-        match = re.match(r"(\w+):\s*(.+)", line)
-        if match:
-            param_name = match.group(1)
-            description = match.group(2)
-            param_docs[param_name] = description
-
-    return param_docs
-
-
-def _infer_parameter_policies(python_type: Any, param_info: str, is_argument: bool = False) -> dict[str, Any]:
-    """
-    Infer parameter policies from type and info.
-
-    Args:
-        python_type: The Python type hint
-        param_info: Parameter description
-        is_argument: Whether this is a Typer Argument (positional)
-
-    Returns:
-        Dictionary of policies
-    """
-    policies = {}
-
-    # Typer Arguments are positional
-    if is_argument:
-        policies["positional"] = True
-
-    # Check if it's a list type
-    origin = get_origin(python_type)
-    if origin is list:
-        policies["repeat"] = "list"
-
-    return policies
+    return param_name, input_def
 
 
 def _dtype_to_str(dtype):
@@ -410,3 +311,24 @@ def _dtype_to_str(dtype):
     if hasattr(dtype, "__name__"):
         return dtype.__name__
     return dtype
+
+
+def parse_decorator(dec: ast.expr) -> dict:
+    """Parse a decorator node to extract name and arguments."""
+    if isinstance(dec, ast.Name):
+        # Simple decorator: @decorator
+        decorator_name = dec.id
+        return decorator_name, {"args": [], "kwargs": {}}
+
+    elif isinstance(dec, ast.Call):
+        # Decorator with arguments: @decorator(arg1, arg2, key=value)
+        decorator_name = ast.unparse(dec.func)
+        args = [ast.unparse(arg) for arg in dec.args]
+        kwargs = {kw.arg: ast.literal_eval(kw.value) for kw in dec.keywords}
+        if decorator_name != "stimela_cab":
+            decorator_name = kwargs.pop("name")
+        return decorator_name, {"args": args, "kwargs": kwargs}
+
+    else:
+        # Complex decorator (e.g., chained attributes)
+        raise ValueError("Unsupported decorator format")
