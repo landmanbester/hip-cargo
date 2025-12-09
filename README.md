@@ -231,7 +231,7 @@ app.command(name="generate-function")(generate_function)
 
 __all__ = ["app"]
 ```
-<!-- CODE:__init__:START -->
+<!-- CODE:__init__:END -->
 
 So we have two commands registered.
 That's all we'll need for this demo.
@@ -242,7 +242,91 @@ The package `pyproject.toml` needs to enable a lightweight mode by default but a
 For `hip-cargo`, it looks like the following:
 
 <!-- CODE:pyprojecttoml:START -->
-<!-- CODE:pyprojecttoml:START -->
+```python
+[project]
+name = "hip-cargo"
+version = "0.1.2"
+description = "Tools for generating Stimela cab definitions from Python functions"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [
+    { name = "landmanbester", email = "lbester@sarao.ac.za" }
+]
+keywords = ["stimela", "typer", "cli", "yaml", "code-generation", "radio-astronomy"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Code Generators",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Scientific/Engineering :: Astronomy",
+]
+dependencies = [
+    "typer>=0.12.0",
+    "pyyaml>=6.0",
+    "typing-extensions>=4.15.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/landmanbester/hip-cargo"
+Repository = "https://github.com/landmanbester/hip-cargo"
+"Bug Tracker" = "https://github.com/landmanbester/hip-cargo/issues"
+
+[project.scripts]
+cargo = "hip_cargo.cli:app"
+
+[build-system]
+requires = ["uv_build>=0.8.3,<0.10.0"]
+build-backend = "uv_build"
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "N", "W"]
+ignore = []
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "--strict-markers",
+    "--strict-config",
+    "--verbose",
+]
+markers = [
+    "unit: Unit tests",
+    "integration: Integration tests",
+    "slow: Tests that take more time to run",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.4.2",
+    "ruff>=0.13.2",
+    "tbump>=6.11.0",
+    "pre-commit>=4.0.0",
+    "ipdb"
+]
+test = [
+    "pytest>=8.0.0",
+    "pytest-cov>=5.0.0",
+]
+```
+<!-- CODE:pyprojecttoml:END -->
 
 ### 2. Generate the Stimela cab definition
 
