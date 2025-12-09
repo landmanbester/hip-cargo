@@ -101,6 +101,9 @@ hip-cargo/
 ├── .gitignore                   # make sure your .lock file is not ignored
 ├── pyproject.toml               # PEP 621 compliant
 ├── tbump.toml                   # this makes releases so much easier
+├── tests                        # obviously we need these
+│   ├── conftest.py
+│   ├── __init__.py
 └── README.md                    # We are going to put all the docs in the project README's :no_mouth:
 
 ```
