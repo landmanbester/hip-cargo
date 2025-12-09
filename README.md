@@ -231,24 +231,18 @@ app.command(name="generate-function")(generate_function)
 
 __all__ = ["app"]
 ```
-<!-- CODE:__init__:END -->
+<!-- CODE:__init__:START -->
+
+So we have two commands registered.
+That's all we'll need for this demo.
 
 ## 📦 Packaging
-That's it, if you have something like the following
-```toml
-[project.scripts]
-mypackage = "mypackage.cli:app"
-```
-in your `pyproject.toml` you should now be able to run
-```bash
-app --help
-```
-and
-```bash
-app process --help
-```
-from the command line and have a beautifully formatted CLI for your package.
-Note that you can register multiple commands under `app`.
+This is one of the core design principles.
+The package `pyproject.toml` needs to enable a lightweight mode by default but also specify what the full dependencies are.
+For `hip-cargo`, it looks like the following:
+
+<!-- CODE:pyprojecttoml:START -->
+<!-- CODE:pyprojecttoml:START -->
 
 ### 2. Generate the Stimela cab definition
 

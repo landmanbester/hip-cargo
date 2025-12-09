@@ -9,6 +9,7 @@ def update_readme():
     snippets = {
         "__init__": Path("src/hip_cargo/cli/__init__.py").read_text(),
         "generate-cabs": Path("src/hip_cargo/cli/generate_cabs.py").read_text(),
+        "pyprojecttoml": Path("pyproject.toml").read_text(),
     }
 
     # Replace content between markers
