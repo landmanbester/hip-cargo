@@ -7,7 +7,7 @@ def update_readme():
 
     # Define your code snippets with markers
     snippets = {
-        "__init__": Path("src/hip_cargo/__init__.py").read_text(),
+        "__init__": Path("src/hip_cargo/cli/__init__.py").read_text(),
         "generate-cabs": Path("src/hip_cargo/cli/generate_cabs.py").read_text(),
     }
 
