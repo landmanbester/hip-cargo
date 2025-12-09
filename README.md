@@ -51,7 +51,7 @@ Documentation on each individual command can be obtained by calling help for the
 ```bash
 cargo generate-cabs --help
 ```
-The full package should be available as a container image on the [GitHub Container Registry](ghcr.io).
+The full package should be available as a container image on the [GitHub Container Registry](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry).
 The `Dockerfile` for the project should install the package in `full` mode.
 This is used to build the container image that is uploaded to the registry.
 The image should be tagged with a version so that `stimela` knows how to match cab configuration to images.
