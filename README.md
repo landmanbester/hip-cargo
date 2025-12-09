@@ -1,11 +1,15 @@
 # hip-cargo
 
-A guide to designing auto-documenting CLI interfaces using Typer + conversion utilities.
-If you are creating a new package the instructions below will guide you on how to structure it.
-The `generate-function` utility is available to assist in converting an existing package to the `hip-cargo` format but there will be some manual steps involved.
-The philosophy behind this design is to allow having a lightweight version of the package that only installs the bits required to generate `--help` from the CLI and the cab definitions that can then be used with `stimela`.
-The full package should be available as a container image that can be used with `stimela`.
-The image should be tagged with the package version so that `stimela` will automatically pull the image that matches the cab configuration.
+`hip-cargo` is an attempt to liberate developers from maintaining their packages in `cult-cargo`.
+The core concept boils down to maintaining a lightweight package that only installs the `stimela` cabs required to run a linked and versioned containerised image of the package.
+This makes it possible to install the package alongside `cult-cargo` and include cabs into recipes using the syntax
+```yaml
+_include:
+  - (module)cab_name.yml
+```
+In principle, that's all there is to it.
+The `hip-cargo` package does not dictate how you should go about structuring your package.
+Instead, it serves as an example of how to design auto-documenting CLI interfaces using Typer and provides some utilities to convert function signatures into `stimela` cabs and vice versa.
 
 ## Installation
 
@@ -21,7 +25,37 @@ cd hip-cargo
 uv sync
 ```
 
+The latter is probably more useful if you want to use `hip-cargo` as a template for your own package.
+
 ## Quick Start
+The following instructions provide a guide on how to structure a package for use with `hip-cargo`.
+Note that `hip-cargo` itself follows exactly this structure and will be used as the running example throughout.
+It provides two utility functions viz.
+
+* `generate-cabs`: Generate cabs from Typer CLI definitions.
+* `generate-function`: Generate a Typer CLI definition from a cab.
+
+By default, `hip-cargo` installs a lightweight version of the package that only provides the CLI and the cab definitions required for using the linked container image with `stimela`.
+Upon installation, an executable called `cargo` is added to the `PATH`.
+`cargo` is a Typer command group containing multiple commands.
+Available commands can be listed using
+```bash
+cargo --help
+```
+This should print something like the following
+
+![CLI Help](docs/cli-help.svg)
+
+Documentation on each individual command can be obtained by calling help for the command.
+For example:
+
+![GC Help](docs/generate-cabs-help.svg)
+
+![GF Help](docs/generate-function-help.svg)
+
+The full package should be available as a container image that can be used with `stimela`.
+The image should be tagged with the package version so that `stimela` will automatically pull the image that matches the cab configuration.
+
 
 ### 1. Decorate your Python CLI
 
@@ -57,7 +91,7 @@ def process(
     """
     Process a data file.
     """
-    # All your manual parameter wrangling here
+    # Lazy imports from core happen here
     from mypackage.core.process import process as process_core
     return process_core(*args, **kwargs)
 ```

@@ -26,7 +26,8 @@ Directory = NewType("Directory", Path)
 def generate_cabs(
     module: Annotated[
         File,
-        typer.Argument(
+        typer.Option(
+            ...,
             parser=File,
             help="CLI module path. "
             "Use wild card to generate cabs for multiple commands in module (e.g. package/cli/*). ",
