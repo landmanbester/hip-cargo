@@ -29,13 +29,13 @@ def generate_container_url(pyproject_path="pyproject.toml"):
         data = tomllib.load(f)
 
     project = data.get("project", {})
-    version = project.get("version")
+    # version = project.get("version")
 
     # Repository URL can be in different places
     urls = project.get("urls", {})
     repo_url = urls.get("Repository") or urls.get("Source") or urls.get("Homepage")
 
-    container_url = repo_url.replace("https://github.com", "ghcr.io") + f":{version}"
+    container_url = repo_url.replace("https://github.com", "ghcr.io") + ":latest"
 
     return container_url
 
