@@ -200,6 +200,20 @@ def generate_cabs(
 ```
 <!-- CODE:generate-cabs:END -->
 
+Each CLI module should be a separate file and all modules need to be registered as commands inside `src/cli/__init__.py`.
+For `hip-cargo`, this is what it looks like
+
+<!-- CODE:__init__:START -->
+```python
+"""hip-cargo: Tools for generating Stimela cab definitions."""
+
+from hip_cargo.utils.decorators import stimela_cab, stimela_output
+
+__version__ = "0.1.2"
+__all__ = ["stimela_cab", "stimela_output"]
+```
+<!-- CODE:__init__:END -->
+
 ## 📦 Packaging
 That's it, if you have something like the following
 ```toml
