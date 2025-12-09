@@ -86,10 +86,11 @@ def generate_cabs(module_paths: list[str], output_dir: str | None, pyprojecttoml
 
                 # Write the YAML file
                 if output_dir:
-                    output_dir = Path(output_dir) / f"{node.name}.yml"
+                    output_dir = Path(output_dir)
                     # Create parent directory if it doesn't exist
                     output_dir.parent.mkdir(parents=True, exist_ok=True)
-                    with open(output_dir, "w") as f:
+                    output_file = output_dir / f"{node.name}.yml"
+                    with open(output_file, "w") as f:
                         f.write(yaml_content)
                 else:  # else write to terminal
                     print(yaml_content)

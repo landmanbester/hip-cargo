@@ -6,11 +6,10 @@ from pathlib import Path
 
 from rich.console import Console
 
-width = 100
-
 
 def update_help_svg():
     """Generate SVG from cargo --help output."""
+
     # Run the CLI command
     result = subprocess.run(["cargo", "--help"], capture_output=True, text=True, check=True)
 
