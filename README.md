@@ -1,7 +1,7 @@
 # hip-cargo
 
-`hip-cargo` is an attempt to liberate developers from maintaining their packages in `cult-cargo`.
-The core concept boils down to maintaining a lightweight package that only installs the `stimela` cabs required to run a linked and versioned containerised image of the package.
+`hip-cargo` is an attempt to liberate developers from maintaining their packages in [`cult-cargo`](https://github.com/caracal-pipeline/cult-cargo).
+The core concept boils down to maintaining a lightweight package that only installs the [`stimela`](https://github.com/caracal-pipeline/stimela) cabs required to run a linked and versioned containerized image of the package.
 This makes it possible to install the package alongside `cult-cargo` and include cabs into recipes using the syntax
 ```yaml
 _include:
@@ -9,7 +9,8 @@ _include:
 ```
 In principle, that's all there is to it.
 The `hip-cargo` package does not dictate how you should go about structuring your package.
-Instead, it serves as an example of how to design auto-documenting CLI interfaces using Typer and provides some utilities to convert function signatures into `stimela` cabs and vice versa.
+Instead, it serves as an example of how to design auto-documenting CLI interfaces using Typer.
+It also provides some utilities to convert function signatures into `stimela` cabs and vice versa for packages that mimic its structure.
 
 ## Installation
 
@@ -46,15 +47,63 @@ This should print something like the following
 
 ![CLI Help](docs/cli-help.svg)
 
-Documentation on each individual command can be obtained by calling help for the command.
-For example:
+Documentation on each individual command can be obtained by calling help for the command e.g.
+```bash
+cargo generate-cabs --help
+```
+The full package should be available as a container image on the [GitHub Container Registry](ghcr.io).
+The `Dockerfile` for the project should install the package in `full` mode.
+This is used to build the container image that is uploaded to the registry.
+The image should be tagged with a version so that `stimela` knows how to match cab configuration to images.
+The following versioning schema is proposed:
 
-![GC Help](docs/generate-cabs-help.svg)
+* use semantic versioning for releases
+* use `latest` tag for `main`/`master` branch
+* use `branch-name` when developing new features
 
-![GF Help](docs/generate-function-help.svg)
+GitHub actions should be set up to build and push the container image to the registry.
+The image should be tagged with the version and the branch name.
+The image should be pushed to the registry using the `ghcr.io` domain.
+One snag is that one needs to know the version in order to create the cabs.
+Since `hip-cargo` is available on the GRH, the `generate-cabs` command can be used GitHub actions to achieve this.
+Let's start with the expected package structure.
 
-The full package should be available as a container image that can be used with `stimela`.
-The image should be tagged with the package version so that `stimela` will automatically pull the image that matches the cab configuration.
+## Package Structure
+
+We recommend using [uv](https://docs.astral.sh/uv/) as the package manager.
+Initialize your project with the following structure (again using `hip-cargo` as the example):
+
+```
+hip-cargo/
+├── .github
+│   ├── dependabot.yml
+│   └── workflows
+│       ├── ci.yml
+│       ├── publish-container.yml
+│       └── publish.yml
+├── src
+│   └── hip_cargo
+│       ├── cabs
+│       │   ├── generate_cabs.yml
+│       │   ├── generate_function.yml
+│       │   ├── __init__.py
+│       ├── cli
+│       │   ├── generate_cabs.py
+│       │   ├── generate_function.py
+│       │   ├── __init__.py
+│       ├── core
+│       │   ├── generate_cabs.py
+│       │   ├── generate_function.py
+│       │   ├── __init__.py
+├── Dockerfile                   # For containerization
+├── LICENSE                      # MIT or BSD3 license encouraged
+├── .pre-commit-config.yaml      # You should use these if you don't already
+├── .gitignore                   # make sure your .lock file is not ignored
+├── pyproject.toml               # PEP 621 compliant
+├── tbump.toml                   # this makes releases so much easier
+└── README.md                    # We are going to put all the docs in the project README's :no_mouth:
+
+```
 
 
 ### 1. Decorate your Python CLI
@@ -159,36 +208,7 @@ MS = NewType("MS", Path)
 ```
 bit for you. It should also add the `parser=MS` in the `typer.Option()` bit for you.
 
-## Project Structure for hip-cargo Packages
 
-Packages following the hip-cargo pattern should be structured to enable both lightweight cab definitions and full execution environments:
-
-```
-my-scientific-package/
-├── src/
-│   └── mypackage/
-│       ├── __init__.py
-│       ├── utils/               # Utilities used by core algorithms
-│       │   ├── __init__.py
-│       │   └── operator.py
-│       ├── core/                # Core implementations with standard python type hints (no Annotated or custom types)
-│       │   ├── __init__.py
-│       │   ├── process.py
-│       │   └── analyze.py
-│       ├── cli/                 # Lightweight CLI layer
-│       │   ├── __init__.py      # Main Typer app
-│       │   ├── process.py       # Individual commands
-│       │   └── analyze.py
-│       └── cabs/                # Generated cab definitions (inside mypackage)
-│           ├── __init__.py
-│           ├── process.yaml
-│           └── analyze.yaml
-├── scripts/
-│   └── generate_cabs.py        # Automation script
-├── Dockerfile                   # For containerization
-├── pyproject.toml
-└── README.md
-```
 
 ### Key Principles
 
