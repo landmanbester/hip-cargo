@@ -200,61 +200,7 @@ def generate_cabs(
 ```
 <!-- CODE:generate-cabs:END -->
 
-```python
-import typer
-from pathlib import Path
-from typing import NewType
-from typing_extensions import Annotated
-from hip_cargo import stimela_cab, stimela_output
-
-# custom types (stimela has e.g. File, URI, MS and Directory)
-File = NewType("File", Path)
-URI = NewType("URI", Path)
-MS = NewType("MS", Path)
-Directory = NewType("Directory", Path)
-
-@stimela_cab(
-    name="my_processor",
-    info="Process data files",
-)
-@stimela_output(
-    name="output_file",
-    dtype="File",
-    info="{input_file}.processed",
-    required=True,
-)
-def process(
-    input_ms: Annotated[MS, typer.Argument(parser=MS, help="Input MS to process")],  # note the parser=MS bit. This is required for non-standard types
-    output_dir: Annotated[Directory, typer.Option(parser=Directory, help="Output Directory for results")] = Path("./output"),
-    threshold: Annotated[float, typer.Option(help="Threshold value")] = 0.5,
-):
-    """
-    Process a data file.
-    """
-    # Lazy imports from core happen here
-    from mypackage.core.process import process as process_core
-    return process_core(*args, **kwargs)
-```
-Note that `*args` and `**kwargs` need to passed explicitly.
-Then register the command in the `src/mypackage/cli/__init__.py` with something like the following
-```python
-"""Lightweight CLI for mypackage."""
-
-import typer
-
-app = typer.Typer(
-    name="mypackage",
-    help="Scientific computing package",
-    no_args_is_help=True,
-)
-
-# Register commands
-from mypackage.cli.process import process
-
-app.command(name="process")(process)
-
-__all__ = ["app"]
-```
+## 📦 Packaging
 That's it, if you have something like the following
 ```toml
 [project.scripts]
