@@ -205,12 +205,31 @@ For `hip-cargo`, this is what it looks like
 
 <!-- CODE:__init__:START -->
 ```python
-"""hip-cargo: Tools for generating Stimela cab definitions."""
+"""Lightweight CLI for hip-cargo."""
 
-from hip_cargo.utils.decorators import stimela_cab, stimela_output
+import typer
 
-__version__ = "0.1.2"
-__all__ = ["stimela_cab", "stimela_output"]
+app = typer.Typer(
+    name="cargo",
+    help="Tools for generating Stimela cab definitions from Python functions",
+    no_args_is_help=True,
+)
+
+
+@app.callback()
+def callback():
+    """hip-cargo: a guide to designing self-documenting CLI interfaces using Typer + conversion utilities."""
+    pass
+
+
+# Register commands
+from hip_cargo.cli.generate_cabs import generate_cabs  # noqa: E402
+from hip_cargo.cli.generate_function import generate_function  # noqa: E402
+
+app.command(name="generate-cabs")(generate_cabs)
+app.command(name="generate-function")(generate_function)
+
+__all__ = ["app"]
 ```
 <!-- CODE:__init__:END -->
 
