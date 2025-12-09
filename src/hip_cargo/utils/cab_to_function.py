@@ -179,12 +179,17 @@ def load_cab_definition(cab_file: Path) -> dict[str, Any]:
     with open(cab_file) as f:
         data = yaml.safe_load(f)
 
-    if "cabs" not in data:
-        raise ValueError(f"No 'cabs' section found in {cab_file}")
+    # Support both old format (with "cabs:" wrapper) and new format (without it)
+    if "cabs" in data:
+        # Old format: cabs: { cab_name: { ... } }
+        cab_name = next(iter(data["cabs"]))
+        cab_def = data["cabs"][cab_name]
+    else:
+        # New format: cab_name: { ... }
+        # Get the first (and usually only) top-level key that's not metadata
+        cab_name = next(iter(data))
+        cab_def = data[cab_name]
 
-    # Get the first (and usually only) cab
-    cab_name = next(iter(data["cabs"]))
-    cab_def = data["cabs"][cab_name]
     cab_def["_name"] = cab_name
 
     return cab_def
