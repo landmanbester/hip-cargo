@@ -13,7 +13,7 @@ generate_cabs:
       policies:
         positional: true
     image:
-      info: 'pyproject.toml associated with the module. '
+      info: 'Name of container image. '
       dtype: File
   outputs:
     output_dir:
