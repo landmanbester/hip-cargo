@@ -126,6 +126,8 @@ jobs:
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=ref,event=branch
+            type=ref,event=pr,prefix=pr-
+            type=raw,value=${{ github.head_ref }},enable=${{ github.event_name == 'pull_request' }}
             type=raw,value=latest,enable={{is_default_branch}}
 
       - name: Build and push Docker image
