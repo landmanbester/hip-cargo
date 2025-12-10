@@ -66,12 +66,22 @@ jobs:
 
       - name: Generate Stimela cabs using hip-cargo container
         run: |
+          # Extract package name from pyproject.toml and convert to module name
+          PACKAGE_NAME=$(python3 -c "
+          import tomllib
+          with open('pyproject.toml', 'rb') as f:
+              data = tomllib.load(f)
+              print(data['project']['name'].replace('-', '_'))
+          ")
+          echo "name=$PACKAGE_NAME" >> $GITHUB_OUTPUT
+          echo "Package name: $PACKAGE_NAME"
+
           docker run --rm \
             -v ${{ github.workspace }}:/workspace \
             ghcr.io/landmanbester/hip-cargo:latest \
             cargo generate-cabs \
-              --module '/workspace/src/*/cli/*' \
-              --output-dir '/workspace/src/*/cabs' \
+              --module '/workspace/src/${PACKAGE_NAME}/cli/*' \
+              --output-dir '/workspace/src/${PACKAGE_NAME}/cabs' \
               --image '${{ steps.version.outputs.full_image_name }}'
 
           # Note: The wildcard pattern above assumes your package follows
