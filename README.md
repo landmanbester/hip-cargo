@@ -69,12 +69,7 @@ The following versioning schema is proposed:
 * use `latest` tag for `main`/`master` branch
 * use `branch-name` when developing new features
 
-GitHub actions should be set up to build and push the container image to the registry.
-The image should be tagged with the version and the branch name.
-The image should be pushed to the registry using the `ghcr.io` domain.
-One snag is that one needs to know the version in order to create the cabs.
-Since `hip-cargo` is available on the GRH, the `generate-cabs` command can be used GitHub actions to achieve this.
-Let's start with the expected package structure.
+This can all automated with GitHub actions, see the [update-cabs-and-publish](./.github/workflows/update-cabs-and-publish.yml) workflow for an example.
 
 ## Package Structure
 
@@ -87,7 +82,7 @@ hip-cargo/
 │   ├── dependabot.yml
 │   └── workflows
 │       ├── ci.yml
-│       ├── publish-container.yml
+│       ├── update-cabs-and-publish.yml
 │       └── publish.yml
 ├── src
 │   └── hip_cargo
@@ -170,7 +165,7 @@ def generate_cabs(
     ] = None,
     image: Annotated[
         File,
-        typer.Option(parser=File, help="pyproject.toml associated with the module. ", rich_help_panel="Inputs"),
+        typer.Option(parser=File, help="Name of container image. ", rich_help_panel="Inputs"),
     ] = None,
 ):
     """Generate a Stimela cab definition from a Python module.
@@ -245,7 +240,7 @@ That's all we'll need for this demo.
 
 ## 2 Packaging
 This is one of the core design principles.
-The package `pyproject.toml` needs to be PEP 621 compliant and it needs to enable a lightweight mode by default but also specify what the full dependencies are.
+The package `pyproject.toml` needs to be PEP 621 compliant, and it needs to enable a lightweight mode by default but also specify what the full dependencies are.
 For `hip-cargo`, it looks like the following:
 
 <!-- CODE:pyprojecttoml:START -->
@@ -360,64 +355,22 @@ COPY src/ src/
 RUN uv pip install --system --no-cache .
 
 # Make CLI available
-ENTRYPOINT ["mypackage"]
-CMD ["--help"]
+CMD ["cargo", "--help"]
 ```
 
 ### 2. Set up GitHub Actions Workflow
 
-Create `.github/workflows/publish-container.yml`:
+Copy `.github/workflows/update-cabs-and-publish.yml` from `hip-cargo` into your project and edit it from there if needs be.
+Although, it's fairly generic, so hopefully it just works. The basic workflow is the following:
 
-```yaml
-name: Build and Publish Container
+  1. Generate all `stimela` cabs from `src/hip_cargo/cli/*.py` into `src/hip_cargo/cabs` tagging the image with the appropriate tag.
+  2. Commit new cabs to the repo if they have changed.
+  3. Build and push the container to the GHCR.
 
-on:
-  push:
-    tags:
-      - 'v*.*.*'  # Trigger on version tags (e.g., v1.0.0)
-  workflow_dispatch:  # Allow manual triggering
-
-env:
-  REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
-
-jobs:
-  build-and-push:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v5
-
-      - name: Log in to Container Registry
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Extract metadata (tags, labels)
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
-          tags: |
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
-            type=sha,prefix={{branch}}-
-
-      - name: Build and push Docker image
-        uses: docker/build-push-action@v5
-        with:
-          context: .
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-```
+The workflow will tag the container with the branch name if there is an open PR to your default branch.
+Once the PR is merged, an action is triggered to update the image name in the cab definitions and push a `latest` version to GHCR.
+Pushing semantically versioned tags will trigger the same workflow (this is where `tbump` is quite useful).
+In this cas ethe image name is tagged with the version.
 
 ### 3. Link Container to GitHub Package
 
@@ -436,95 +389,28 @@ To associate the container image with your repository:
    - In the package settings, set visibility to "Public" for open-source projects
    - This allows Stimela to pull images without authentication
 
-### 4. Version Tagging Best Practices
+### 4. Using the Container with Stimela
 
-The workflow above creates multiple tags for each release:
-
-```bash
-# For release v1.2.3, creates:
-ghcr.io/username/mypackage:1.2.3    # Full version
-ghcr.io/username/mypackage:1.2      # Minor version
-ghcr.io/username/mypackage:1        # Major version
-ghcr.io/username/mypackage:main-sha123456  # Branch + commit SHA
-```
-
-This allows users to pin to specific versions or track latest minor/major releases.
-
-### 5. Triggering a Build
-
-**Automated (recommended):**
-```bash
-# Create and push a version tag
-git tag v1.0.0
-git push origin v1.0.0
-```
-
-The GitHub Action will automatically build and publish the container.
-
-**Manual:**
-- Go to "Actions" tab in GitHub
-- Select "Build and Publish Container"
-- Click "Run workflow"
-
-### 6. Using the Container with Stimela
-
-Once published, users can reference your container in Stimela recipes:
-
+Once published, users should be able to simply include the cab definitions in their recipes.
+This only requires installing the lightweight version of the package so it shouldn't clash with any other packages, in particular those maintained in `cult-cargo`.
+Use the following syntax
 ```yaml
-cabs:
-  - name: mypackage
-    image: ghcr.io/username/mypackage:1.0.0
+_include:
+  - (mypackage.cabs)cab_name.yml
 ```
 
-Stimela will automatically pull the matching version based on the cab configuration.
+`stimela` will automatically pull the matching version based on the cab configuration.
 
-### 7. Local Testing
-
-Test your container locally before pushing:
-
-```bash
-# Build
-docker build -t mypackage:test .
-
-# Run
-docker run --rm mypackage:test --help
-docker run --rm mypackage:test process --help
-
-# Test with mounted data
-docker run --rm -v $(pwd)/data:/data mypackage:test process /data/input.ms
-```
 
 ## Type Inference
 
-`hip-cargo` automatically recognizes custom `stimela` types. The `generate-cab` command should add
-```python
-from pathlib import Path
-from typing import NewType
-
-MS = NewType("MS", Path)
-Directory = NewType("Directory", Path)
-URI = NewType("URI", Path)
-File = NewType("File", Path)
-```
-
-to the preamble of functions generated from cabs that use these types.
-It should also add the `parser` bit to the type hint Annotation e.g. for the custom `MS` dtype we need
-```
-def process(input_ms: Annotated[MS, typer.Option(parser=MS)]):
-    pass
-```
-One quirk of this approach is that parameters which have `None` as the default need to be defined as e.g.
-```
-def process(input_ms: Annotated[MS | None, typer.Option(parser=MS)]) = None:
-    pass
-```
-Python then parses this as `Optional[MS]` which is just an alias for `Union[MS | None]`. This should be handled correctly such that the `generate-cab` command places `dtype: MS` in the cab definition and the `generate-function` command correctly generates the function signature above. These custom types are currently limited to only two possible types in the `Union` and should be specified using the newer `dtype1 | dtype2` format in the function definition (one of which may be `None`). All standard python types should just work.
+`hip-cargo` automatically recognizes custom `stimela` types. In your CLI definitions, simply create a `NewType` and use it as the parser for the Typer Option/Argument. See the `generate-cabs` definition above for an example.
 
 ## Decorators
 
 ### `@stimela_cab`
 
-Marks a function as a Stimela cab.
+Marks a function as a Stimela cab. (Probably incomplete but it's basically a dictionary mapping.)
 
 - `name`: Cab name
 - `info`: Description
@@ -532,13 +418,13 @@ Marks a function as a Stimela cab.
 
 ### `@stimela_output`
 
-Defines a `stimela` output. When defining functions from cabs the `generate-function` command should check for the following parameter fields
+Defines a `stimela` output. (Probably incomplete but it's basically a dictionary mapping.)
 
 - `name`: Output name (top level, one below `cabs`)
 - `dtype`: Data type (File, Directory, MS, etc.)
 - `info`: Help string
 - `required`: Whether output is required (default: False)
-- `implicit`: If implicit is `True` the parameter should not be placed in the function definition. If implicit is `False` (the default), the parameter needs to be added to the function signature.
+- `implicit`: Just use what you would put in the cab definition for `stimela`
 
 ## Features
 
@@ -555,7 +441,8 @@ This project uses:
 - [ruff](https://github.com/astral-sh/ruff) for linting and formatting
 - [typer](https://typer.tiangolo.com/) for the CLI
 
-### Setting Up Development Environment
+
+### Setting Up Development Environment (Incomplete below)
 
 ```bash
 # Clone the repository
@@ -626,8 +513,6 @@ uv run ruff check . --fix
 # Run tests
 uv run pytest -v
 
-# Run tests with coverage
-uv run pytest --cov=hip_cargo --cov-report=term-missing
 ```
 
 ### Contributing Workflow

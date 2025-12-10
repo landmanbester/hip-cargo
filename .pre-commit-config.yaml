@@ -29,7 +29,7 @@ repos:
         name: Update CLI help documentation
         entry: python scripts/update_cli_help.py
         language: system
-        files: ^(hip_cargo/.*\.py|pyproject\.toml)$
+        files: ^(src/hip_cargo/.*\.py|pyproject\.toml)$
         pass_filenames: false
         stages: [pre-commit]
 

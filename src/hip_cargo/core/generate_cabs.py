@@ -19,9 +19,6 @@ def generate_cabs(module_paths: list[str], output_dir: str | None, image: str | 
         ImportError: If the module cannot be imported
         AttributeError: If the module doesn't contain a decorated function
     """
-    # typer.echo(f"Found decorated function: {func.__name__}")
-    # typer.echo(f"Extracting cab definition for: {cab_name}")
-    # typer.echo("Generating YAML...")
     for module_path in module_paths:
         with open(module_path, "r") as f:
             tree = ast.parse(f.read(), filename=module_path)

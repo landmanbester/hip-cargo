@@ -1,8 +1,6 @@
 """Function introspection for extracting cab information."""
 
 import ast
-import importlib
-import importlib.metadata
 from itertools import compress
 from pathlib import Path
 from types import NoneType, UnionType
@@ -75,62 +73,6 @@ def eval_annotation_safe(annotation_str: str) -> object:
         raise e
 
 
-def _get_container_image_url(module_path: str) -> str | None:
-    """
-    Get the container image URL for a package.
-
-    Extracts the package name from the module path, gets the version,
-    and constructs the ghcr.io image URL from the repository metadata.
-
-    Args:
-        module_path: Dotted module path (e.g., 'hip_cargo.cli.generate_cab')
-
-    Returns:
-        Container image URL (e.g., 'ghcr.io/landmanbester/hip-cargo:0.1.1')
-        or None if information cannot be determined
-    """
-    # Extract package name (first component of module path)
-    package_name = module_path.split(".")[0]
-
-    try:
-        # Get package version
-        version = importlib.metadata.version(package_name)
-
-        # Get package metadata to find repository URL
-        metadata = importlib.metadata.metadata(package_name)
-        repository_url = None
-
-        # Try to get Repository URL from project URLs
-        for line in metadata.get_all("Project-URL") or []:
-            if line.startswith("Repository,"):
-                repository_url = line.split(",", 1)[1].strip()
-                break
-
-        # If no Repository URL, try Homepage
-        if not repository_url:
-            for line in metadata.get_all("Project-URL") or []:
-                if line.startswith("Homepage,"):
-                    repository_url = line.split(",", 1)[1].strip()
-                    break
-
-        if not repository_url:
-            return None
-
-        # Extract owner/repo from GitHub URL
-        # Expected format: https://github.com/owner/repo
-        if "github.com" in repository_url:
-            parts = repository_url.rstrip("/").split("/")
-            if len(parts) >= 2:
-                owner = parts[-2]
-                repo = parts[-1].replace(".git", "")
-                return f"ghcr.io/{owner}/{repo}:{version}"
-
-        return None
-
-    except (importlib.metadata.PackageNotFoundError, Exception):
-        return None
-
-
 def _unwrap_optional_from_annotated(param_type: Any) -> tuple[Any, bool]:
     """
     Unwrap Optional wrapper from Annotated types.
@@ -191,7 +133,6 @@ def extract_input(arg: ast.arg, default: Any) -> tuple[str, dict[str, Any]]:
         raise ValueError("Only Annotated types are supported")
 
     # Get parameter description from typer metadata
-    # param_info = typer_metadata.help if hasattr(typer_metadata, 'help') else None
     param_info = getattr(typer_metadata, "help", None)
 
     # Build input definition
@@ -218,7 +159,11 @@ def extract_input(arg: ast.arg, default: Any) -> tuple[str, dict[str, Any]]:
         # first case deals with flag style options
         default = getattr(typer_metadata, "default")
     else:
-        raise RuntimeError("We should not end up here. This is a bug!")
+        raise RuntimeError(
+            f"Unexpected state in input definition for parameter '{param_name}': "
+            f"default is None and typer_metadata has no 'default' attribute. "
+            f"default={default!r}, typer_metadata={typer_metadata!r}"
+        )
 
     # Determine if required
     required = default is ...
@@ -228,13 +173,13 @@ def extract_input(arg: ast.arg, default: Any) -> tuple[str, dict[str, Any]]:
         input_def["required"] = True
         input_def["policies"] = {}
         input_def["policies"]["positional"] = True
-        if get_origin(dtype) is list:
+        if dtype == "list" or dtype == "List":
             input_def["policies"]["repeat"] = "list"
     else:
         # only set default if not required
         if default is not None:
             input_def["default"] = default
-        if get_origin(dtype) is list:
+        if dtype == "list" or dtype == "List":
             input_def["policies"] = {}
             input_def["policies"]["repeat"] = "list"
 

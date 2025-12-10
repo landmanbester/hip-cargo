@@ -31,6 +31,11 @@ def update_help_svg():
     output_path = docs_dir / "cli-help.svg"
     console.save_svg(str(output_path), title="hip-cargo CLI")
 
+    # Strip trailing whitespace to avoid conflicts with pre-commit hooks
+    content = output_path.read_text()
+    content = "\n".join(line.rstrip() for line in content.splitlines()) + "\n"
+    output_path.write_text(content)
+
     print(f"✓ Updated {output_path}")
     return 0
 
@@ -58,6 +63,11 @@ def update_generate_cabs_help_svg():
     output_path = docs_dir / "generate-cabs-help.svg"
     console.save_svg(str(output_path), title="hip-cargo generate-cabs CLI")
 
+    # Strip trailing whitespace to avoid conflicts with pre-commit hooks
+    content = output_path.read_text()
+    content = "\n".join(line.rstrip() for line in content.splitlines()) + "\n"
+    output_path.write_text(content)
+
     print(f"✓ Updated {output_path}")
     return 0
 
@@ -84,6 +94,11 @@ def update_generate_function_help_svg():
 
     output_path = docs_dir / "generate-function-help.svg"
     console.save_svg(str(output_path), title="hip-cargo generate-function CLI")
+
+    # Strip trailing whitespace to avoid conflicts with pre-commit hooks
+    content = output_path.read_text()
+    content = "\n".join(line.rstrip() for line in content.splitlines()) + "\n"
+    output_path.write_text(content)
 
     print(f"✓ Updated {output_path}")
     return 0

@@ -44,7 +44,7 @@ def generate_cabs(
     ] = None,
     image: Annotated[
         File,
-        typer.Option(parser=File, help="pyproject.toml associated with the module. ", rich_help_panel="Inputs"),
+        typer.Option(parser=File, help="Name of container image. ", rich_help_panel="Inputs"),
     ] = None,
 ):
     """Generate a Stimela cab definition from a Python module.
