@@ -13,5 +13,4 @@ COPY src/ src/
 RUN uv pip install --system --no-cache .
 
 # Make CLI available
-ENTRYPOINT ["cargo"]
-CMD ["--help"]
+CMD ["cargo", "--help"]
