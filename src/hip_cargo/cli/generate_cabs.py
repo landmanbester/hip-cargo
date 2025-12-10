@@ -42,11 +42,10 @@ def generate_cabs(
             rich_help_panel="Outputs",
         ),
     ] = None,
-    pyprojecttoml: Annotated[
+    image: Annotated[
         File,
         typer.Option(parser=File, help="pyproject.toml associated with the module. ", rich_help_panel="Inputs"),
     ] = None,
-    end_message: Annotated[str, typer.Option(hidden=True)] = "✓ Successfully generated cab definitions in ",
 ):
     """Generate a Stimela cab definition from a Python module.
 
@@ -75,7 +74,7 @@ def generate_cabs(
     typer.echo(f"Writing cabs to: {output_dir}")
 
     # Call core logic
-    generate_cabs_core(modlist, str(output_dir), pyprojecttoml)
+    generate_cabs_core(modlist, str(output_dir), image)
 
     # Success message
-    print(f":boom: [green] {end_message}: {output_dir} [/green]")
+    print(f":boom: [green] Successfully generated cabs in: {output_dir} [/green]")

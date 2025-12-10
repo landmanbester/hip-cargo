@@ -3,7 +3,6 @@
 import ast
 import importlib
 import importlib.metadata
-import sys
 from itertools import compress
 from pathlib import Path
 from types import NoneType, UnionType
@@ -17,27 +16,6 @@ MS = NewType("MS", Path)
 Directory = NewType("Directory", Path)
 File = NewType("File", Path)
 URI = NewType("URI", Path)
-
-if sys.version_info >= (3, 11):
-    import tomllib
-else:
-    import tomli as tomllib
-
-
-def generate_container_url(pyproject_path="pyproject.toml"):
-    with open(pyproject_path, "rb") as f:
-        data = tomllib.load(f)
-
-    project = data.get("project", {})
-    # version = project.get("version")
-
-    # Repository URL can be in different places
-    urls = project.get("urls", {})
-    repo_url = urls.get("Repository") or urls.get("Source") or urls.get("Homepage")
-
-    container_url = repo_url.replace("https://github.com", "ghcr.io") + ":latest"
-
-    return container_url
 
 
 def get_safe_namespace():

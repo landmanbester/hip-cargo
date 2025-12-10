@@ -28,6 +28,14 @@ uv sync
 
 The latter is probably more useful if you want to use `hip-cargo` as a template for your own package.
 
+## Key Principles
+
+1. **Separate CLI from implementation**: Keep CLI modules lightweight with lazy imports. Keep them all in the `src/mypackage/cli` directory and define the CLI for each command in a separate file. Construct the main Typer app in `src/mypackage/cli/__init__.py` and register commands there.
+2. **Separate cabs directory at same level as `cli`**: Use `hip-cargo` to auto-generate cabs into in `src/mypackage/cabs/` directory with the `generate_cabs.py` script. There should be a separate file for each cab.
+3. **Single app, multiple commands**: Use one Typer app that registers all commands. If you need a separate app you might as well create a separate repository for it.
+4. **Lazy imports**: Import heavy dependencies (NumPy, JAX, Dask) only when executing
+5. **Linked GitHub package with container image**: Maintain an up to date `Dockerfile` that installs the full package and use **Docker** (or **Podman**) to upload the image to the GitHub Container registry. Link this to your GitHub repository.
+
 ## Quick Start
 The following instructions provide a guide on how to structure a package for use with `hip-cargo`.
 Note that `hip-cargo` itself follows exactly this structure and will be used as the running example throughout.
@@ -160,11 +168,10 @@ def generate_cabs(
             rich_help_panel="Outputs",
         ),
     ] = None,
-    pyprojecttoml: Annotated[
+    image: Annotated[
         File,
         typer.Option(parser=File, help="pyproject.toml associated with the module. ", rich_help_panel="Inputs"),
     ] = None,
-    end_message: Annotated[str, typer.Option(hidden=True)] = "✓ Successfully generated cab definitions in ",
 ):
     """Generate a Stimela cab definition from a Python module.
 
@@ -193,10 +200,10 @@ def generate_cabs(
     typer.echo(f"Writing cabs to: {output_dir}")
 
     # Call core logic
-    generate_cabs_core(modlist, str(output_dir), pyprojecttoml)
+    generate_cabs_core(modlist, str(output_dir), image)
 
     # Success message
-    print(f":boom: [green] {end_message}: {output_dir} [/green]")
+    print(f":boom: [green] Successfully generated cabs in: {output_dir} [/green]")
 ```
 <!-- CODE:generate-cabs:END -->
 
@@ -236,9 +243,9 @@ __all__ = ["app"]
 So we have two commands registered.
 That's all we'll need for this demo.
 
-## 📦 Packaging
+## 2 Packaging
 This is one of the core design principles.
-The package `pyproject.toml` needs to enable a lightweight mode by default but also specify what the full dependencies are.
+The package `pyproject.toml` needs to be PEP 621 compliant and it needs to enable a lightweight mode by default but also specify what the full dependencies are.
 For `hip-cargo`, it looks like the following:
 
 <!-- CODE:pyprojecttoml:START -->
@@ -328,200 +335,6 @@ test = [
 ```
 <!-- CODE:pyprojecttoml:END -->
 
-### 2. Generate the Stimela cab definition
-
-If you have the CLI definition you can convert it to a can using e.g.
-
-```bash
-cargo generate-cab mypackage.process src/mypackage/cabs/process.yaml
-```
-
-This should be automated using `scrips/generate_cabs.py`, but the above command is useful for testing.
-
-### 3. Generate Python function from existing cab (reverse)
-
-If you are converting an existing package to the `hip-cargo` format there is a utility function available viz.
-
-```bash
-cargo generate-function /path/to/existing_cab.yaml -o myfunction.py
-```
-
-Currently, this won't add things like `rich_output_panel`, but it should help to get you started.
-The program should recognize custom types and add the
-```
-from pathlib import Path
-from typing import NewType
-
-MS = NewType("MS", Path)
-```
-bit for you. It should also add the `parser=MS` in the `typer.Option()` bit for you.
-
-
-
-### Key Principles
-
-1. **Separate CLI from implementation**: Keep CLI modules lightweight with lazy imports. Keep them all in the `src/mypackage/cli` directory and define the CLI for each command in a separate file. Construct the main Typer app in `src/mypackage/cli/__init__.py` and register commands there.
-2. **Separate cabs directory at same level as `cli`**: Use `hip-cargo` to auto-generate cabs into in `src/mypackage/cabs/` directory with the `generate_cabs.py` script. There should be a separate file for each cab.
-3. **Single app, multiple commands**: Use one Typer app that registers all commands. If you need a separate app you might as well create a separate repository for it.
-4. **Lazy imports**: Import heavy dependencies (NumPy, JAX, Dask) only when executing
-5. **Linked GitHub package with container image**: Maintain an up to date `Dockerfile` that installs the full package and use **Docker** (or **Podman**) to upload the image to the GitHub Container registry. Link this to your GitHub repository.
-
-### Example Structure
-
-**`src/mypackage/cli/__init__.py`:**
-```python
-"""Lightweight CLI for mypackage."""
-
-import typer
-
-app = typer.Typer(
-    name="mypackage",
-    help="Scientific computing package",
-    no_args_is_help=True,
-)
-
-# Register commands
-from mypackage.cli.process import process
-from mypackage.cli.analyze import analyze
-
-app.command(name="process")(process)
-app.command(name="analyze")(analyze)
-
-__all__ = ["app"]
-```
-
-**`src/mypackage/cli/process.py`:**
-```python
-"""Process command - lightweight wrapper."""
-
-from pathlib import Path
-from typing import NewType
-from typing_extensions import Annotated
-import typer
-from hip_cargo import stimela_cab, stimela_output
-
-MS = NewType("MS", Path)
-
-@stimela_cab(name="mypackage_process", info="Process data")
-@stimela_output(name="output", dtype="File", info="{input_file}.out")
-def process(
-    input_ms: Annotated[MS, typer.Argument(parser=MS, help="Input File")],
-    param: Annotated[float, typer.Option(help="Parameter")] = 1.0,
-):
-    """Process data files."""
-    # Lazy import - only loaded when executing
-    from mypackage.operators.core_algorithm import process_data
-
-    return process_data(input_file, param)
-```
-
-**`pyproject.toml`:**
-```toml
-[project]
-name = "mypackage"
-dependencies = [
-    "typer>=0.12.0",
-    "hip-cargo>=0.1.0",
-]
-
-[project.optional-dependencies]
-# Full scientific stack
-full = [
-    "numpy>=1.24.0",
-    "jax>=0.4.0",
-    # ... heavy dependencies
-]
-
-[project.scripts]
-mypackage = "mypackage.cli:app"
-```
-
-**`scripts/generate_cabs.py`:**
-```python
-"""Generate all cab definitions."""
-import subprocess
-from pathlib import Path
-
-CLI_MODULES = [
-    "mypackage.cli.process",
-    "mypackage.cli.analyze",
-]
-
-CABS_DIR = Path("src/mypackage/cabs")
-CABS_DIR.mkdir(exist_ok=True)
-
-for module in CLI_MODULES:
-    cmd_name = module.split(".")[-1]
-    output = CABS_DIR / f"{cmd_name}.yaml"
-
-    print(f"Generating {output}...")
-    subprocess.run([
-        "cargo", "generate-cab",
-        module,
-        str(output)
-    ], check=True)
-
-print("✓ All cabs generated")
-```
-
-### Installation Modes
-
-Users can install your package in different ways:
-
-```bash
-# Lightweight (just CLI and cab definitions)
-pip install mypackage
-
-# Full (with all scientific dependencies)
-pip install mypackage[full]
-
-# Development
-pip install -e "mypackage[full,dev]"
-```
-
-### Integration with cult-cargo
-
-For integration with Stimela's cult-cargo:
-
-1. **Make cabs discoverable:**
-```python
-# src/mypackage/cabs/__init__.py
-from pathlib import Path
-
-CAB_DIR = Path(__file__).parent
-AVAILABLE_CABS = [p.stem for p in CAB_DIR.glob("*.yml")]
-
-def get_cab_path(name: str) -> Path:
-    """Get path to a cab definition."""
-    return CAB_DIR / f"{name}.yml"
-```
-
-2. **cult-cargo imports lightweight version:**
-
-We have to decide whether we want to add this kind of thing to `cult-cargo`:
-
-```toml
-# In cult-cargo's pyproject.toml
-[tool.poetry.dependencies]
-mypackage = "^1.0.0"  # Not mypackage[full]
-```
-
-However, it should be possible to just
-```bash
-uv pip install mypackage==x.x.x
-```
-without any dependency conflicts. If not we have to think about ephemeral virtual environments.
-
-3. **Users run with Stimela:**
-```bash
-# Native: requires full installation
-pip install mypackage[full]
-stimela run recipe.yml
-
-# Singularity: uses container (lightweight install sufficient)
-pip install mypackage
-stimela run recipe.yml -S
-```
 
 ## Container Images and GitHub Actions
 

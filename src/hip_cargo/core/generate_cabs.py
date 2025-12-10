@@ -5,10 +5,10 @@ from pathlib import Path
 
 import yaml
 
-from hip_cargo.utils.introspector import extract_input, generate_container_url, parse_decorator
+from hip_cargo.utils.introspector import extract_input, parse_decorator
 
 
-def generate_cabs(module_paths: list[str], output_dir: str | None, pyprojecttoml: str | None) -> None:
+def generate_cabs(module_paths: list[str], output_dir: str | None, image: str | None) -> None:
     """Generate a Stimela cab definition from a Python module.
 
     Args:
@@ -47,9 +47,8 @@ def generate_cabs(module_paths: list[str], output_dir: str | None, pyprojecttoml
                 parts[-1] = parts[-1].replace(".py", "")
                 parts.append(node.name)
                 cab_def[node.name]["command"] = ".".join(parts)
-                if pyprojecttoml is not None:
-                    container_url = generate_container_url(pyprojecttoml)
-                    cab_def[node.name]["image"] = container_url
+                if image is not None:
+                    cab_def[node.name]["image"] = image
                 cab_def[node.name]["outputs"] = {}
                 for decorator_name, decorator_content in decorators.items():
                     if decorator_name == "stimela_cab":
