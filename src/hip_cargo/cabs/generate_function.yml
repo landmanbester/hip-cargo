@@ -1,0 +1,18 @@
+generate_function:
+  flavour: python
+  command: hip_cargo.core.generate_function.generate_function
+  image: ghcr.io/landmanbester/hip-cargo:stimelatests
+  name: hip_cargo_generate_function
+  info: Generate Python function from Stimela cab definition
+  inputs:
+    cab_file:
+      info: Path to Stimela cab YAML file
+      dtype: Path
+      required: true
+      policies:
+        positional: true
+  outputs:
+    output:
+      dtype: File
+      info: Path to output CLI function
+      required: true

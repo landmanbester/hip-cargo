@@ -16,10 +16,10 @@ def callback():
 
 
 # Register commands
-from hip_cargo.cli.generate_cab import generate_cab  # noqa: E402
+from hip_cargo.cli.generate_cabs import generate_cabs  # noqa: E402
 from hip_cargo.cli.generate_function import generate_function  # noqa: E402
 
-app.command(name="generate-cab")(generate_cab)
+app.command(name="generate-cabs")(generate_cabs)
 app.command(name="generate-function")(generate_function)
 
 __all__ = ["app"]

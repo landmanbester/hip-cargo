@@ -22,3 +22,22 @@ repos:
       - id: check-merge-conflict
       - id: check-toml
       - id: mixed-line-ending
+
+  - repo: local
+    hooks:
+      - id: update-cli-help
+        name: Update CLI help documentation
+        entry: python scripts/update_cli_help.py
+        language: system
+        files: ^(src/hip_cargo/.*\.py|pyproject\.toml)$
+        pass_filenames: false
+        stages: [pre-commit]
+
+  - repo: local
+    hooks:
+      - id: update-readme
+        name: Update README with code snippets
+        entry: python scripts/update_readme.py
+        language: system
+        files: ^(src/.*\.py|README\.md)$
+        pass_filenames: false
