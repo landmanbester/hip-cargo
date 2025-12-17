@@ -25,10 +25,10 @@ Directory = NewType("Directory", Path)
 )
 def generate_cabs(
     module: Annotated[
-        File,
+        list[File],
         typer.Option(
             ...,
-            parser=File,
+            parser=Path,
             help="CLI module path. "
             "Use wild card to generate cabs for multiple commands in module (e.g. package/cli/*). ",
             rich_help_panel="Inputs",
@@ -37,14 +37,14 @@ def generate_cabs(
     output_dir: Annotated[
         Directory,
         typer.Option(
-            parser=Directory,
+            parser=Path,
             help="Output directory for cab definition. The cab will have the exact same name as the command.",
             rich_help_panel="Outputs",
         ),
     ] = None,
     image: Annotated[
-        File,
-        typer.Option(parser=File, help="Name of container image. ", rich_help_panel="Inputs"),
+        str | None,
+        typer.Option(help="Name of container image. ", rich_help_panel="Inputs"),
     ] = None,
 ):
     """Generate a Stimela cab definition from a Python module.
@@ -56,16 +56,17 @@ def generate_cabs(
     from hip_cargo.core.generate_cabs import generate_cabs as generate_cabs_core  # noqa: E402
 
     # glob if wildcard in module
-    modpath = Path(module)
-    if "*" in module:
-        base_path = Path(str(modpath).split("*")[0].rstrip("/"))
-        modlist = [f for f in base_path.glob("*") if f.is_file() and not f.name.startswith("__")]
-        if len(modlist) == 0:
-            raise RuntimeError(f"No modules found matching {module}")
-    else:
-        if not modpath.is_file():
-            raise RuntimeError(f"No module file found at {module}")
-        modlist = [modpath]
+    modlist = []
+    for modpath in module:
+        if "*" in str(modpath):
+            base_path = Path(str(modpath).split("*")[0].rstrip("/"))
+            modlist.extend([f for f in base_path.glob("*") if f.is_file() and not f.name.startswith("__")])
+            if len(modlist) == 0:
+                raise RuntimeError(f"No modules found matching {module}")
+        else:
+            if not modpath.is_file():
+                raise RuntimeError(f"No module file found at {module}")
+            modlist.append(modpath)
 
     # User feedback
     for mod in modlist:
