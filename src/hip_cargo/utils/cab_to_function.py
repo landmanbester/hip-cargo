@@ -109,43 +109,6 @@ def extract_info_string(info: Any) -> str:
         return ""
 
 
-# def split_info_at_periods(info: str) -> str:
-#     """
-#     Split info string at periods to create multi-line help text.
-
-#     This helps avoid long line issues in generated code.
-
-#     Args:
-#         info: Info string to split
-
-#     Returns:
-#         Info string with newlines after periods
-#     """
-#     if not info:
-#         return info
-
-#     # Split at periods but keep the periods
-#     sentences = []
-#     current = []
-
-#     for char in info:
-#         current.append(char)
-#         if char == ".":
-#             # Found a period, extract sentence
-#             sentence = "".join(current).strip()
-#             if sentence:
-#                 sentences.append(sentence)
-#             current = []
-
-#     # Add any remaining text
-#     remaining = "".join(current).strip()
-#     if remaining:
-#         sentences.append(remaining)
-
-#     # Join with newlines
-#     return "\n".join(sentences)
-
-
 def split_info_at_periods(info: str) -> str:
     """
     Split info string at periods to create multi-line help text.
@@ -225,7 +188,7 @@ def generate_parameter_signature(
         # These are passed as comma-separated strings, not actual lists
         py_type = "str"
         # Append metadata to help string for round-trip compatibility
-        info = info + ".\n Stimela dtype: " + dtype
+        info = info + ".\nStimela dtype: " + dtype
     else:
         # Determine Python type normally
         py_type = stimela_dtype_to_python_type(dtype, preserve_custom=True)
@@ -376,148 +339,6 @@ def generate_parameter_signature(
                     if " | None" not in py_type and not uses_literal:
                         py_type = f"{py_type} | None"
                     return f"    {py_param_name}: Annotated[{py_type}, {typer_part}] = None,"
-
-
-# def generate_function_from_cab(cab_file: Path) -> str:
-#     """
-#     Generate a complete Python function from a Stimela cab definition.
-
-#     Args:
-#         cab_file: Path to YAML cab definition
-
-#     Returns:
-#         Python function code as string
-#     """
-#     cab_def = load_cab_definition(cab_file)
-
-#     cab_name = cab_def["_name"]
-#     # Try to get info from top level, or construct from cab name
-#     raw_info = cab_def.get("info", "")
-#     if raw_info:
-#         info = extract_info_string(raw_info)
-#     else:
-#         # Generate a reasonable default from cab name
-#         info = cab_name.replace("_", " ").title()
-#     policies = cab_def.get("policies", {})
-#     inputs = cab_def.get("inputs", {})
-#     outputs = cab_def.get("outputs", {})
-
-#     # Extract function name from cab name (e.g., pfb_grid -> grid)
-#     func_name = sanitize_param_name(cab_name)
-#     if "_" in func_name:
-#         # Take last part for function name
-#         func_name = func_name.split("_")[-1]
-
-#     # Detect which custom types and features are used
-#     custom_types = extract_custom_types(inputs)
-#     custom_types.update(extract_custom_types(outputs))
-
-#     # Check if any parameters use choices (need Literal import)
-#     uses_literal = any(param_def.get("choices") for param_def in inputs.values())
-
-#     # Separate outputs into implicit and non-implicit
-#     # Non-implicit outputs need to be added to function signature
-#     explicit_outputs = {}
-#     for output_name, output_def in outputs.items():
-#         # If implicit field exists and is truthy (True or a string template), it's implicit
-#         implicit_value = output_def.get("implicit")
-#         is_implicit = bool(implicit_value)  # Any truthy value means implicit
-#         if not is_implicit:
-#             explicit_outputs[output_name] = output_def
-
-#     # Start building the function
-#     lines = []
-
-#     # Imports
-#     lines.append("from pathlib import Path")
-#     lines.append("from typing import Annotated, NewType")
-#     if uses_literal:
-#         lines.append("from typing import Literal")
-#     lines.append("")
-#     lines.append("from hip_cargo import stimela_cab, stimela_output")
-#     lines.append("import typer")
-#     lines.append("")
-
-#     # Add NewType declarations for custom types
-#     if custom_types:
-#         for custom_type in sorted(custom_types):  # Sort for consistent output
-#             lines.append(f'{custom_type} = NewType("{custom_type}", Path)')
-#         lines.append("")
-
-#     # Decorators
-#     lines.append("@stimela_cab(")
-#     lines.append(f'    name="{cab_name}",')
-#     lines.append(f'    info="{info}",')
-#     # Format policies as dict, not string
-#     if policies:
-#         lines.append(f"    policies={policies},")
-#     lines.append(")")
-
-#     # Output decorators
-#     for output_name, output_def in outputs.items():
-#         # Sanitize output name
-#         py_output_name = sanitize_param_name(output_name)
-#         output_dtype = output_def.get("dtype", "File")
-#         # Get info - could be under 'info' or 'implicit'
-#         output_info_raw = output_def.get("info", "")
-#         if not output_info_raw:
-#             # Try implicit field
-#             implicit_val = output_def.get("implicit", "")
-#             if isinstance(implicit_val, str):
-#                 output_info_raw = implicit_val
-#         output_info = extract_info_string(output_info_raw)
-#         # Sanitize f-string references
-#         output_info = sanitize_fstring_refs(output_info)
-#         output_required = output_def.get("required", False)
-
-#         lines.append("@stimela_output(")
-#         lines.append(f'    name="{py_output_name}",')
-#         lines.append(f'    dtype="{output_dtype}",')
-#         lines.append(f'    info="{output_info}",')
-#         if output_required:
-#             lines.append(f"    required={output_required},")
-#         lines.append(")")
-
-#     # Function signature
-#     lines.append(f"def {func_name}(")
-
-#     # Separate required and optional parameters
-#     # Python requires all required params before optional ones
-#     required_params = []
-#     optional_params = []
-
-#     # Process inputs
-#     for param_name, param_def in inputs.items():
-#         if param_def.get("required", False):
-#             required_params.append((param_name, param_def, False))
-#         else:
-#             optional_params.append((param_name, param_def, False))
-
-#     # Process non-implicit outputs
-#     for output_name, output_def in explicit_outputs.items():
-#         if output_def.get("required", False):
-#             required_params.append((output_name, output_def, True))
-#         else:
-#             optional_params.append((output_name, output_def, True))
-
-#     # Add required parameters first, then optional
-#     for param_name, param_def, is_output in required_params:
-#         param_sig = generate_parameter_signature(param_name, param_def, policies=policies, is_output=is_output)
-#         lines.append(param_sig)
-
-#     for param_name, param_def, is_output in optional_params:
-#         param_sig = generate_parameter_signature(param_name, param_def, policies=policies, is_output=is_output)
-#         lines.append(param_sig)
-
-#     lines.append("):")
-#     lines.append('    """')
-#     lines.append(f"    {info}")
-#     lines.append('    """')
-
-#     # Function body - generate the implementation
-#     lines.extend(_generate_function_body(cab_def, inputs, explicit_outputs))
-
-#     return "\n".join(lines)
 
 
 def _generate_function_body(cab_def: dict[str, Any], inputs: dict[str, Any], outputs: dict[str, Any]) -> list[str]:

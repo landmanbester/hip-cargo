@@ -91,18 +91,9 @@ def generate_function(cab_file: Path, output_file: Path | None = None, config_fi
     # Output decorators
     for output_name, output_def in outputs.items():
         # Sanitize output name
-        output_name = output_name.replace("-", "_")
         output_dtype = output_def.get("dtype", "File")
         # Get info - could be under 'info' or 'implicit'
-        output_info_raw = output_def.get("info", "")
-        if not output_info_raw:
-            # Try implicit field
-            implicit_val = output_def.get("implicit", "")
-            if isinstance(implicit_val, str):
-                output_info_raw = implicit_val
-        output_info = output_info_raw.replace("-", "_")
-        # Sanitize f-string references
-        output_info = output_info
+        output_info = output_def.get("info", "")
         output_required = output_def.get("required", False)
 
         lines.append("@stimela_output(")
@@ -160,13 +151,18 @@ def generate_function(cab_file: Path, output_file: Path | None = None, config_fi
         format_cmd.extend(["--config", str(config_file)])
     format_cmd.append("-")  # Read from stdin
 
-    formatted_code = subprocess.run(
-        format_cmd,
-        input=function_code,
-        capture_output=True,
-        text=True,
-        check=True,
-    ).stdout
+    try:
+        formatted_code = subprocess.run(
+            format_cmd,
+            input=function_code,
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout
+    except subprocess.CalledProcessError as e:
+        print("Error during code formatting:")
+        print(e.stderr)
+        formatted_code = function_code  # Fallback to unformatted code
 
     if output_file:
         output_file.parent.mkdir(parents=True, exist_ok=True)

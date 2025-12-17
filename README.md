@@ -183,10 +183,10 @@ def generate_cabs(
             base_path = Path(str(modpath).split("*")[0].rstrip("/"))
             modlist.extend([f for f in base_path.glob("*") if f.is_file() and not f.name.startswith("__")])
             if len(modlist) == 0:
-                raise RuntimeError(f"No modules found matching {module}")
+                raise RuntimeError(f"No modules found matching {modpath}")
         else:
             if not modpath.is_file():
-                raise RuntimeError(f"No module file found at {module}")
+                raise RuntimeError(f"No module file found at {modpath}")
             modlist.append(modpath)
 
     # User feedback
