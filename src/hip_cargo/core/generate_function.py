@@ -1,5 +1,6 @@
 """Core logic for generating Python functions from Stimela cab definitions."""
 
+import subprocess
 from pathlib import Path
 
 import yaml
@@ -7,12 +8,11 @@ import yaml
 from hip_cargo.utils.cab_to_function import (
     _generate_function_body,
     extract_custom_types,
-    generate_function_from_cab,
     generate_parameter_signature,
 )
 
 
-def generate_function(cab_file: Path, output_file: Path | None = None) -> None:
+def generate_function(cab_file: Path, output_file: Path | None = None, config_file: Path | None = None) -> None:
     """Generate a Python function from a Stimela cab definition.
 
     Args:
@@ -88,16 +88,6 @@ def generate_function(cab_file: Path, output_file: Path | None = None) -> None:
         lines.append(f"    policies={policies},")
     lines.append(")")
 
-    function_code = generate_function_from_cab(cab_file)
-
-    if output_file:
-        output_file.parent.mkdir(parents=True, exist_ok=True)
-        with open(output_file, "w") as f:
-            f.write(function_code)
-        print(f"✓ Generated function written to: {output_file}")
-    else:
-        print(function_code)
-
     # Output decorators
     for output_name, output_def in outputs.items():
         # Sanitize output name
@@ -147,19 +137,11 @@ def generate_function(cab_file: Path, output_file: Path | None = None) -> None:
 
     # Add required parameters first, then optional
     for param_name, param_def, is_output in required_params:
-        print(param_name, param_def)
         param_sig = generate_parameter_signature(param_name, param_def, policies=policies, is_output=is_output)
-        import ipdb
-
-        ipdb.set_trace()  # --- IGNORE ---
         lines.append(param_sig)
 
     for param_name, param_def, is_output in optional_params:
-        print(param_name, param_def)
         param_sig = generate_parameter_signature(param_name, param_def, policies=policies, is_output=is_output)
-        import ipdb
-
-        ipdb.set_trace()  # --- IGNORE ---
         lines.append(param_sig)
 
     lines.append("):")
@@ -170,4 +152,26 @@ def generate_function(cab_file: Path, output_file: Path | None = None) -> None:
     # Function body - generate the implementation
     lines.extend(_generate_function_body(cab_def, inputs, explicit_outputs))
 
-    return "\n".join(lines)
+    function_code = "\n".join(lines)
+
+    # format generated code
+    format_cmd = ["ruff", "format"]
+    if config_file:
+        format_cmd.extend(["--config", str(config_file)])
+    format_cmd.append("-")  # Read from stdin
+
+    formatted_code = subprocess.run(
+        format_cmd,
+        input=function_code,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout
+
+    if output_file:
+        output_file.parent.mkdir(parents=True, exist_ok=True)
+        with open(output_file, "w") as f:
+            f.write(formatted_code)
+        print(f"Generated function written to: {output_file}")
+    else:
+        print(formatted_code)

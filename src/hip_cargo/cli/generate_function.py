@@ -33,6 +33,14 @@ def generate_function(
             rich_help_panel="Outputs",
         ),
     ] = None,
+    config_file: Annotated[
+        File | None,
+        typer.Option(
+            parser=Path,
+            help="Optional path to ruff config file to use when generating function",
+            rich_help_panel="Inputs",
+        ),
+    ] = None,
 ):
     """Generate a Python function from a Stimela cab definition.
 
@@ -56,11 +64,4 @@ def generate_function(
     typer.echo(f"Reading cab definition from: {cab_file}")
 
     # Call core logic
-    generate_function_core(cab_file, output_file)
-
-    # Success message (only if writing to file)
-    if output_file:
-        typer.secho(
-            f"✓ Successfully generated Python function: {output_file}",
-            fg=typer.colors.GREEN,
-        )
+    generate_function_core(cab_file, output_file, config_file)
