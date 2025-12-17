@@ -333,11 +333,11 @@ test = [
 
 ## Container Images and GitHub Actions
 
-For Stimela to use your package in containerized environments, you should publish OCI container images to GitHub Container Registry (ghcr.io). This section shows how to automate this with GitHub Actions.
+For `stimela` to use your package in containerized environments, you should publish OCI container images to GitHub Container Registry (ghcr.io). This section shows how to automate this with GitHub Actions.
 
 ### 1. Create a Dockerfile
 
-Add a `Dockerfile` at the root of your repository:
+Add a `Dockerfile` at the root of your repository. For example:
 
 ```dockerfile
 FROM python:3.11-slim
@@ -361,7 +361,8 @@ CMD ["cargo", "--help"]
 ### 2. Set up GitHub Actions Workflow
 
 Copy `.github/workflows/update-cabs-and-publish.yml` from `hip-cargo` into your project and edit it from there if needs be.
-Although, it's fairly generic, so hopefully it just works. The basic workflow is the following:
+It is fairly generic so hopefully it just works.
+The basic workflow is the following:
 
   1. Generate all `stimela` cabs from `src/hip_cargo/cli/*.py` into `src/hip_cargo/cabs` tagging the image with the appropriate tag.
   2. Commit new cabs to the repo if they have changed.
@@ -387,13 +388,13 @@ To associate the container image with your repository:
 
 3. **Set package visibility**:
    - In the package settings, set visibility to "Public" for open-source projects
-   - This allows Stimela to pull images without authentication
+   - This allows `stimela` to pull images without authentication
 
-### 4. Using the Container with Stimela
+### 4. Using the Container with `stimela`
 
 Once published, users should be able to simply include the cab definitions in their recipes.
-This only requires installing the lightweight version of the package so it shouldn't clash with any other packages, in particular those maintained in `cult-cargo`.
-Use the following syntax
+This only requires installing the lightweight version of the package, so it shouldn't clash with any other packages, in particular `stimela` and `cult-cargo`.
+Use the following syntax to include a cab in a recipe
 ```yaml
 _include:
   - (mypackage.cabs)cab_name.yml

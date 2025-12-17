@@ -27,7 +27,7 @@ def is_custom_type(dtype: str) -> bool:
     return False
 
 
-def extract_custom_types_from_inputs(inputs: dict[str, Any]) -> set[str]:
+def extract_custom_types(dct: dict[str, Any]) -> set[str]:
     """
     Extract all custom types used in input parameters.
 
@@ -38,27 +38,8 @@ def extract_custom_types_from_inputs(inputs: dict[str, Any]) -> set[str]:
         Set of custom type names used
     """
     custom_types = set()
-    for param_def in inputs.values():
+    for param_def in dct.values():
         dtype = param_def.get("dtype", "str")
-        for custom_type in CUSTOM_STIMELA_TYPES:
-            if custom_type in str(dtype):
-                custom_types.add(custom_type)
-    return custom_types
-
-
-def extract_custom_types_from_outputs(outputs: dict[str, Any]) -> set[str]:
-    """
-    Extract all custom types used in output parameters.
-
-    Args:
-        outputs: Dictionary of output parameters
-
-    Returns:
-        Set of custom type names used
-    """
-    custom_types = set()
-    for output_def in outputs.values():
-        dtype = output_def.get("dtype", "File")
         for custom_type in CUSTOM_STIMELA_TYPES:
             if custom_type in str(dtype):
                 custom_types.add(custom_type)
@@ -381,8 +362,8 @@ def generate_function_from_cab(cab_file: Path) -> str:
         func_name = func_name.split("_")[-1]
 
     # Detect which custom types and features are used
-    custom_types = extract_custom_types_from_inputs(inputs)
-    custom_types.update(extract_custom_types_from_outputs(outputs))
+    custom_types = extract_custom_types(inputs)
+    custom_types.update(extract_custom_types(outputs))
 
     # Check if any parameters use choices (need Literal import)
     uses_literal = any(param_def.get("choices") for param_def in inputs.values())
@@ -577,22 +558,3 @@ def _generate_function_body(cab_def: dict[str, Any], inputs: dict[str, Any], out
     lines.append("    )")
 
     return lines
-
-
-def cab_to_function_cli(cab_file: Path, output_file: Path | None = None) -> None:
-    """
-    CLI function to generate Python function from cab definition.
-
-    Args:
-        cab_file: Path to YAML cab definition
-        output_file: Optional output file path (prints to stdout if None)
-    """
-    function_code = generate_function_from_cab(cab_file)
-
-    if output_file:
-        output_file.parent.mkdir(parents=True, exist_ok=True)
-        with open(output_file, "w") as f:
-            f.write(function_code)
-        print(f"✓ Generated function written to: {output_file}")
-    else:
-        print(function_code)

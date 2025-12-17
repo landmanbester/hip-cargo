@@ -2,10 +2,17 @@
 
 from pathlib import Path
 
-from hip_cargo.utils.cab_to_function import cab_to_function_cli
+import yaml
+
+from hip_cargo.utils.cab_to_function import (
+    _generate_function_body,
+    extract_custom_types,
+    generate_function_from_cab,
+    generate_parameter_signature,
+)
 
 
-def generate_function(cab_path: str, output_path: str | None = None) -> None:
+def generate_function(cab_file: Path, output_file: Path | None = None) -> None:
     """Generate a Python function from a Stimela cab definition.
 
     Args:
@@ -17,10 +24,150 @@ def generate_function(cab_path: str, output_path: str | None = None) -> None:
         FileNotFoundError: If the cab file doesn't exist
         ValueError: If the cab file is invalid
     """
-    cab_file = Path(cab_path)
 
     if not cab_file.exists():
         raise FileNotFoundError(f"Cab file not found: {cab_file}")
 
-    output_file = Path(output_path) if output_path else None
-    cab_to_function_cli(cab_file, output_file)
+    # load cab definition
+    with open(cab_file) as f:
+        data = yaml.safe_load(f)
+
+    cab_name = next(iter(data["cabs"]))
+    cab_def = data["cabs"][cab_name]
+    cab_def["_name"] = cab_name
+    info = cab_def.get("info", "")
+
+    policies = cab_def.get("policies", {})
+    inputs = cab_def.get("inputs", {})
+    outputs = cab_def.get("outputs", {})
+
+    # sanitize function name
+    func_name = cab_name.replace("-", "_")
+    if "_" in func_name:
+        # Take last part for function name
+        func_name = func_name.split("_")[-1]
+
+    custom_types = extract_custom_types(inputs)
+    custom_types.update(extract_custom_types(outputs))
+    uses_literal = any(param_def.get("choices") for param_def in inputs.values())
+
+    # Separate outputs into implicit and non-implicit
+    # Non-implicit outputs need to be added to function signature
+    explicit_outputs = {}
+    for output_name, output_def in outputs.items():
+        # If implicit field exists and is truthy (True or a string template), it's implicit
+        implicit_value = output_def.get("implicit", False)
+        if not implicit_value:
+            explicit_outputs[output_name] = output_def
+
+    # Start building the function
+    lines = []
+
+    # Imports
+    lines.append("from pathlib import Path")
+    lines.append("from typing import Annotated, NewType")
+    if uses_literal:
+        lines.append("from typing import Literal")
+    lines.append("")
+    lines.append("from hip_cargo import stimela_cab, stimela_output")
+    lines.append("import typer")
+    lines.append("")
+
+    # Add NewType declarations for custom types
+    if custom_types:
+        for custom_type in sorted(custom_types):  # Sort for consistent output
+            lines.append(f'{custom_type} = NewType("{custom_type}", Path)')
+        lines.append("")
+
+    # Decorators
+    lines.append("@stimela_cab(")
+    lines.append(f'    name="{cab_name}",')
+    lines.append(f'    info="{info}",')
+    # Format policies as dict, not string
+    if policies:
+        lines.append(f"    policies={policies},")
+    lines.append(")")
+
+    function_code = generate_function_from_cab(cab_file)
+
+    if output_file:
+        output_file.parent.mkdir(parents=True, exist_ok=True)
+        with open(output_file, "w") as f:
+            f.write(function_code)
+        print(f"✓ Generated function written to: {output_file}")
+    else:
+        print(function_code)
+
+    # Output decorators
+    for output_name, output_def in outputs.items():
+        # Sanitize output name
+        output_name = output_name.replace("-", "_")
+        output_dtype = output_def.get("dtype", "File")
+        # Get info - could be under 'info' or 'implicit'
+        output_info_raw = output_def.get("info", "")
+        if not output_info_raw:
+            # Try implicit field
+            implicit_val = output_def.get("implicit", "")
+            if isinstance(implicit_val, str):
+                output_info_raw = implicit_val
+        output_info = output_info_raw.replace("-", "_")
+        # Sanitize f-string references
+        output_info = output_info
+        output_required = output_def.get("required", False)
+
+        lines.append("@stimela_output(")
+        lines.append(f'    name="{output_name}",')
+        lines.append(f'    dtype="{output_dtype}",')
+        lines.append(f'    info="{output_info}",')
+        if output_required:
+            lines.append(f"    required={output_required},")
+        lines.append(")")
+
+    # Function signature
+    lines.append(f"def {func_name}(")
+
+    # Separate required and optional parameters
+    # Python requires all required params before optional ones
+    required_params = []
+    optional_params = []
+
+    # Process inputs
+    for param_name, param_def in inputs.items():
+        if param_def.get("required", False):
+            required_params.append((param_name, param_def, False))
+        else:
+            optional_params.append((param_name, param_def, False))
+
+    # Process non-implicit outputs
+    for output_name, output_def in explicit_outputs.items():
+        if output_def.get("required", False):
+            required_params.append((output_name, output_def, True))
+        else:
+            optional_params.append((output_name, output_def, True))
+
+    # Add required parameters first, then optional
+    for param_name, param_def, is_output in required_params:
+        print(param_name, param_def)
+        param_sig = generate_parameter_signature(param_name, param_def, policies=policies, is_output=is_output)
+        import ipdb
+
+        ipdb.set_trace()  # --- IGNORE ---
+        lines.append(param_sig)
+
+    for param_name, param_def, is_output in optional_params:
+        print(param_name, param_def)
+        param_sig = generate_parameter_signature(param_name, param_def, policies=policies, is_output=is_output)
+        import ipdb
+
+        ipdb.set_trace()  # --- IGNORE ---
+        lines.append(param_sig)
+
+    lines.append("):")
+    lines.append('    """')
+    lines.append(f"    {info}")
+    lines.append('    """')
+
+    # Function body - generate the implementation
+    lines.extend(_generate_function_body(cab_def, inputs, explicit_outputs))
+
+    return "\n".join(lines)

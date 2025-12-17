@@ -1,11 +1,14 @@
 """CLI command for generating Python functions from Stimela cab definitions."""
 
 from pathlib import Path
+from typing import NewType
 
 import typer
 from typing_extensions import Annotated
 
 from hip_cargo.utils.decorators import stimela_cab, stimela_output
+
+File = NewType("File", Path)
 
 
 @stimela_cab(
@@ -14,18 +17,22 @@ from hip_cargo.utils.decorators import stimela_cab, stimela_output
 )
 @stimela_output(
     dtype="File",
-    name="output",
-    info="Path to output CLI function",
+    name="output-file",
+    info="Name of output CLI function",
     required=True,
 )
 def generate_function(
-    cab_file: Annotated[Path, typer.Argument(help="Path to Stimela cab YAML file", rich_help_panel="Inputs")],
-    output: Annotated[
-        Path,
-        typer.Option(
-            "--output", "-o", help="Output Python file (prints to stdout if not specified)", rich_help_panel="Outputs"
-        ),
+    cab_file: Annotated[
+        File, typer.Option(..., parser=Path, help="Path to Stimela cab YAML file", rich_help_panel="Inputs")
     ],
+    output_file: Annotated[
+        File,
+        typer.Option(
+            parser=Path,
+            help="Name of output CLI function (prints to stdout if not specified)",
+            rich_help_panel="Outputs",
+        ),
+    ] = None,
 ):
     """Generate a Python function from a Stimela cab definition.
 
@@ -49,11 +56,11 @@ def generate_function(
     typer.echo(f"Reading cab definition from: {cab_file}")
 
     # Call core logic
-    generate_function_core(str(cab_file), str(output) if output else None)
+    generate_function_core(cab_file, output_file)
 
     # Success message (only if writing to file)
-    if output:
+    if output_file:
         typer.secho(
-            f"✓ Successfully generated Python function: {output}",
+            f"✓ Successfully generated Python function: {output_file}",
             fg=typer.colors.GREEN,
         )
