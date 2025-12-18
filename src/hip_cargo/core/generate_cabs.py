@@ -8,7 +8,7 @@ import yaml
 from hip_cargo.utils.introspector import extract_input, parse_decorator
 
 
-def generate_cabs(module_paths: list[Path], output_dir: Path | None, image: str | None) -> None:
+def generate_cabs(module: list[Path], output_dir: Path | None = None, image: str | None = None) -> None:
     """Generate a Stimela cab definition from a Python module.
 
     Args:
@@ -19,7 +19,27 @@ def generate_cabs(module_paths: list[Path], output_dir: Path | None, image: str 
         ImportError: If the module cannot be imported
         AttributeError: If the module doesn't contain a decorated function
     """
-    for module_path in module_paths:
+    # glob if wildcard in module
+    modlist = []
+    for modpath in module:
+        if not isinstance(modpath, Path):
+            modpath = Path(modpath)
+        if "*" in str(modpath):
+            base_path = Path(str(modpath).split("*")[0].rstrip("/"))
+            modlist.extend([f for f in base_path.glob("*") if f.is_file() and not f.name.startswith("__")])
+            if len(modlist) == 0:
+                raise RuntimeError(f"No modules found matching {modpath}")
+        else:
+            if not modpath.is_file():
+                raise RuntimeError(f"No module file found at {modpath}")
+            modlist.append(modpath)
+
+    # User feedback
+    for mod in modlist:
+        print(f"Loading file: {mod}")
+
+    print(f"Writing cabs to: {output_dir}")
+    for module_path in modlist:
         with open(module_path, "r") as f:
             tree = ast.parse(f.read(), filename=module_path)
 
@@ -70,6 +90,9 @@ def generate_cabs(module_paths: list[Path], output_dir: Path | None, image: str 
                 # rerder to place outputs last
                 outputs = cab_def[node.name].pop("outputs")
                 cab_def[node.name]["outputs"] = outputs
+
+                # Wrap in top-level "cabs" key
+                cab_def = {"cabs": cab_def}
 
                 # Generate YAML
                 # Use safe_dump with nice formatting

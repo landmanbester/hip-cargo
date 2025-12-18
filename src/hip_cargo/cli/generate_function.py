@@ -1,5 +1,3 @@
-"""CLI command for generating Python functions from Stimela cab definitions."""
-
 from pathlib import Path
 from typing import NewType
 
@@ -51,17 +49,5 @@ def generate_function(
     # Lazy import core logic
     from hip_cargo.core.generate_function import generate_function as generate_function_core  # noqa: E402
 
-    # Validate input
-    if not cab_file.exists():
-        typer.secho(
-            f"✗ Error: Cab file not found: {cab_file}",
-            fg=typer.colors.RED,
-            err=True,
-        )
-        raise typer.Exit(code=1)
-
-    # User feedback
-    typer.echo(f"Reading cab definition from: {cab_file}")
-
     # Call core logic
-    generate_function_core(cab_file, output_file, config_file)
+    generate_function_core(cab_file, output_file=output_file, config_file=config_file)
