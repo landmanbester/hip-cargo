@@ -1,24 +1,25 @@
-generate_function:
-  flavour: python
-  command: hip_cargo.core.generate_function.generate_function
-  image: ghcr.io/landmanbester/hip-cargo:genfunc
-  name: hip_cargo_generate_function
-  info: Generate Python function from Stimela cab definition
-  inputs:
-    cab_file:
-      info: Path to Stimela cab YAML file
-      dtype: File
-      required: true
-      policies:
-        positional: true
-    output_file:
-      info: Name of output CLI function (prints to stdout if not specified)
-      dtype: File
-    config_file:
-      info: Optional path to ruff config file to use when generating function
-      dtype: File
-  outputs:
-    output-file:
-      dtype: File
-      info: Name of output CLI function
-      required: true
+cabs:
+  generate_function:
+    flavour: python
+    command: hip_cargo.core.generate_function.generate_function
+    image: ghcr.io/landmanbester/hip-cargo:latest
+    name: hip_cargo_generate_function
+    info: Generate Python function from Stimela cab definition
+    inputs:
+      cab_file:
+        info: Path to Stimela cab YAML file
+        dtype: File
+        required: true
+        policies:
+          positional: true
+      output_file:
+        info: Name of output CLI function (prints to stdout if not specified)
+        dtype: File
+      config_file:
+        info: Optional path to ruff config file to use when generating function
+        dtype: File
+    outputs:
+      output-file:
+        dtype: File
+        info: Name of output CLI function
+        required: true
