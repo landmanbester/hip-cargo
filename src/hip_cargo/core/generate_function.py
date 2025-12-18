@@ -180,11 +180,11 @@ def generate_function(cab_file: Path, output_file: Path | None = None, config_fi
 
     # Add required parameters first, then optional
     for param_name, param_def, is_output in required_params:
-        param_sig = generate_parameter_signature(param_name, param_def, policies=policies, is_output=is_output)
+        param_sig = generate_parameter_signature(param_name, param_def, policies=policies)
         lines.append(param_sig)
 
     for param_name, param_def, is_output in optional_params:
-        param_sig = generate_parameter_signature(param_name, param_def, policies=policies, is_output=is_output)
+        param_sig = generate_parameter_signature(param_name, param_def, policies=policies)
         lines.append(param_sig)
 
     lines.append("):")

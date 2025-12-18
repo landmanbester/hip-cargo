@@ -154,10 +154,7 @@ def split_info_at_periods(info: str) -> str:
 
 
 def generate_parameter_signature(
-    param_name: str,
-    param_def: dict[str, Any],
-    policies: Optional[dict[str, Any]] = None,
-    # is_output: bool = False,
+    param_name: str, param_def: dict[str, Any], policies: Optional[dict[str, Any]] = None
 ) -> str:
     """
     Generate parameter signature for a single parameter using Annotated style.
