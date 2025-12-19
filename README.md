@@ -5,12 +5,12 @@ The core concept boils down to maintaining a lightweight package that only insta
 This makes it possible to install the package alongside `cult-cargo` and include cabs into recipes using the syntax
 ```yaml
 _include:
-  - (module)cab_name.yml
+  - (module.cabs)cab_name.yml
 ```
 In principle, that's all there is to it.
 The `hip-cargo` package does not dictate how you should go about structuring your package.
-Instead, it serves as an example of how to design auto-documenting CLI interfaces using Typer.
-It also provides some utilities to convert function signatures into `stimela` cabs and vice versa for packages that mimic its structure.
+Instead, it serves as an example of how to design auto-documenting CLI interfaces using Typer with automated cab generation and containerisation.
+It provides utilities to convert function signatures into `stimela` cabs (and vice versa) for packages that mimic its structure.
 
 ## Installation
 
@@ -23,10 +23,9 @@ Or for development:
 ```bash
 git clone https://github.com/landmanbester/hip-cargo.git
 cd hip-cargo
-uv sync
+uv sync --group dev --group test
+uv run pre-commit install
 ```
-
-The latter is probably more useful if you want to use `hip-cargo` as a template for your own package.
 
 ## Key Principles
 
@@ -60,7 +59,7 @@ Documentation on each individual command can be obtained by calling help for the
 cargo generate-cabs --help
 ```
 The full package should be available as a container image on the [GitHub Container Registry](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry).
-The `Dockerfile` for the project should install the package in `full` mode.
+The `Dockerfile` for the project should install the full package, not the lightweight version.
 This is used to build the container image that is uploaded to the registry.
 The image should be tagged with a version so that `stimela` knows how to match cab configuration to images.
 The following versioning schema is proposed:
@@ -69,7 +68,9 @@ The following versioning schema is proposed:
 * use `latest` tag for `main`/`master` branch
 * use `branch-name` when developing new features
 
-This can all automated with GitHub actions, see the [update-cabs-and-publish](./.github/workflows/update-cabs-and-publish.yml) workflow for an example.
+This can all automated with pre-commit hooks and GitHub actions.
+Use pre-commit hook to auto-generate cab definitions on each commit.
+See the [update-cabs-and-publish](./.github/workflows/update-cabs-and-publish.yml) workflow for an example of how to set up GitHub Actions for automation.
 
 ## Package Structure
 
@@ -310,7 +311,8 @@ test = [
 
 ## Container Images and GitHub Actions
 
-For `stimela` to use your package in containerized environments, you should publish OCI container images to GitHub Container Registry (ghcr.io). This section shows how to automate this with GitHub Actions.
+For `stimela` to use your package in containerized environments, you should publish OCI container images to GitHub Container Registry (ghcr.io).
+This section shows how to automate this with GitHub Actions.
 
 ### 1. Create a Dockerfile
 
@@ -335,20 +337,29 @@ RUN uv pip install --system --no-cache .
 CMD ["cargo", "--help"]
 ```
 
-### 2. Set up GitHub Actions Workflow
+### 2. Automate Cab Creation and Containerisation
 
-Copy `.github/workflows/update-cabs-and-publish.yml` from `hip-cargo` into your project and edit it from there if needs be.
-It is fairly generic so hopefully it just works.
-The basic workflow is the following:
-
-  1. Generate all `stimela` cabs from `src/hip_cargo/cli/*.py` into `src/hip_cargo/cabs` tagging the image with the appropriate tag.
-  2. Commit new cabs to the repo if they have changed.
-  3. Build and push the container to the GHCR.
-
+You can automate cab generation using pre-commit hooks.
+For example, you could define the following in your `.pre-commit-config.yaml`
+```yaml
+repos:
+  - repo: local
+    hooks:
+      - id: generate-cabs
+        name: Generate Stimela cab definitions
+        entry: python scripts/generate_cabs.py
+        language: system
+        files: ^src/hip_cargo/cli/.*\.py$
+        pass_filenames: false
+        stages: [pre-commit]
+```
+This uses [this script](./scripts/generate_cabs.py) to generate cabs for all commands defined in your CLI module.
+You should be able reuse the GitHub action for `hip-cargo` in `.github/workflows/update-cabs-and-publish.yml` to automate container creation for your project.
+The basic idea is to validate your cab definitions and then to build and push the container to the GHCR.
 The workflow will tag the container with the branch name if there is an open PR to your default branch.
 Once the PR is merged, an action is triggered to update the image name in the cab definitions and push a `latest` version to GHCR.
 Pushing semantically versioned tags will trigger the same workflow (this is where `tbump` is quite useful).
-In this cas ethe image name is tagged with the version.
+In this case the image name is tagged with the version.
 
 ### 3. Link Container to GitHub Package
 
@@ -378,11 +389,15 @@ _include:
 ```
 
 `stimela` will automatically pull the matching version based on the cab configuration.
+You could optionally provide `stimela` recipes inside your project.
+See the recipe in `src/hip_cargo/recipes` for an example.
 
 
 ## Type Inference
 
-`hip-cargo` automatically recognizes custom `stimela` types. In your CLI definitions, simply create a `NewType` and use it as the parser for the Typer Option/Argument. See the `generate-cabs` definition above for an example.
+`hip-cargo` automatically recognizes custom `stimela` types.
+These should be created using `typing.NewType`.
+See the `generate-cabs` definition above for an example.
 
 ## Decorators
 
@@ -428,34 +443,14 @@ git clone https://github.com/landmanbester/hip-cargo.git
 cd hip-cargo
 
 # Install dependencies with development tools
-uv sync --group dev
+uv sync --group dev --group test
 
 # Install pre-commit hooks (recommended)
 uv run pre-commit install
 ```
 
-### Pre-commit Hooks
-
-This project uses [pre-commit](https://pre-commit.com/) to automatically check code quality before commits. The hooks run:
-
-- **ruff linting**: Checks code style and catches common errors
-- **ruff formatting**: Ensures consistent code formatting
-- **trailing whitespace**: Removes trailing whitespace
-- **end-of-file-fixer**: Ensures files end with a newline
-- **check-yaml**: Validates YAML syntax
-- **check-toml**: Validates TOML syntax
-- **check-merge-conflict**: Prevents committing merge conflict markers
-- **check-added-large-files**: Prevents accidentally committing large files
-
-#### Installing Pre-commit Hooks
-
-After cloning the repository, install the pre-commit hooks:
-
-```bash
-uv run pre-commit install
-```
-
-This will automatically run the hooks before each commit. If any checks fail, the commit will be blocked until you fix the issues.
+This will automatically run the hooks before each commit.
+If any checks fail, the commit will be blocked until you fix the issues.
 
 #### Running Hooks Manually
 
