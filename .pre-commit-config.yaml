@@ -41,3 +41,13 @@ repos:
         language: system
         files: ^(src/.*\.py|README\.md)$
         pass_filenames: false
+
+  - repo: local
+    hooks:
+      - id: generate-cabs
+        name: Generate Stimela cab definitions
+        entry: python scripts/generate_cabs.py
+        language: system
+        files: ^src/hip_cargo/cli/.*\.py$
+        pass_filenames: false
+        stages: [pre-commit]
