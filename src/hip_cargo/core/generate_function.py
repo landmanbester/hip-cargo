@@ -13,8 +13,9 @@ from hip_cargo.utils.cab_to_function import (
 )
 
 
-def generate_function(cab_file: Path, output_file: Path | None = None, config_file: Path | None = None) -> None:
-    """Generate a Python function from a Stimela cab definition.
+def generate_function(cab_file: Path, config_file: Path | None = None, output_file: Path | None = None) -> None:
+    """
+    Generate a Python function from a Stimela cab definition.
 
     Args:
         cab_path: Path to the YAML cab definition file
@@ -49,9 +50,6 @@ def generate_function(cab_file: Path, output_file: Path | None = None, config_fi
 
     # sanitize function name
     func_name = cab_name.replace("-", "_")
-    if "_" in func_name:
-        # Take last part for function name
-        func_name = func_name.split("_")[-1]
 
     custom_types = extract_custom_types(inputs)
     custom_types.update(extract_custom_types(outputs))
@@ -79,8 +77,9 @@ def generate_function(cab_file: Path, output_file: Path | None = None, config_fi
     if uses_literal:
         lines.append("from typing import Literal")
     lines.append("")
-    lines.append("from hip_cargo import stimela_cab, stimela_output")
     lines.append("import typer")
+    lines.append("")
+    lines.append("from hip_cargo.utils.decorators import stimela_cab, stimela_output")
     lines.append("")
 
     # Add NewType declarations for custom types
@@ -128,8 +127,8 @@ def generate_function(cab_file: Path, output_file: Path | None = None, config_fi
         output_required = output_def.get("required", False)
 
         lines.append("@stimela_output(")
-        lines.append(f'    name="{output_name}",')
         lines.append(f'    dtype="{output_dtype}",')
+        lines.append(f'    name="{output_name}",')
 
         # Format output info with sentence splitting
         if output_info_raw:
@@ -201,9 +200,6 @@ def generate_function(cab_file: Path, output_file: Path | None = None, config_fi
         else:
             lines.append(f"    {info_formatted}")
         lines.append('    """')
-    else:
-        # Empty docstring
-        lines.append('    """TODO: Add description."""')
 
     # Function body - generate the implementation
     lines.extend(generate_function_body(cab_def, inputs, explicit_outputs))
@@ -211,11 +207,10 @@ def generate_function(cab_file: Path, output_file: Path | None = None, config_fi
     function_code = "\n".join(lines)
 
     # format generated code
-    format_cmd = ["ruff", "format"]
+    format_cmd = ["uv", "run", "ruff", "format"]
     if config_file:
         format_cmd.extend(["--config", str(config_file)])
     format_cmd.append("-")  # Read from stdin
-
     try:
         formatted_code = subprocess.run(
             format_cmd,

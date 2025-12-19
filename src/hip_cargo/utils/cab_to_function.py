@@ -163,7 +163,6 @@ def generate_parameter_signature(
         param_name: Parameter name (will be sanitized)
         param_def: Parameter definition from cab
         policies: Global policies (can be overridden by param policies)
-        is_output: Whether this is an output parameter
 
     Returns:
         Parameter signature string
@@ -176,7 +175,6 @@ def generate_parameter_signature(
     info = extract_info_string(info_raw) if info_raw else ""
     required = param_def.get("required", False)
     default = param_def.get("default")
-    param_policies = param_def.get("policies", policies)
     choices = param_def.get("choices")
 
     # Check if this needs comma-separated conversion (List[int] or List[float])
@@ -204,9 +202,6 @@ def generate_parameter_signature(
         choices_formatted = ", ".join(f'"{c}"' if isinstance(c, str) else str(c) for c in choices)
         py_type = f"Literal[{choices_formatted}]"
         needs_parser = False  # Literal types don't need parser
-
-    # Determine if positional (Argument) or option
-    is_positional = param_policies.get("positional", False) if param_policies else False
 
     # Format default value for Python code
     def format_default(val):
@@ -236,117 +231,66 @@ def generate_parameter_signature(
         else:
             return str(val)
 
-    # Check if info contains newlines (needs special formatting for typer)
+    # Check if info contains newlines (for proper help text formatting)
     has_newlines = "\n" in info
 
     # Build the Typer annotation (Annotated style)
-    if is_positional:
-        # Arguments
-        parser_part = ", parser=Path" if needs_parser else ""
-        if has_newlines:
-            # Multi-line help - split into quoted strings
-            info_lines = info.split("\n")
-            info_lines_escaped = [line.replace('"', '\\"') for line in info_lines]
-            # Build multi-line help string with trailing spaces for proper concatenation
-            if len(info_lines_escaped) > 1:
-                help_str = f'"{info_lines_escaped[0]} "'
-                for line in info_lines_escaped[1:-1]:
-                    help_str += f'\n                 "{line} "'
-                # Last line has no trailing space
-                help_str += f'\n                 "{info_lines_escaped[-1]}"'
-            else:
-                help_str = f'"{info_lines_escaped[0]}"'
-            typer_part = f"typer.Argument({parser_part[2:] + ', ' if parser_part else ''}help={help_str})"
-        else:
-            # Escape quotes for single-line help
-            info_escaped = info.replace('"', '\\"')
-            typer_part = f'typer.Argument({parser_part[2:] + ", " if parser_part else ""}help="{info_escaped}")'
+    # ALWAYS use multi-line format with trailing commas to ensure ruff preserves the style
 
-        if required:
-            return f"    {py_param_name}: Annotated[{py_type}, {typer_part}],"
-        else:
-            # Positional with default (rare but possible)
-            default_val = format_default(default)
-            return f"    {py_param_name}: Annotated[{py_type}, {typer_part}] = {default_val},"
+    lines_out = []
+    lines_out.append(f"    {py_param_name}: Annotated[")
+    lines_out.append(f"        {py_type},")
+
+    # Build typer.Option with arguments on separate lines
+    if required:
+        lines_out.append("        typer.Option(")
+        lines_out.append("            ...,")
+        if needs_parser:
+            lines_out.append("            parser=Path,")
     else:
-        # Options - add parser for custom types
-        parser_part = "parser=Path, " if needs_parser else ""
+        lines_out.append("        typer.Option(")
+        if needs_parser:
+            lines_out.append("            parser=Path,")
 
-        # Build the parameter signature differently for multi-line vs single-line
-        if has_newlines:
-            # Multi-line format with proper indentation
-            # Build the parameter line by line
-            lines_out = []
-            lines_out.append(f"    {py_param_name}: Annotated[")
-            lines_out.append(f"        {py_type},")
+    # Add help text (handle multi-line info)
+    if has_newlines:
+        # Split info by newlines and quote each sentence
+        info_lines = info.split("\n")
+        # Escape quotes in each line
+        info_lines_escaped = [line.replace('"', '\\"') for line in info_lines]
 
-            # Build typer.Option with multi-line help
-            if required:
-                if parser_part:
-                    lines_out.append(f"        typer.Option(..., {parser_part.rstrip(', ')},")
-                else:
-                    lines_out.append("        typer.Option(...,")
-            else:
-                if parser_part:
-                    lines_out.append(f"        typer.Option({parser_part.rstrip(', ')},")
-                else:
-                    lines_out.append("        typer.Option(")
-
-            # Split info by newlines and quote each sentence
-            info_lines = info.split("\n")
-            # Escape quotes in each line
-            info_lines_escaped = [line.replace('"', '\\"') for line in info_lines]
-
-            # First line starts with help=
-            # Add space at end of each line except the last for proper concatenation
-            if len(info_lines_escaped) > 1:
-                lines_out.append(f'            help="{info_lines_escaped[0]} "')
-                # Subsequent lines (except last) also need trailing space
-                for line in info_lines_escaped[1:-1]:
-                    lines_out.append(f'                 "{line} "')
-                # Last line has no trailing space
-                lines_out.append(f'                 "{info_lines_escaped[-1]}"')
-            else:
-                lines_out.append(f'            help="{info_lines_escaped[0]}"')
-
-            lines_out.append("        ),")
-
-            # Add closing bracket and default if applicable
-            if default is not None and not required:
-                default_val = format_default(default)
-                lines_out.append(f"    ] = {default_val},")
-            elif not required:
-                # No default provided, use None for optional
-                if " | None" not in py_type and not uses_literal:
-                    # Need to go back and fix the type
-                    lines_out[1] = f"        {py_type} | None,"
-                lines_out.append("    ] = None,")
-            else:
-                lines_out.append("    ],")
-
-            return "\n".join(lines_out)
+        # First line starts with help=
+        # Add space at end of each line except the last for proper concatenation
+        if len(info_lines_escaped) > 1:
+            lines_out.append(f'            help="{info_lines_escaped[0]} "')
+            # Subsequent lines (except last) also need trailing space
+            for line in info_lines_escaped[1:-1]:
+                lines_out.append(f'                 "{line} "')
+            # Last line has no trailing space and ends with comma
+            lines_out.append(f'                 "{info_lines_escaped[-1]}",')
         else:
-            # Single-line format
-            # Escape quotes for single-line help
-            info_escaped = info.replace('"', '\\"')
-            help_part = f'help="{info_escaped}"'
+            lines_out.append(f'            help="{info_lines_escaped[0]}",')
+    else:
+        # Single-line help text
+        info_escaped = info.replace('"', '\\"')
+        lines_out.append(f'            help="{info_escaped}",')
 
-            if required:
-                # Required parameters (both inputs and outputs) always use ...
-                typer_part = f"typer.Option(..., {parser_part}{help_part})"
-                return f"    {py_param_name}: Annotated[{py_type}, {typer_part}],"
-            else:
-                # Optional parameters or outputs
-                typer_part = f"typer.Option({parser_part}{help_part})"
-                if default is not None:
-                    default_val = format_default(default)
-                    return f"    {py_param_name}: Annotated[{py_type}, {typer_part}] = {default_val},"
-                else:
-                    # No default provided, use None
-                    # For optional types, add | None to type
-                    if " | None" not in py_type and not uses_literal:
-                        py_type = f"{py_type} | None"
-                    return f"    {py_param_name}: Annotated[{py_type}, {typer_part}] = None,"
+    lines_out.append("        ),")
+
+    # Add closing bracket and default if applicable
+    if default is not None and not required:
+        default_val = format_default(default)
+        lines_out.append(f"    ] = {default_val},")
+    elif not required:
+        # No default provided, use None for optional
+        if " | None" not in py_type and not uses_literal:
+            # Need to go back and fix the type
+            lines_out[1] = f"        {py_type} | None,"
+        lines_out.append("    ] = None,")
+    else:
+        lines_out.append("    ],")
+
+    return "\n".join(lines_out)
 
 
 def generate_function_body(cab_def: dict[str, Any], inputs: dict[str, Any], outputs: dict[str, Any]) -> list[str]:
@@ -371,7 +315,7 @@ def generate_function_body(cab_def: dict[str, Any], inputs: dict[str, Any], outp
     func_name = command_parts[-1]
     # Lazy import
     lines.append("    # Lazy import the core implementation")
-    lines.append(f"    from {import_path} import {func_name} as {func_name}_core")
+    lines.append(f"    from {import_path} import {func_name} as {func_name}_core  # noqa: E402")
     lines.append("")
 
     # Detect and convert comma-separated string parameters

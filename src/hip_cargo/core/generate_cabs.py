@@ -8,8 +8,9 @@ import yaml
 from hip_cargo.utils.introspector import extract_input, parse_decorator
 
 
-def generate_cabs(module: list[Path], output_dir: Path | None = None, image: str | None = None) -> None:
-    """Generate a Stimela cab definition from a Python module.
+def generate_cabs(module: list[Path], image: str | None = None, output_dir: Path | None = None) -> None:
+    """
+    Generate a Stimela cab definition from a Python module.
 
     Args:
         module_paths: List of python module paths (e.g., "package/cli/command.py")

@@ -1,5 +1,6 @@
 """Test round-trip conversion: CLI function -> cab -> function."""
 
+import subprocess
 import tempfile
 from pathlib import Path
 
@@ -7,12 +8,29 @@ from hip_cargo.core.generate_cabs import generate_cabs
 from hip_cargo.core.generate_function import generate_function
 
 
+def format_with_ruff(code: str, file_path: Path) -> str:
+    """Format Python code using ruff and return the formatted result."""
+    # Write code to file
+    file_path.write_text(code)
+
+    # Format with ruff
+    subprocess.run(
+        ["uv", "run", "ruff", "format", str(file_path)],
+        check=True,
+        capture_output=True,
+    )
+
+    # Read formatted code
+    return file_path.read_text()
+
+
 def normalize_code(code: str) -> str:
     """Normalize Python code for comparison by removing extra whitespace and blank lines."""
     lines = []
     for line in code.splitlines():
         stripped = line.rstrip()
-        if stripped:  # Skip blank lines
+        # Skip blank lines and lines with rich_help_panel (not preserved in cab)
+        if stripped and "rich_help_panel" not in line:
             lines.append(stripped)
     return "\n".join(lines)
 
@@ -37,7 +55,7 @@ def test_roundtrip_generate_cabs():
         assert cab_file.exists(), "Cab file should be generated"
 
         generated_file = tmpdir / "generate_cabs_roundtrip.py"
-        generate_function(cab_file, generated_file, config_file=None)
+        generate_function(cab_file, output_file=generated_file, config_file="pyproject.toml")
 
         # Step 3: Verify generated function is syntactically valid
         assert generated_file.exists(), "Generated function should exist"
@@ -46,34 +64,20 @@ def test_roundtrip_generate_cabs():
         # Compile to check syntax
         compile(generated_code, str(generated_file), "exec")
 
-        # Step 4: Compare with original (normalized)
-        original_file = Path("src/hip_cargo/cli/generate_cabs.py")
-        original_code = original_file.read_text()
-
-        # Normalize both for comparison
-        norm_original = normalize_code(original_code)
-        norm_generated = normalize_code(generated_code)
-
-        # The function name might be shortened (e.g., "generate_cabs" -> "cabs")
-        # so normalize both to use the same function name for comparison
-        if "def generate_cabs(" in norm_original and "def cabs(" in norm_generated:
-            norm_generated = norm_generated.replace("def cabs(", "def generate_cabs(")
+        # Step 4: Compare with original (both should have been formatted with ruff)
+        original_code = cli_module.read_text()
 
         # Compare line by line
-        original_lines = norm_original.splitlines()
-        generated_lines = norm_generated.splitlines()
+        original_lines = original_code.splitlines()
+        generated_lines = generated_code.splitlines()
 
         # They should match exactly after normalization
-        try:
-            assert len(original_lines) == len(generated_lines), (
-                f"Line count mismatch: original has {len(original_lines)} lines, "
-                f"generated has {len(generated_lines)} lines"
-            )
+        assert len(original_lines) == len(generated_lines), (
+            f"Line count mismatch: original has {len(original_lines)} lines, generated has {len(generated_lines)} lines"
+        )
 
-            for i, (orig_line, gen_line) in enumerate(zip(original_lines, generated_lines), 1):
-                assert orig_line == gen_line, f"Line {i} differs:\n  Original:  {orig_line}\n  Generated: {gen_line}"
-        except AssertionError:
-            pass
+        for i, (orig_line, gen_line) in enumerate(zip(original_lines, generated_lines), 1):
+            assert orig_line == gen_line, f"Line {i} differs:\n  Original:  {orig_line}\n  Generated: {gen_line}"
 
 
 def test_roundtrip_generate_function():
@@ -96,7 +100,7 @@ def test_roundtrip_generate_function():
         assert cab_file.exists(), "Cab file should be generated"
 
         generated_file = tmpdir / "generate_function_roundtrip.py"
-        generate_function(cab_file, generated_file, config_file=None)
+        generate_function(cab_file, output_file=generated_file, config_file="pyproject.toml")
 
         # Step 3: Verify generated function is syntactically valid
         assert generated_file.exists(), "Generated function should exist"
@@ -105,36 +109,19 @@ def test_roundtrip_generate_function():
         # Compile to check syntax
         compile(generated_code, str(generated_file), "exec")
 
-        # Step 4: Compare with original (normalized)
-        original_file = Path("src/hip_cargo/cli/generate_function.py")
-        original_code = original_file.read_text()
-
-        # Normalize both for comparison
-        norm_original = normalize_code(original_code)
-        norm_generated = normalize_code(generated_code)
-
-        # The function name might be shortened (e.g., "generate_function" -> "function")
-        # so normalize both to use the same function name for comparison
-        if "def generate_function(" in norm_original and "def function(" in norm_generated:
-            norm_generated = norm_generated.replace("def function(", "def generate_function(")
+        # Step 4: Compare with original (both should have been formatted with ruff)
+        original_code = cli_module.read_text()
 
         # Compare line by line
-        original_lines = norm_original.splitlines()
-        generated_lines = norm_generated.splitlines()
+        original_lines = original_code.splitlines()
+        generated_lines = generated_code.splitlines()
 
         # They should match exactly after normalization
-        try:
-            assert len(original_lines) == len(generated_lines), (
-                f"Line count mismatch: original has {len(original_lines)} lines, "
-                f"generated has {len(generated_lines)} lines"
-            )
-        except AssertionError:
-            pass
-        try:
-            for i, (orig_line, gen_line) in enumerate(zip(original_lines, generated_lines), 1):
-                assert orig_line == gen_line, f"Line {i} differs:\n  Original:  {orig_line}\n  Generated: {gen_line}"
-        except AssertionError:
-            pass
+        assert len(original_lines) == len(generated_lines), (
+            f"Line count mismatch: original has {len(original_lines)} lines, generated has {len(generated_lines)} lines"
+        )
+        for i, (orig_line, gen_line) in enumerate(zip(original_lines, generated_lines), 1):
+            assert orig_line == gen_line, f"Line {i} differs:\n  Original:  {orig_line}\n  Generated: {gen_line}"
 
 
 def test_roundtrip_preserves_spacing():
@@ -155,7 +142,7 @@ def test_roundtrip_preserves_spacing():
         # Generate function from cab
         cab_file = cab_dir / "generate_cabs.yml"
         generated_file = tmpdir / "test_spacing.py"
-        generate_function(cab_file, generated_file, config_file=None)
+        generate_function(cab_file, output_file=generated_file, config_file=None)
 
         generated_code = generated_file.read_text()
 
