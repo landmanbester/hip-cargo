@@ -2,6 +2,7 @@ cabs:
   generate_function:
     flavour: python
     command: hip_cargo.core.generate_function.generate_function
+    image: ghcr.io/landmanbester/hip-cargo:genfunc
     name: generate_function
     info: Generate Python function from Stimela cab definition.
     inputs:
@@ -20,5 +21,5 @@ cabs:
     outputs:
       output-file:
         dtype: File
-        info: Name of output CLI function.
+        info: Name of output CLI function (prints to stdout if not specified).
         required: true
