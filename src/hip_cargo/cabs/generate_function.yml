@@ -1,7 +1,7 @@
 generate_function:
   flavour: python
   command: hip_cargo.core.generate_function.generate_function
-  image: ghcr.io/landmanbester/hip-cargo:latest
+  image: ghcr.io/landmanbester/hip-cargo:dependabot-github_actions-github-actions-97f38a5d32
   name: hip_cargo_generate_function
   info: Generate Python function from Stimela cab definition
   inputs:
