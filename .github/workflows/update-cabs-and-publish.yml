@@ -87,6 +87,19 @@ jobs:
                 --output-dir '/workspace/src/${{ steps.package.outputs.name }}/cabs' \
                 --image '${{ steps.version.outputs.full_image_name }}'
 
+      - name: Validate cabs are up to date (for PRs)
+        if: github.event_name == 'pull_request'
+        run: |
+          # Check if there are any changes to cab files
+          if ! git diff --quiet src/*/cabs/*.yml; then
+            echo "::error::Cab files are out of sync. Please run 'python scripts/generate_cabs.py' locally and commit the changes."
+            echo "::error::Or ensure the pre-commit hooks are installed with 'pre-commit install'."
+            git diff src/*/cabs/*.yml
+            exit 1
+          else
+            echo "✓ Cab files are up to date"
+          fi
+
       - name: Commit updated cabs (for tag pushes and main branch)
         if: github.event_name != 'pull_request'
         run: |
@@ -101,14 +114,6 @@ jobs:
             git commit -m "Update stimela cabs to reference ${{ steps.version.outputs.full_image_name }}"
             git push
           fi
-
-      - name: Commit updated cabs (for PRs)
-        if: github.event_name == 'pull_request'
-        uses: stefanzweifel/git-auto-commit-action@v7
-        with:
-          commit_message: "Update stimela cabs to version ${{ steps.version.outputs.version }}"
-          branch: ${{ github.head_ref }}
-          file_pattern: "src/*/cabs/*.yml"
 
       - name: Log in to Container Registry
         uses: docker/login-action@v3

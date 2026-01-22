@@ -1,0 +1,38 @@
+_include:
+  - (hip_cargo.cabs)generate_cabs.yml
+
+opts:
+  backend:
+    select: singularity
+
+generate:
+  info: Generate cabs using hip-cargo
+
+  inputs:
+    module:
+      dtype: List[File]
+      default: /home/bester/code/hip-cargo/src/hip_cargo/cli/generate_function.py
+      info:
+        List of paths to CLI definitions for which cabs are to be generated.
+    output_dir:
+      dtype: Directory
+      default: /tmp
+      mkdir: true
+      must_exist: false
+      path_policies:
+        write_parent: true
+      info:
+        Directory where generated cab definitions will be saved.
+    image:
+      dtype: str
+      default: ghcr.io/landmanbester/hip-cargo:latest
+      info:
+        Name of container image to place in cab definitions.
+
+  steps:
+    test-cab:
+      cab: generate_cabs
+      params:
+        module: =recipe.module
+        output_dir: =recipe.output_dir
+        image: =recipe.image

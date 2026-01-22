@@ -8,8 +8,9 @@ import yaml
 from hip_cargo.utils.introspector import extract_input, parse_decorator
 
 
-def generate_cabs(module_paths: list[str], output_dir: str | None, image: str | None) -> None:
-    """Generate a Stimela cab definition from a Python module.
+def generate_cabs(module: list[Path], image: str | None = None, output_dir: Path | None = None) -> None:
+    """
+    Generate a Stimela cab definition from a Python module.
 
     Args:
         module_paths: List of python module paths (e.g., "package/cli/command.py")
@@ -19,7 +20,27 @@ def generate_cabs(module_paths: list[str], output_dir: str | None, image: str | 
         ImportError: If the module cannot be imported
         AttributeError: If the module doesn't contain a decorated function
     """
-    for module_path in module_paths:
+    # glob if wildcard in module
+    modlist = []
+    for modpath in module:
+        if not isinstance(modpath, Path):
+            modpath = Path(modpath)
+        if "*" in str(modpath):
+            base_path = Path(str(modpath).split("*")[0].rstrip("/"))
+            modlist.extend([f for f in base_path.glob("*") if f.is_file() and not f.name.startswith("__")])
+            if len(modlist) == 0:
+                raise RuntimeError(f"No modules found matching {modpath}")
+        else:
+            if not modpath.is_file():
+                raise RuntimeError(f"No module file found at {modpath}")
+            modlist.append(modpath)
+
+    # User feedback
+    for mod in modlist:
+        print(f"Loading file: {mod}")
+
+    print(f"Writing cabs to: {output_dir}")
+    for module_path in modlist:
         with open(module_path, "r") as f:
             tree = ast.parse(f.read(), filename=module_path)
 
@@ -36,11 +57,29 @@ def generate_cabs(module_paths: list[str], output_dir: str | None, image: str | 
                 cab_def = {node.name: {}}
                 cab_def[node.name]["flavour"] = "python"
                 parts = Path(module_path).parts
-                src_index = parts.index("src")
+
+                # Extract the module path relative to src/
+                try:
+                    src_index = parts.index("src")
+                except ValueError:
+                    raise RuntimeError(
+                        f"Expected 'src' directory in module path, got: {module_path}\n"
+                        f"Module path should follow pattern: .../src/package/cli/module.py"
+                    )
+
                 relative_path = Path(*parts[src_index + 1 :])
                 parts = list(relative_path.parts)
-                cli_index = parts.index("cli")
-                parts[cli_index] = "core"
+
+                # Replace 'cli' with 'core' to get the command module path
+                try:
+                    cli_index = parts.index("cli")
+                    parts[cli_index] = "core"
+                except ValueError:
+                    raise RuntimeError(
+                        f"Expected 'cli' directory in module path after 'src', got: {relative_path}\n"
+                        f"Module path should follow pattern: .../src/package/cli/module.py"
+                    )
+
                 parts[-1] = parts[-1].replace(".py", "")
                 parts.append(node.name)
                 cab_def[node.name]["command"] = ".".join(parts)
@@ -57,7 +96,8 @@ def generate_cabs(module_paths: list[str], output_dir: str | None, image: str | 
                 num_args = len(node.args.args)
                 num_default = len(node.args.defaults)
                 for i, arg in enumerate(node.args.args):
-                    if arg.arg in cab_def[node.name]["outputs"]:
+                    # Check if this parameter is an output (convert underscores to hyphens for comparison)
+                    if arg.arg.replace("_", "-") in cab_def[node.name]["outputs"]:
                         continue  # skip outputs
                     default_idx = i - (num_args - num_default)
                     if default_idx >= 0:
@@ -65,11 +105,15 @@ def generate_cabs(module_paths: list[str], output_dir: str | None, image: str | 
                     else:
                         default = None
                     param_name, input_def = extract_input(arg, default)
-                    cab_def[node.name]["inputs"][param_name] = input_def
+                    # Convert underscores to hyphens for cab input names
+                    cab_def[node.name]["inputs"][param_name.replace("_", "-")] = input_def
 
                 # rerder to place outputs last
                 outputs = cab_def[node.name].pop("outputs")
                 cab_def[node.name]["outputs"] = outputs
+
+                # Wrap in top-level "cabs" key
+                cab_def = {"cabs": cab_def}
 
                 # Generate YAML
                 # Use safe_dump with nice formatting
@@ -83,8 +127,8 @@ def generate_cabs(module_paths: list[str], output_dir: str | None, image: str | 
                 # Write the YAML file
                 if output_dir:
                     output_dir = Path(output_dir)
-                    # Create parent directory if it doesn't exist
-                    output_dir.parent.mkdir(parents=True, exist_ok=True)
+                    # Create output directory if it doesn't exist
+                    output_dir.mkdir(parents=True, exist_ok=True)
                     output_file = output_dir / f"{node.name}.yml"
                     with open(output_file, "w") as f:
                         f.write(yaml_content)
