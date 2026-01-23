@@ -1,6 +1,7 @@
 """Core logic for generating Python functions from Stimela cab definitions."""
 
 import subprocess
+import warnings
 from pathlib import Path
 
 import yaml
@@ -211,7 +212,9 @@ def generate_function(cab_file: Path, config_file: Path | None = None, output_fi
 
     # format generated code
     format_cmd = ["uv", "run", "ruff", "format"]
-    import warnings
+    if config_file:
+        format_cmd.extend(["--config", str(config_file)])
+    format_cmd.append("-")  # Read from stdin
 
     try:
         formatted_code = subprocess.run(
@@ -223,9 +226,6 @@ def generate_function(cab_file: Path, config_file: Path | None = None, output_fi
         ).stdout
     except subprocess.CalledProcessError as e:
         warnings.warn("Code formatting with ruff failed; using unformatted code. Error details:\n" + e.stderr)
-        formatted_code = function_code  # Fallback to unformatted code
-        print("Error during code formatting:")
-        print(e.stderr)
         formatted_code = function_code  # Fallback to unformatted code
 
     if output_file:

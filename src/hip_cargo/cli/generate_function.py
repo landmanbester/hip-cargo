@@ -32,7 +32,7 @@ def generate_function(
         typer.Option(
             ...,
             parser=Path,
-            help="Name of output CLI function (prints to stdout if not specified).",
+            help="Name of output CLI function.",
         ),
     ],
     config_file: Annotated[
