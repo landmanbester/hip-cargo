@@ -1,6 +1,7 @@
 """Function introspection for extracting cab information."""
 
 import ast
+import re
 from itertools import compress
 from pathlib import Path
 from types import NoneType, UnionType
@@ -255,3 +256,37 @@ def parse_decorator(dec: ast.expr) -> dict:
     else:
         # Complex decorator (e.g., chained attributes)
         raise ValueError("Unsupported decorator format")
+
+
+def format_info_fields(yaml_str):
+    """Replace inline info strings with multi-line format."""
+
+    # Process line by line to handle wrapped content
+    lines = yaml_str.split("\n")
+    result = []
+    i = 0
+
+    while i < len(lines):
+        line = lines[i]
+        match = re.match(r"^(\s*)info:\s*(.*)$", line)
+
+        if match:
+            indent = match.group(1)
+            content = match.group(2)
+
+            # Collect continuation lines (indented more than 'info:')
+            cond1 = i + 1 < len(lines)
+            while cond1 and lines[i + 1].startswith(indent + "  ") and not re.match(r"^\s*\w+:", lines[i + 1]):
+                i += 1
+                content += " " + lines[i].strip()
+
+            # Format the collected content
+            formatted_lines = content.replace(". ", ".\n").strip().split("\n")
+            result.append(f"{indent}info:")
+            result.extend(f"{indent}  {line}" for line in formatted_lines)
+        else:
+            result.append(line)
+
+        i += 1
+
+    return "\n".join(result)

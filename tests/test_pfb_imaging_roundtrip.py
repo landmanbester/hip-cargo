@@ -119,9 +119,6 @@ def test_pfb_imaging_roundtrip(module_name):
         try:
             compile(generated_code, str(generated_file), "exec")
         except SyntaxError as e:
-            import ipdb
-
-            ipdb.set_trace()
             pytest.fail(f"Generated code for {module_name} has syntax error: {e}")
 
         # Step 4: Verify functional equivalence by generating cab from regenerated function

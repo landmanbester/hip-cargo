@@ -372,10 +372,19 @@ def generate_function_body(cab_def: dict[str, Any], inputs: dict[str, Any], outp
             # Optional parameters are passed as keyword arguments
             keyword_params.append(f"        {py_param_name}={param_value},")
 
-    # Add output parameters (always as keyword arguments)
-    for output_name in outputs.keys():
+    # Add output parameters (positional if they have positional policy, otherwise keyword)
+    for output_name, output_def in outputs.items():
         py_output_name = output_name.replace("-", "_")
-        keyword_params.append(f"        {py_output_name}={py_output_name},")
+        # Check if output has positional policy
+        policies = output_def.get("policies", {})
+        is_positional = policies.get("positional", False)
+
+        if is_positional:
+            # Positional outputs
+            positional_params.append(f"        {py_output_name},")
+        else:
+            # Keyword outputs
+            keyword_params.append(f"        {py_output_name}={py_output_name},")
 
     # Combine: positional args first, then keyword args
     all_params = positional_params + keyword_params

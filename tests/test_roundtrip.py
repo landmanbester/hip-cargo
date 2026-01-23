@@ -119,6 +119,25 @@ def test_roundtrip_preserves_spacing():
 
         generated_code = generated_file.read_text()
 
-        # Assert that there are no occurrences of a period immediately followed
-        # by a non-space character (except for newline)
-        assert not re.search(r"\.\S", generated_code), "Multi-line strings should have a space after periods"
+        # Extract only info and help strings to check for proper spacing
+        # Use regex to find help="..." and info="..." patterns (including multi-line strings)
+        info_help_pattern = r'(?:help|info)=(?:"([^"]*)"|\'([^\']*)\'|"""(.*?)"""|\'\'\'(.*?)\'\'\')'
+        matches = re.findall(info_help_pattern, generated_code, re.DOTALL)
+
+        # Flatten matches (each match is a tuple with one non-empty group)
+        info_help_strings = []
+        for match_tuple in matches:
+            for match_str in match_tuple:
+                if match_str:
+                    info_help_strings.append(match_str)
+
+        # Check each info/help string for proper spacing after periods
+        for info_str in info_help_strings:
+            # Check for period followed by non-space character (but allow period at end of string)
+            # Also allow period followed by newline
+            bad_spacing = re.search(r"\.[^\s\n]", info_str)
+            assert not bad_spacing, (
+                f"Info/help string has improper spacing after period:\n"
+                f"  String: {info_str!r}\n"
+                f"  Bad pattern at position {bad_spacing.start() if bad_spacing else 'N/A'}"
+            )

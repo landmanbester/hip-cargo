@@ -14,14 +14,14 @@ from hip_cargo.utils.cab_to_function import (
 )
 
 
-def generate_function(cab_file: Path, config_file: Path | None = None, output_file: Path | None = None) -> None:
+def generate_function(cab_file: Path, output_file: Path, config_file: Path | None = None) -> None:
     """
     Generate a Python function from a Stimela cab definition.
 
     Args:
-        cab_path: Path to the YAML cab definition file
-        output_path: Optional path where the Python function should be written.
-                    If None, prints to stdout.
+        cab_file: Path to the YAML cab definition file.
+        output_file: Path where the Python function should be written.
+        config_file: Optional path to ruff config file to use when formatting the generated code.
 
     Raises:
         FileNotFoundError: If the cab file doesn't exist
@@ -157,6 +157,10 @@ def generate_function(cab_file: Path, config_file: Path | None = None, output_fi
 
         if output_required:
             lines.append(f"    required={output_required},")
+
+        if output_def.get("policies", None):
+            lines.append(f"    policies={output_def.get('policies')},")
+
         lines.append(")")
 
     # Function signature

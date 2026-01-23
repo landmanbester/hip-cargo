@@ -38,6 +38,7 @@ def stimela_output(
     info: str = "",
     required: bool = False,
     implicit: bool = False,
+    policies: Optional[dict[str, Any]] = None,
 ) -> Callable:
     """
     Decorator to define an output of a Stimela cab.
@@ -58,7 +59,14 @@ def stimela_output(
 
         # Append this output definition
         func.__stimela_outputs__.append(
-            {"name": name, "dtype": dtype, "info": info, "required": required, "implicit": implicit}
+            {
+                "name": name,
+                "dtype": dtype,
+                "info": info,
+                "required": required,
+                "implicit": implicit,
+                "policies": policies or {},
+            }
         )
 
         return func

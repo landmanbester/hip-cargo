@@ -5,7 +5,7 @@ from pathlib import Path
 
 import yaml
 
-from hip_cargo.utils.introspector import extract_input, parse_decorator
+from hip_cargo.utils.introspector import extract_input, format_info_fields, parse_decorator
 
 
 def generate_cabs(module: list[Path], image: str | None = None, output_dir: Path | None = None) -> None:
@@ -88,11 +88,14 @@ def generate_cabs(module: list[Path], image: str | None = None, output_dir: Path
                     cab_def[node.name]["image"] = image
                 cab_def[node.name]["outputs"] = {}
                 for decorator_name, decorator_content in decorators.items():
+                    print(decorator_name, decorator_content["kwargs"])
                     if decorator_name == "stimela_cab":
-                        cab_def[node.name].update(decorator_content["kwargs"])
+                        kwargs = decorator_content["kwargs"].copy()
+                        cab_def[node.name].update(kwargs)
                     else:  # must be outputs
                         # there are no args in outputs decorator, they are all kwargs
-                        cab_def[node.name]["outputs"][decorator_name] = decorator_content["kwargs"]
+                        kwargs = decorator_content["kwargs"].copy()
+                        cab_def[node.name]["outputs"][decorator_name] = kwargs
                 cab_def[node.name]["inputs"] = {}
                 num_args = len(node.args.args)
                 num_default = len(node.args.defaults)
@@ -125,6 +128,9 @@ def generate_cabs(module: list[Path], image: str | None = None, output_dir: Path
                     indent=2,
                 )
 
+                # format info fields so they are defined as multi-line strings
+                yaml_content_formatted = format_info_fields(yaml_content)
+
                 # Write the YAML file
                 if output_dir:
                     output_dir = Path(output_dir)
@@ -132,6 +138,6 @@ def generate_cabs(module: list[Path], image: str | None = None, output_dir: Path
                     output_dir.mkdir(parents=True, exist_ok=True)
                     output_file = output_dir / f"{node.name}.yml"
                     with open(output_file, "w") as f:
-                        f.write(yaml_content)
+                        f.write(yaml_content_formatted)
                 else:  # else write to terminal
-                    print(yaml_content)
+                    print(yaml_content_formatted)

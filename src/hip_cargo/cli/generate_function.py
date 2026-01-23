@@ -15,8 +15,9 @@ File = NewType("File", Path)
 @stimela_output(
     dtype="File",
     name="output-file",
-    info="Name of output CLI function (prints to stdout if not specified).",
+    info="Name of output CLI function.",
     required=True,
+    policies={"positional": True},
 )
 def generate_function(
     cab_file: Annotated[
@@ -52,6 +53,6 @@ def generate_function(
     # Call the core function with all parameters
     generate_function_core(
         cab_file,
+        output_file,
         config_file=config_file,
-        output_file=output_file,
     )
