@@ -148,7 +148,7 @@ def generate_cabs(
             parser=Path,
             help="CLI module path. "
             "Use wild card to generate cabs for multiple commands in module. "
-            "For example, package/cli/*).",
+            "For example, package/cli/*",
         ),
     ],
     image: Annotated[

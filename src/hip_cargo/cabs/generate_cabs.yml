@@ -2,13 +2,13 @@ cabs:
   generate_cabs:
     flavour: python
     command: hip_cargo.core.generate_cabs.generate_cabs
-    image: ghcr.io/landmanbester/hip-cargo:genfunc
+    image: ghcr.io/landmanbester/hip-cargo:genfunc2
     name: generate_cabs
     info: Generate Stimela cab definition from Python CLI function.
     inputs:
       module:
         info: CLI module path. Use wild card to generate cabs for multiple commands
-          in module. For example, package/cli/*).
+          in module. For example, package/cli/*
         dtype: List[File]
         required: true
         policies:

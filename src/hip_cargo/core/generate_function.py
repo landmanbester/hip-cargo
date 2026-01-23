@@ -39,6 +39,9 @@ def generate_function(cab_file: Path, config_file: Path | None = None, output_fi
     with open(cab_file) as f:
         data = yaml.safe_load(f)
 
+    if "cabs" not in data:
+        raise ValueError(f"Invalid cab file format: missing 'cabs' key in {cab_file}")
+
     cab_name = next(iter(data["cabs"]))
     cab_def = data["cabs"][cab_name]
     cab_def["_name"] = cab_name
@@ -208,9 +211,8 @@ def generate_function(cab_file: Path, config_file: Path | None = None, output_fi
 
     # format generated code
     format_cmd = ["uv", "run", "ruff", "format"]
-    if config_file:
-        format_cmd.extend(["--config", str(config_file)])
-    format_cmd.append("-")  # Read from stdin
+    import warnings
+
     try:
         formatted_code = subprocess.run(
             format_cmd,
@@ -220,6 +222,8 @@ def generate_function(cab_file: Path, config_file: Path | None = None, output_fi
             check=True,
         ).stdout
     except subprocess.CalledProcessError as e:
+        warnings.warn("Code formatting with ruff failed; using unformatted code. Error details:\n" + e.stderr)
+        formatted_code = function_code  # Fallback to unformatted code
         print("Error during code formatting:")
         print(e.stderr)
         formatted_code = function_code  # Fallback to unformatted code

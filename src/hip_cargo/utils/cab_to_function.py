@@ -133,7 +133,7 @@ def split_info_at_periods(info: str) -> str:
     while i < len(info):
         current += info[i]
         # Check if we hit a period followed by space (or end of string)
-        if info[i] == "." and (i + 1 >= len(info) or (i + 1 < len(info) and info[i + 1] == " ")):
+        if info[i] == "." and (i + 1 >= len(info) or info[i + 1] == " "):
             # Found end of sentence
             sentence = current.strip()
             if sentence:

@@ -26,8 +26,9 @@ def generate_cabs(module: list[Path], image: str | None = None, output_dir: Path
         if not isinstance(modpath, Path):
             modpath = Path(modpath)
         if "*" in str(modpath):
-            base_path = Path(str(modpath).split("*")[0].rstrip("/"))
-            modlist.extend([f for f in base_path.glob("*") if f.is_file() and not f.name.startswith("__")])
+            base_path = modpath.parent
+            pattern = modpath.name
+            modlist.extend([f for f in base_path.glob(pattern) if f.is_file() and not f.name.startswith("__")])
             if len(modlist) == 0:
                 raise RuntimeError(f"No modules found matching {modpath}")
         else:

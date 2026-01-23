@@ -1,38 +1,11 @@
 """Test round-trip conversion: CLI function -> cab -> function."""
 
-import subprocess
+import re
 import tempfile
 from pathlib import Path
 
 from hip_cargo.core.generate_cabs import generate_cabs
 from hip_cargo.core.generate_function import generate_function
-
-
-def format_with_ruff(code: str, file_path: Path) -> str:
-    """Format Python code using ruff and return the formatted result."""
-    # Write code to file
-    file_path.write_text(code)
-
-    # Format with ruff
-    subprocess.run(
-        ["uv", "run", "ruff", "format", str(file_path)],
-        check=True,
-        capture_output=True,
-    )
-
-    # Read formatted code
-    return file_path.read_text()
-
-
-def normalize_code(code: str) -> str:
-    """Normalize Python code for comparison by removing extra whitespace and blank lines."""
-    lines = []
-    for line in code.splitlines():
-        stripped = line.rstrip()
-        # Skip blank lines and lines with rich_help_panel (not preserved in cab)
-        if stripped and "rich_help_panel" not in line:
-            lines.append(stripped)
-    return "\n".join(lines)
 
 
 def test_roundtrip_generate_cabs():
@@ -55,7 +28,7 @@ def test_roundtrip_generate_cabs():
         assert cab_file.exists(), "Cab file should be generated"
 
         generated_file = tmpdir / "generate_cabs_roundtrip.py"
-        generate_function(cab_file, output_file=generated_file, config_file="pyproject.toml")
+        generate_function(cab_file, output_file=generated_file, config_file=Path("pyproject.toml"))
 
         # Step 3: Verify generated function is syntactically valid
         assert generated_file.exists(), "Generated function should exist"
@@ -100,7 +73,7 @@ def test_roundtrip_generate_function():
         assert cab_file.exists(), "Cab file should be generated"
 
         generated_file = tmpdir / "generate_function_roundtrip.py"
-        generate_function(cab_file, output_file=generated_file, config_file="pyproject.toml")
+        generate_function(cab_file, output_file=generated_file, config_file=Path("pyproject.toml"))
 
         # Step 3: Verify generated function is syntactically valid
         assert generated_file.exists(), "Generated function should exist"
@@ -146,8 +119,6 @@ def test_roundtrip_preserves_spacing():
 
         generated_code = generated_file.read_text()
 
-        # Check that periods are followed by spaces (not "word.Another")
-        # This checks for proper concatenation of multi-line strings
-        assert "path. " in generated_code or "path.Use" not in generated_code, (
-            "Multi-line strings should have proper spacing after periods"
-        )
+        # Assert that there are no occurrences of a period immediately followed
+        # by a non-space character (except for newline)
+        assert not re.search(r"\.\S", generated_code), "Multi-line strings should have a space after periods"
