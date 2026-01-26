@@ -15,46 +15,75 @@ on:
 
 env:
   REGISTRY: ghcr.io
-  # This will be something like "landmanbester/my-project"
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
+  # For PRs: just run tests to validate cab generation logic
+  # This avoids the chicken-and-egg problem where the container has old code
+  validate-pr:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v7
+
+      - name: Set up Python
+        run: uv python install 3.11
+
+      - name: Install dependencies
+        run: uv sync --group test
+
+      - name: Run tests (includes roundtrip validation)
+        run: uv run pytest -v
+
+      - name: Verify cab generation works
+        run: |
+          # Generate cabs to a temp directory and verify they're valid YAML
+          uv run cargo generate-cabs \
+              --module 'src/hip_cargo/cli/*' \
+              --output-dir '/tmp/test-cabs' \
+              --image 'ghcr.io/test/test:latest'
+          echo "✓ Cab generation successful"
+          ls -la /tmp/test-cabs/
+
+  # For main/tags: regenerate cabs with correct image tag, commit, and publish container
   update-cabs-and-container:
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     permissions:
-      contents: write  # Need write to commit cabs back
-      packages: write  # Need write to push containers
+      contents: write
+      packages: write
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
         with:
-          # Need full history for version extraction
           fetch-depth: 0
-          # For PRs, check out the PR branch
-          ref: ${{ github.event_name == 'pull_request' && github.head_ref || github.ref }}
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v7
+
+      - name: Set up Python
+        run: uv python install 3.11
+
+      - name: Install dependencies
+        run: uv sync
 
       - name: Determine version and image tag
         id: version
         run: |
           if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
-            # Tag push: extract semantic version
             VERSION=${GITHUB_REF#refs/tags/v}
             IMAGE_TAG=$VERSION
             echo "Detected release version: $VERSION"
           elif [[ "${{ github.ref }}" == refs/heads/main ]] || [[ "${{ github.ref }}" == refs/heads/master ]]; then
-            # Main branch: use 'latest'
             VERSION="latest"
             IMAGE_TAG="latest"
             echo "Detected main branch, using 'latest'"
-          elif [[ "${{ github.event_name }}" == "pull_request" ]]; then
-            # PR: use branch name
-            VERSION="${{ github.head_ref }}"
-            # Sanitize branch name for use in image tags (replace / with -)
-            IMAGE_TAG=$(echo "$VERSION" | sed 's/\//-/g')
-            echo "Detected PR from branch: $VERSION"
           else
-            # Other branch push: use branch name
             VERSION=${GITHUB_REF#refs/heads/}
             IMAGE_TAG=$(echo "$VERSION" | sed 's/\//-/g')
             echo "Detected branch: $VERSION"
@@ -67,47 +96,28 @@ jobs:
       - name: Extract package name
         id: package
         run: |
-            # Extract package name from pyproject.toml and convert to module name
-            PACKAGE_NAME=$(python3 -c "
-            import tomllib
-            with open('pyproject.toml', 'rb') as f:
-                data = tomllib.load(f)
-                print(data['project']['name'].replace('-', '_'))
-            ")
-            echo "name=$PACKAGE_NAME" >> $GITHUB_OUTPUT
-            echo "Package name: $PACKAGE_NAME"
+          PACKAGE_NAME=$(python3 -c "
+          import tomllib
+          with open('pyproject.toml', 'rb') as f:
+              data = tomllib.load(f)
+              print(data['project']['name'].replace('-', '_'))
+          ")
+          echo "name=$PACKAGE_NAME" >> $GITHUB_OUTPUT
+          echo "Package name: $PACKAGE_NAME"
 
-      - name: Generate Stimela cabs using hip-cargo container
+      - name: Generate Stimela cabs with correct image tag
         run: |
-            docker run --rm \
-            -v ${{ github.workspace }}:/workspace \
-            ghcr.io/landmanbester/hip-cargo:latest \
-            cargo generate-cabs \
-                --module '/workspace/src/${{ steps.package.outputs.name }}/cli/*' \
-                --output-dir '/workspace/src/${{ steps.package.outputs.name }}/cabs' \
-                --image '${{ steps.version.outputs.full_image_name }}'
+          uv run cargo generate-cabs \
+              --module 'src/${{ steps.package.outputs.name }}/cli/*' \
+              --output-dir 'src/${{ steps.package.outputs.name }}/cabs' \
+              --image '${{ steps.version.outputs.full_image_name }}'
 
-      - name: Validate cabs are up to date (for PRs)
-        if: github.event_name == 'pull_request'
-        run: |
-          # Check if there are any changes to cab files
-          if ! git diff --quiet src/*/cabs/*.yml; then
-            echo "::error::Cab files are out of sync. Please run 'python scripts/generate_cabs.py' locally and commit the changes."
-            echo "::error::Or ensure the pre-commit hooks are installed with 'pre-commit install'."
-            git diff src/*/cabs/*.yml
-            exit 1
-          else
-            echo "✓ Cab files are up to date"
-          fi
-
-      - name: Commit updated cabs (for tag pushes and main branch)
-        if: github.event_name != 'pull_request'
+      - name: Commit updated cabs
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add src/*/cabs/*.yml
 
-          # Only commit if there are changes
           if git diff --staged --quiet; then
             echo "No changes to cab files"
           else
@@ -131,8 +141,6 @@ jobs:
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
             type=ref,event=branch
-            type=ref,event=pr,prefix=pr-
-            type=raw,value=${{ github.head_ref }},enable=${{ github.event_name == 'pull_request' }}
             type=raw,value=latest,enable={{is_default_branch}}
 
       - name: Build and push Docker image

@@ -30,7 +30,7 @@ uv run pre-commit install
 ## Key Principles
 
 1. **Separate CLI from implementation**: Keep CLI modules lightweight with lazy imports. Keep them all in the `src/mypackage/cli` directory and define the CLI for each command in a separate file. Construct the main Typer app in `src/mypackage/cli/__init__.py` and register commands there.
-2. **Separate cabs directory at same level as `cli`**: Use `hip-cargo` to auto-generate cabs into in `src/mypackage/cabs/` directory with the `generate_cabs.py` script. There should be a separate file for each cab.
+2. **Separate cabs directory at same level as `cli`**: Use `hip-cargo` to auto-generate cabs into in `src/mypackage/cabs/` directory with the `generate_cabs.py` script. There should be a separate `src/mypackage/cli/mycommand.py` file corresponding to each cab.
 3. **Single app, multiple commands**: Use one Typer app that registers all commands. If you need a separate app you might as well create a separate repository for it.
 4. **Lazy imports**: Import heavy dependencies (NumPy, JAX, Dask) only when executing
 5. **Linked GitHub package with container image**: Maintain an up to date `Dockerfile` that installs the full package and use **Docker** (or **Podman**) to upload the image to the GitHub Container registry. Link this to your GitHub repository.
@@ -68,8 +68,8 @@ The following versioning schema is proposed:
 * use `latest` tag for `main`/`master` branch
 * use `branch-name` when developing new features
 
-This can all automated with pre-commit hooks and GitHub actions.
-Use pre-commit hook to auto-generate cab definitions on each commit.
+This can all be automated with pre-commit hooks and GitHub actions.
+Use pre-commit hooks to auto-generate cab definitions on each commit.
 See the [update-cabs-and-publish](./.github/workflows/update-cabs-and-publish.yml) workflow for an example of how to set up GitHub Actions for automation.
 
 ## Package Structure
@@ -80,34 +80,44 @@ Initialize your project with the following structure (again using `hip-cargo` as
 ```
 hip-cargo/
 ├── .github
-│   ├── dependabot.yml
-│   └── workflows
-│       ├── ci.yml
-│       ├── update-cabs-and-publish.yml
-│       └── publish.yml
+│   ├── dependabot.yml
+│   └── workflows
+│       ├── ci.yml
+│       ├── update-cabs-and-publish.yml
+│       └── publish.yml
+├── scripts                      # Automation scripts
+│   └── generate_cabs.py
 ├── src
-│   └── hip_cargo
-│       ├── cabs
-│       │   ├── generate_cabs.yml
-│       │   ├── generate_function.yml
-│       │   ├── __init__.py
-│       ├── cli
-│       │   ├── generate_cabs.py
-│       │   ├── generate_function.py
-│       │   ├── __init__.py
-│       ├── core
-│       │   ├── generate_cabs.py
-│       │   ├── generate_function.py
-│       │   ├── __init__.py
+│   └── hip_cargo
+│       ├── cabs                 # Generated cab definitions (YAML)
+│       │   ├── __init__.py
+│       │   ├── generate_cabs.yml
+│       │   └── generate_function.yml
+│       ├── cli                  # Lightweight CLI wrappers
+│       │   ├── __init__.py
+│       │   ├── generate_cabs.py
+│       │   └── generate_function.py
+│       ├── core                 # Core implementations (lazy-loaded)
+│       │   ├── __init__.py
+│       │   ├── generate_cabs.py
+│       │   └── generate_function.py
+│       ├── recipes              # Stimela recipes for running commands via stimela
+│       │   ├── __init__.py
+│       │   └── gen_cabs.yml
+│       └── utils                # Shared utilities
+│           ├── __init__.py
+│           ├── cab_to_function.py
+│           ├── decorators.py
+│           └── introspector.py
+├── tests
+│   ├── __init__.py
+│   └── conftest.py
 ├── Dockerfile                   # For containerization
 ├── LICENSE                      # MIT or BSD3 license encouraged
 ├── .pre-commit-config.yaml      # You should use these if you don't already
 ├── .gitignore                   # make sure your .lock file is not ignored
 ├── pyproject.toml               # PEP 621 compliant
 ├── tbump.toml                   # this makes releases so much easier
-├── tests                        # obviously we need these
-│   ├── conftest.py
-│   ├── __init__.py
 └── README.md                    # We are going to put all the docs in the project README's :no_mouth:
 
 ```
@@ -389,8 +399,12 @@ _include:
 ```
 
 `stimela` will automatically pull the matching version based on the cab configuration.
-You could optionally provide `stimela` recipes inside your project.
-See the recipe in `src/hip_cargo/recipes` for an example.
+You could optionally provide `stimela` recipes inside your project (see `src/hip_cargo/recipes`, for example).
+If the lightweight version if the package is installed it should be possible to run these recipes directly using the syntax
+
+```python
+stimela run '(mypackage.recipes)::killer_recipe.yml' recipe_name option1=option1...
+```
 
 
 ## Type Inference
@@ -418,6 +432,7 @@ Defines a `stimela` output. (Probably incomplete but it's basically a dictionary
 - `info`: Help string
 - `required`: Whether output is required (default: False)
 - `implicit`: Just use what you would put in the cab definition for `stimela`
+- `policies`: Parameter level policies provided as a `dict`
 
 ## Features
 
