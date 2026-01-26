@@ -1,8 +1,10 @@
 # Pre-commit hooks for hip-cargo
 # See https://pre-commit.com for more information
 #
-# Note: Documentation hooks (update-readme, update-cli-help) run in CI only.
-# To run them locally: python scripts/update_readme.py && python scripts/update_cli_help.py
+# NOTE: When hooks modify files, pre-commit will "fail" and abort the commit.
+# This is expected behavior - it allows you to review the changes.
+# Simply run `git add -u && git commit` again. The second attempt will succeed
+# because the files are already correctly formatted/updated.
 
 repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit
@@ -24,8 +26,23 @@ repos:
       - id: check-toml
       - id: mixed-line-ending
 
+  # Local hooks run after external hooks, ensuring they see formatted code
   - repo: local
     hooks:
+      - id: update-cli-help
+        name: Update CLI help SVGs
+        entry: python scripts/update_cli_help.py
+        language: system
+        files: ^(src/hip_cargo/.*\.py|pyproject\.toml)$
+        pass_filenames: false
+
+      - id: update-readme
+        name: Update README with code snippets
+        entry: python scripts/update_readme.py
+        language: system
+        files: ^(src/.*\.py|pyproject\.toml|README\.md)$
+        pass_filenames: false
+
       - id: generate-cabs
         name: Generate Stimela cab definitions
         entry: python scripts/generate_cabs.py
