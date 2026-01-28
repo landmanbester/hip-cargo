@@ -403,7 +403,7 @@ You could optionally provide `stimela` recipes inside your project (see `src/hip
 If the lightweight version if the package is installed it should be possible to run these recipes directly using the syntax
 
 ```python
-stimela run '(mypackage.recipes)::killer_recipe.yml' recipe_name option1=option1...
+stimela run 'mypackage.recipes::killer_recipe.yml' recipe_name option1=option1...
 ```
 
 

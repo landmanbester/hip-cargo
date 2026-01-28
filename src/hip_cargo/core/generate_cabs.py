@@ -88,7 +88,6 @@ def generate_cabs(module: list[Path], image: str | None = None, output_dir: Path
                     cab_def[node.name]["image"] = image
                 cab_def[node.name]["outputs"] = {}
                 for decorator_name, decorator_content in decorators.items():
-                    print(decorator_name, decorator_content["kwargs"])
                     if decorator_name == "stimela_cab":
                         kwargs = decorator_content["kwargs"].copy()
                         cab_def[node.name].update(kwargs)
