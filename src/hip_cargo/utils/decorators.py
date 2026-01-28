@@ -39,6 +39,9 @@ def stimela_output(
     required: bool = False,
     implicit: bool = False,
     policies: Optional[dict[str, Any]] = None,
+    must_exist: bool = False,
+    mkdir: bool = False,
+    path_policies: Optional[dict[str, Any]] = None,
 ) -> Callable:
     """
     Decorator to define an output of a Stimela cab.
@@ -66,6 +69,9 @@ def stimela_output(
                 "required": required,
                 "implicit": implicit,
                 "policies": policies or {},
+                "must_exist": must_exist,
+                "mkdir": mkdir,
+                "path_policies": path_policies or {},
             }
         )
 
