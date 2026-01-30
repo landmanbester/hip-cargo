@@ -162,6 +162,12 @@ def generate_function(cab_file: Path, output_file: Path, config_file: Path | Non
         if output_def.get("policies", None):
             lines.append(f"    policies={output_def.get('policies')},")
 
+        if output_def.get("implicit", None):
+            lines.append(f"    implicit='{output_def.get('implicit')}',")
+
+        if output_def.get("must_exist", None):
+            lines.append(f"    must_exist={output_def.get('must_exist')},")
+
         lines.append(")")
 
     # Function signature
