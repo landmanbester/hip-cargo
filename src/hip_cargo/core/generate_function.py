@@ -168,6 +168,12 @@ def generate_function(cab_file: Path, output_file: Path, config_file: Path | Non
         if "must_exist" in output_def:
             lines.append(f"    must_exist={output_def.get('must_exist')},")
 
+        if "mkdir" in output_def:
+            lines.append(f"    mkdir={output_def.get('mkdir')},")
+
+        if "path_policies" in output_def:
+            lines.append(f"    path_policies={output_def.get('path_policies')},")
+
         lines.append(")")
 
     # Function signature
