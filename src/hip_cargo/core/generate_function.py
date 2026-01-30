@@ -77,9 +77,10 @@ def generate_function(cab_file: Path, output_file: Path, config_file: Path | Non
 
     # Imports
     lines.append("from pathlib import Path")
-    lines.append("from typing import Annotated, NewType")
     if uses_literal:
-        lines.append("from typing import Literal")
+        lines.append("from typing import Annotated, Literal, NewType")
+    else:
+        lines.append("from typing import Annotated, NewType")
     lines.append("")
     lines.append("import typer")
     lines.append("")
@@ -214,20 +215,38 @@ def generate_function(cab_file: Path, output_file: Path, config_file: Path | Non
 
     function_code = "\n".join(lines)
 
-    # format generated code
-    format_cmd = ["uv", "run", "ruff", "format"]
+    # 1. Prepare the Linter command (Check + Fix)
+    # Note: We use --stdin-filename to give Ruff context, and - to read/write to stdout
+    check_cmd = ["uv", "run", "ruff", "check", "--fix", "--stdin-filename", "generated.py", "-"]
+
+    # 2. Prepare the Formatter command
+    format_cmd = ["uv", "run", "ruff", "format", "--stdin-filename", "generated.py", "-"]
+
     if config_file:
+        check_cmd.extend(["--config", str(config_file)])
         format_cmd.extend(["--config", str(config_file)])
-    format_cmd.append("-")  # Read from stdin
 
     try:
-        formatted_code = subprocess.run(
-            format_cmd,
+        # First Pass: Lint and Fix
+        lint_result = subprocess.run(
+            check_cmd,
             input=function_code,
             capture_output=True,
             text=True,
             check=True,
-        ).stdout
+        )
+
+        # Second Pass: Format the result of the linting
+        final_result = subprocess.run(
+            format_cmd,
+            input=lint_result.stdout,
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+
+        formatted_code = final_result.stdout
+
     except subprocess.CalledProcessError as e:
         warnings.warn("Code formatting with ruff failed; using unformatted code. Error details:\n" + e.stderr)
         formatted_code = function_code  # Fallback to unformatted code

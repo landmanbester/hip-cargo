@@ -26,6 +26,7 @@ from hip_cargo.core.generate_function import generate_function
 # Path to pfb-imaging package (local development version)
 PFB_IMAGING_ROOT = Path.home() / "software" / "pfb-imaging"
 PFB_IMAGING_CLI = PFB_IMAGING_ROOT / "src" / "pfb_imaging" / "cli"
+PFB_IMAGING_CABS = PFB_IMAGING_ROOT / "src" / "pfb_imaging" / "cabs"
 
 # List of CLI modules to test
 CLI_MODULES = [
@@ -97,14 +98,21 @@ def test_pfb_imaging_roundtrip(module_name):
         assert cab_file.exists(), f"Cab file should be generated for {module_name}"
 
         # Load original cab
-        with open(cab_file) as f:
+        original_cab_file = PFB_IMAGING_CABS / f"{module_name}.yml"
+        with open(original_cab_file) as f:
             original_cab = yaml.safe_load(f)
+            original_cab["cabs"][module_name].pop("image")
+
+        with open(cab_file) as f:
+            generated_cab = yaml.safe_load(f)
+
+        assert original_cab == generated_cab, f"Generated cab does not match original for {module_name}"
 
         # Step 2: Generate function from cab
         generated_file = tmpdir / f"{module_name}_regenerated.py"
         try:
             generate_function(
-                cab_file,
+                original_cab_file,
                 output_file=generated_file,
                 config_file=Path("pyproject.toml"),  # Use hip-cargo's ruff config
             )
@@ -120,69 +128,6 @@ def test_pfb_imaging_roundtrip(module_name):
             compile(generated_code, str(generated_file), "exec")
         except SyntaxError as e:
             pytest.fail(f"Generated code for {module_name} has syntax error: {e}")
-
-        # Step 4: Verify functional equivalence by generating cab from regenerated function
-        # Copy regenerated file to CLI dir (overwrite the copy)
-        shutil.copy2(generated_file, copied_file)
-
-        try:
-            generate_cabs(
-                module=[copied_file],
-                output_dir=cab_dir_2,
-                image=None,
-            )
-        except Exception as e:
-            pytest.fail(f"Failed to generate cab from regenerated function for {module_name}: {e}")
-
-        # Load regenerated cab
-        cab_file_2 = cab_dir_2 / f"{module_name}.yml"
-        assert cab_file_2.exists(), f"Second cab file should be generated for {module_name}"
-
-        with open(cab_file_2) as f:
-            regenerated_cab = yaml.safe_load(f)
-
-        # Compare cab structures (ignoring formatting differences)
-        # Both should have the same structure for functional equivalence
-        # Normalize whitespace in info strings for comparison
-        def normalize_cab(cab):
-            """Normalize cab data for comparison (whitespace in info strings)."""
-            import copy
-
-            cab_copy = copy.deepcopy(cab)
-            if "cabs" in cab_copy:
-                for cab_name, cab_data in cab_copy["cabs"].items():
-                    # Normalize info in cab itself
-                    if "info" in cab_data:
-                        cab_data["info"] = " ".join(cab_data["info"].split())
-
-                    # Normalize info in inputs
-                    if "inputs" in cab_data:
-                        for input_name, input_data in cab_data["inputs"].items():
-                            if "info" in input_data:
-                                input_data["info"] = " ".join(input_data["info"].split())
-
-                    # Normalize info in outputs
-                    if "outputs" in cab_data:
-                        for output_name, output_data in cab_data["outputs"].items():
-                            if "info" in output_data:
-                                output_data["info"] = " ".join(output_data["info"].split())
-
-            return cab_copy
-
-        normalized_original = normalize_cab(original_cab)
-        normalized_regenerated = normalize_cab(regenerated_cab)
-
-        if normalized_original != normalized_regenerated:
-            # Provide detailed diff
-            print(f"\n=== CAB STRUCTURE DIFF for {module_name} ===")
-            print("Original cab keys:", list(original_cab.get("cabs", {}).get(module_name, {}).keys()))
-            print("Regenerated cab keys:", list(regenerated_cab.get("cabs", {}).get(module_name, {}).keys()))
-
-            pytest.fail(
-                f"Cab structure mismatch for {module_name}.\n"
-                f"The regenerated function does not produce the same cab structure.\n"
-                f"This indicates a loss of information during roundtrip conversion."
-            )
 
 
 @pytest.mark.skipif(
