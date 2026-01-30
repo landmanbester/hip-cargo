@@ -328,6 +328,14 @@ def generate_function_body(cab_def: dict[str, Any], inputs: dict[str, Any], outp
     for param_name, param_def in inputs.items():
         dtype = param_def.get("dtype", "str")
 
+        if "Stimela dtype:" in extract_info_string(param_def.get("info", "")):
+            # Extract original Stimela dtype from help text
+            info_str = extract_info_string(param_def.get("info", ""))
+            for line in info_str.split("\n"):
+                if "Stimela dtype:" in line:
+                    dtype = line.split("Stimela dtype:")[-1].strip()
+                    break
+
         # Check if this parameter needs comma-separated conversion
         if dtype in ["List[int]", "List[float]"]:
             element_type = dtype[5:-1]  # Extract type from List[type]
