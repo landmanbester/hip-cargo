@@ -125,8 +125,6 @@ def generate_function(cab_file: Path, output_file: Path, config_file: Path | Non
 
     # Output decorators
     for output_name, output_def in outputs.items():
-        print(f"Processing output: {output_name}")
-        print(f"Output definition: {output_def}")
         # Sanitize output name
         output_dtype = output_def.get("dtype", "File")
         # Get info - could be under 'info'
