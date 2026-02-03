@@ -163,7 +163,7 @@ def generate_function(cab_file: Path, output_file: Path, config_file: Path | Non
             lines.append(f"    policies={output_def.get('policies')},")
 
         if output_def.get("implicit", None):
-            lines.append(f"    implicit='{output_def.get('implicit')}',")
+            lines.append(f'    implicit="{output_def.get("implicit")}",')
 
         if "must_exist" in output_def:
             lines.append(f"    must_exist={output_def.get('must_exist')},")
@@ -229,10 +229,10 @@ def generate_function(cab_file: Path, output_file: Path, config_file: Path | Non
 
     # 1. Prepare the Linter command (Check + Fix)
     # Note: We use --stdin-filename to give Ruff context, and - to read/write to stdout
-    check_cmd = ["uv", "run", "ruff", "check", "--fix", "--stdin-filename", "generated.py", "-"]
+    check_cmd = ["ruff", "check", "--fix", "--stdin-filename", "generated.py", "-"]
 
     # 2. Prepare the Formatter command
-    format_cmd = ["uv", "run", "ruff", "format", "--stdin-filename", "generated.py", "-"]
+    format_cmd = ["ruff", "format", "--stdin-filename", "generated.py", "-"]
 
     if config_file:
         check_cmd.extend(["--config", str(config_file)])

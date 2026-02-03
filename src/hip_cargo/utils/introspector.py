@@ -279,6 +279,7 @@ def format_info_fields(yaml_str):
             while cond1 and lines[i + 1].startswith(indent + "  ") and not re.match(r"^\s*\w+:", lines[i + 1]):
                 i += 1
                 content += " " + lines[i].strip()
+                cond1 = i + 1 < len(lines)
 
             # Format the collected content
             formatted_lines = content.replace(". ", ".\n").strip().split("\n")

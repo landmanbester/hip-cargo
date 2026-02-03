@@ -425,14 +425,19 @@ Marks a function as a Stimela cab. (Probably incomplete but it's basically a dic
 
 ### `@stimela_output`
 
-Defines a `stimela` output. (Probably incomplete but it's basically a dictionary mapping.)
+Defines a `stimela` output supporting the following fields (Probably incomplete but it's basically a dictionary mapping):
 
 - `name`: Output name (top level, one below `cabs`)
 - `dtype`: Data type (File, Directory, MS, etc.)
 - `info`: Help string
-- `required`: Whether output is required (default: False)
+- `required`: Whether output is required (`default: False`)
 - `implicit`: Just use what you would put in the cab definition for `stimela`
-- `policies`: Parameter level policies provided as a `dict`
+- `policies`: Parameter level policies provided as a `dict`. See `stimela` [docs](https://stimela.readthedocs.io/en/latest/reference/schema_ref.html)
+- `must_exist`: Whether an output has to exist when the task finishes (`default: False`)
+- `mkdir`: create the directory if it does not exist (`default: False`)
+- `path_policies`: Path policies provided as a `dict`. See `stimela` [docs](https://stimela.readthedocs.io/en/latest/reference/schema_ref.html)
+
+Note that the order is important if you want to implement a [roundtrip test](tests/test_roundtrip.py).
 
 ## Features
 

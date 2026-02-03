@@ -111,7 +111,7 @@ def generate_cabs(module: list[Path], image: str | None = None, output_dir: Path
                     # Convert underscores to hyphens for cab input names
                     cab_def[node.name]["inputs"][param_name.replace("_", "-")] = input_def
 
-                # rerder to place outputs last
+                # reorder to place outputs last
                 outputs = cab_def[node.name].pop("outputs")
                 cab_def[node.name]["outputs"] = outputs
 
