@@ -37,8 +37,11 @@ jobs:
       - name: Install dependencies
         run: uv sync
 
+      - name: Install hip-cargo
+        run: uv pip install -e .
+
       - name: Regenerate cab definitions with latest tag
-        run: python scripts/generate_cabs.py
+        run: uv run python scripts/generate_cabs.py
 
       - name: Check for changes
         id: check_changes
