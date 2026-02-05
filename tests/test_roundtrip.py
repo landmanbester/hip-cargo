@@ -15,12 +15,11 @@ def test_roundtrip_generate_cabs():
         cab_dir = tmpdir / "cabs"
         cab_dir.mkdir()
 
-        # Step 1: Generate cabs from CLI module
+        # Step 1: Generate cabs from CLI module (using libcst for comment preservation)
         cli_module = Path("src/hip_cargo/cli/generate_cabs.py")
         generate_cabs(
-            module=[cli_module],
+            [cli_module],
             output_dir=cab_dir,
-            image=None,
         )
 
         # Step 2: Generate function from cab
@@ -60,12 +59,11 @@ def test_roundtrip_generate_function():
         cab_dir = tmpdir / "cabs"
         cab_dir.mkdir()
 
-        # Step 1: Generate cabs from CLI module
+        # Step 1: Generate cabs from CLI module (using libcst for comment preservation)
         cli_module = Path("src/hip_cargo/cli/generate_function.py")
         generate_cabs(
-            module=[cli_module],
+            [cli_module],
             output_dir=cab_dir,
-            image=None,
         )
 
         # Step 2: Generate function from cab
@@ -104,12 +102,11 @@ def test_roundtrip_preserves_spacing():
         cab_dir = tmpdir / "cabs"
         cab_dir.mkdir()
 
-        # Generate cab from CLI
+        # Generate cab from CLI (using libcst for comment preservation)
         cli_module = Path("src/hip_cargo/cli/generate_cabs.py")
         generate_cabs(
-            module=[cli_module],
+            [cli_module],
             output_dir=cab_dir,
-            image=None,
         )
 
         # Generate function from cab

@@ -1,11 +1,15 @@
 """Core logic for generating Stimela cab definitions from Python modules."""
 
-import ast
 from pathlib import Path
 
+import libcst as cst
 import yaml
 
-from hip_cargo.utils.introspector import extract_input, format_info_fields, parse_decorator
+from hip_cargo.utils.introspector import extract_input_libcst, format_info_fields, parse_decorator_libcst
+
+# Large width prevents YAML line wrapping, which would break trailing comments
+# (e.g., "  # noqa: E501"). YAML dumper would split long lines and lose the comment.
+YAML_MAX_WIDTH = 10000
 
 
 def generate_cabs(module: list[Path], image: str | None = None, output_dir: Path | None = None) -> None:
@@ -43,20 +47,21 @@ def generate_cabs(module: list[Path], image: str | None = None, output_dir: Path
     print(f"Writing cabs to: {output_dir}")
     for module_path in modlist:
         with open(module_path, "r") as f:
-            tree = ast.parse(f.read(), filename=module_path)
+            # tree = ast.parse(f.read(), filename=module_path)
+            tree = cst.parse_module(f.read())
 
         for node in tree.body:
-            if isinstance(node, ast.FunctionDef):
+            if isinstance(node, cst.FunctionDef):
                 decorators = {}
-                for dec in node.decorator_list:
-                    deco_name, deco_args = parse_decorator(dec)
+                for dec in node.decorators:
+                    deco_name, deco_args = parse_decorator_libcst(dec)
                     decorators[deco_name] = deco_args
 
                 if "stimela_cab" not in decorators:
                     continue  # skip non-decorated functions
 
-                cab_def = {node.name: {}}
-                cab_def[node.name]["flavour"] = "python"
+                cab_def = {node.name.value: {}}
+                cab_def[node.name.value]["flavour"] = "python"
                 parts = Path(module_path).parts
 
                 # Extract the module path relative to src/
@@ -82,49 +87,46 @@ def generate_cabs(module: list[Path], image: str | None = None, output_dir: Path
                     )
 
                 parts[-1] = parts[-1].replace(".py", "")
-                parts.append(node.name)
-                cab_def[node.name]["command"] = ".".join(parts)
+                parts.append(node.name.value)
+                cab_def[node.name.value]["command"] = ".".join(parts)
                 if image is not None:
-                    cab_def[node.name]["image"] = image
-                cab_def[node.name]["outputs"] = {}
+                    cab_def[node.name.value]["image"] = image
+                cab_def[node.name.value]["outputs"] = {}
                 for decorator_name, decorator_content in decorators.items():
                     if decorator_name == "stimela_cab":
                         kwargs = decorator_content["kwargs"].copy()
-                        cab_def[node.name].update(kwargs)
+                        cab_def[node.name.value].update(kwargs)
                     else:  # must be outputs
                         # there are no args in outputs decorator, they are all kwargs
                         kwargs = decorator_content["kwargs"].copy()
-                        cab_def[node.name]["outputs"][decorator_name] = kwargs
-                cab_def[node.name]["inputs"] = {}
-                num_args = len(node.args.args)
-                num_default = len(node.args.defaults)
-                for i, arg in enumerate(node.args.args):
+                        cab_def[node.name.value]["outputs"][decorator_name] = kwargs
+                cab_def[node.name.value]["inputs"] = {}
+                # LibCST: use node.params.params instead of node.args.args
+                for param in node.params.params:
                     # Check if this parameter is an output (convert underscores to hyphens for comparison)
-                    if arg.arg.replace("_", "-") in cab_def[node.name]["outputs"]:
+                    if param.name.value.replace("_", "-") in cab_def[node.name.value]["outputs"]:
                         continue  # skip outputs
-                    default_idx = i - (num_args - num_default)
-                    if default_idx >= 0:
-                        default = node.args.defaults[default_idx]
-                    else:
-                        default = None
-                    param_name, input_def = extract_input(arg, default)
+                    # Use extract_input_libcst which handles LibCST Param nodes
+                    param_name, input_def = extract_input_libcst(param)
                     # Convert underscores to hyphens for cab input names
-                    cab_def[node.name]["inputs"][param_name.replace("_", "-")] = input_def
+                    cab_def[node.name.value]["inputs"][param_name.replace("_", "-")] = input_def
 
                 # reorder to place outputs last
-                outputs = cab_def[node.name].pop("outputs")
-                cab_def[node.name]["outputs"] = outputs
+                outputs = cab_def[node.name.value].pop("outputs")
+                cab_def[node.name.value]["outputs"] = outputs
 
                 # Wrap in top-level "cabs" key
                 cab_def = {"cabs": cab_def}
 
                 # Generate YAML
                 # Use safe_dump with nice formatting
+                # Set width to large value to prevent line wrapping (which breaks trailing comments)
                 yaml_content = yaml.safe_dump(
                     cab_def,
                     default_flow_style=False,
                     sort_keys=False,
                     indent=2,
+                    width=YAML_MAX_WIDTH,
                 )
 
                 # format info fields so they are defined as multi-line strings
@@ -135,7 +137,7 @@ def generate_cabs(module: list[Path], image: str | None = None, output_dir: Path
                     output_dir = Path(output_dir)
                     # Create output directory if it doesn't exist
                     output_dir.mkdir(parents=True, exist_ok=True)
-                    output_file = output_dir / f"{node.name}.yml"
+                    output_file = output_dir / f"{node.name.value}.yml"
                     with open(output_file, "w") as f:
                         f.write(yaml_content_formatted)
                 else:  # else write to terminal

@@ -15,7 +15,7 @@
 ### 2. **Lightweight Dependencies**
 - Minimize external dependencies
 - Only add dependencies when absolutely necessary
-- Current dependencies: `typer`, `pyyaml`, `typing-extensions`
+- Current dependencies: `typer`, `pyyaml`, `libcst`, `typing-extensions`
 - Question: "Can this be done with stdlib?" before adding a dependency
 
 ### 3. **Modern Python Best Practices**
@@ -71,9 +71,16 @@ uv run ruff format .
 # Check and auto-fix issues
 uv run ruff check . --fix
 
-# Run tests manually
-python tests/test_decorators.py
+# Run tests
+python -m pytest tests/ -v
 ```
+
+### Test Infrastructure
+
+- All tests use `tempfile.TemporaryDirectory()` for isolated temporary file handling
+- No test artifacts written to the repository directory
+- Tests automatically clean up after themselves
+- Comment preservation tested through multiple roundtrip scenarios
 
 ## Coding Standards
 
@@ -105,6 +112,7 @@ python tests/test_decorators.py
 ## What NOT to Do
 
 - Never delete a test unless instructed
+- Never keep unnecessary dependencies hanging around
 - Don't add one level deep utility functions like the following, rather just access the object method directly:
 ```python
 def extract_name(func: Any) -> str:
@@ -180,6 +188,31 @@ hip-cargo currently supports:
 - **Reverse generation**: Creating Python function signatures from existing Stimela cab YAML files
 - Automatic sanitization of parameter names (hyphens → underscores)
 - F-string reference sanitization in output definitions
+- **Comment preservation**: Full roundtrip preservation of inline comments (e.g., `# noqa: E501`)
+
+## Implementation Details
+
+### LibCST-based Parsing (Current)
+
+The project uses [LibCST](https://libcst.readthedocs.io/) (Concrete Syntax Tree) for parsing Python code. This preserves all formatting details including comments, whitespace, and formatting tokens.
+
+**Key advantages:**
+- Preserves inline comments through full roundtrip (CLI → YAML → CLI)
+- Maintains code formatting and style
+- Provides native `.evaluated_value` for string literals
+- Avoids risky `eval()` calls
+
+**Key functions:**
+- `parse_decorator_libcst()`: Extract decorator metadata including inline comments
+- `extract_input_libcst()`: Parse function parameters with comment preservation
+- `parse_annotated_libcst()`: Parse `Annotated[Type, metadata]` directly from CST nodes
+- `get_cst_value()`: Recursively extract Python values from CST nodes without eval
+
+**Comment handling:**
+- Inline comments detected via regex pattern `r'\s{2,}#'` (PEP 8: 2+ spaces before #)
+- Comments stored in YAML as trailing YAML comments (e.g., `field: value  # comment`)
+- Multi-line info fields format each sentence on a new line, comment on last line
+- `format_info_fields()` ensures proper YAML formatting with comment preservation
 
 ## Critical Implementation Details
 

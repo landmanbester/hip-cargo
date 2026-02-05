@@ -16,7 +16,7 @@ File = NewType("File", Path)
 @stimela_output(
     dtype="Directory",
     name="output-dir",
-    info="Output directory for cab definition. The cab will have the exact same name as the command.",
+    info="Output directory for cab definition. The cab will have the exact same name as the command.",  # noqa: E501
 )
 def generate_cabs(
     module: Annotated[
@@ -39,7 +39,7 @@ def generate_cabs(
         Directory | None,
         typer.Option(
             parser=Path,
-            help="Output directory for cab definition. The cab will have the exact same name as the command.",
+            help="Output directory for cab definition. The cab will have the exact same name as the command.",  # noqa: E501
         ),
     ] = None,
 ):

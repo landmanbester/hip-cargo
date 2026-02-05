@@ -8,10 +8,12 @@ import yaml
 
 from hip_cargo.utils.cab_to_function import (
     extract_custom_types,
+    extract_trailing_comment,
     generate_function_body,
     generate_parameter_signature,
     split_info_at_periods,
 )
+from hip_cargo.utils.yaml_comments import extract_yaml_comments
 
 
 def generate_function(cab_file: Path, output_file: Path, config_file: Path | None = None) -> None:
@@ -36,6 +38,9 @@ def generate_function(cab_file: Path, output_file: Path, config_file: Path | Non
     else:
         print(f"Loading cab definition from: {cab_file}")
 
+    # Extract inline comments from YAML file
+    yaml_comments = extract_yaml_comments(cab_file)
+
     # load cab definition
     with open(cab_file) as f:
         data = yaml.safe_load(f)
@@ -48,9 +53,34 @@ def generate_function(cab_file: Path, output_file: Path, config_file: Path | Non
     cab_def["_name"] = cab_name
     info = cab_def.get("info", "")
 
+    # Helper to find comment for a given text
+    def find_comment_for_text(text: str) -> str:
+        """Find inline comment matching the end of the given text."""
+        if not text:
+            return ""
+        # Check if any line in yaml_comments matches the end of this text
+        for content, comment in yaml_comments.items():
+            if text.rstrip().endswith(content.rstrip()):
+                return comment
+        return ""
+
+    # Apply comment to main info if found
+    info_comment = find_comment_for_text(info)
+    if info_comment:
+        info = f"{info}  {info_comment}"
+
     policies = cab_def.get("policies", {})
     inputs = cab_def.get("inputs", {})
     outputs = cab_def.get("outputs", {})
+
+    # Apply comments to outputs FIRST (before building explicit_outputs)
+    # This ensures both decorator and parameter get the comment
+    for output_name, output_def in outputs.items():
+        output_info = output_def.get("info", "")
+        if output_info:
+            output_comment = find_comment_for_text(output_info)
+            if output_comment:
+                output_def["info"] = f"{output_info}  {output_comment}"
 
     # sanitize function name
     func_name = cab_name.replace("-", "_")
@@ -99,7 +129,9 @@ def generate_function(cab_file: Path, output_file: Path, config_file: Path | Non
 
     # Format info with sentence splitting
     if info:
-        info_split = split_info_at_periods(info)
+        # Extract trailing comment before splitting
+        info_no_comment, trailing_comment = extract_trailing_comment(info)
+        info_split = split_info_at_periods(info_no_comment)
         if "\n" in info_split:
             # Multi-line info
             info_lines = info_split.split("\n")
@@ -108,13 +140,23 @@ def generate_function(cab_file: Path, output_file: Path, config_file: Path | Non
                 lines.append(f'    info="{info_lines_escaped[0]} "')
                 for line in info_lines_escaped[1:-1]:
                     lines.append(f'         "{line} "')
-                lines.append(f'         "{info_lines_escaped[-1]}",')
+                # Add comment to last line if present
+                if trailing_comment:
+                    lines.append(f'         "{info_lines_escaped[-1]}",{trailing_comment}')
+                else:
+                    lines.append(f'         "{info_lines_escaped[-1]}",')
             else:
-                lines.append(f'    info="{info_lines_escaped[0]}",')
+                if trailing_comment:
+                    lines.append(f'    info="{info_lines_escaped[0]}",{trailing_comment}')
+                else:
+                    lines.append(f'    info="{info_lines_escaped[0]}",')
         else:
             # Single line info
             info_escaped = info_split.replace('"', '\\"')
-            lines.append(f'    info="{info_escaped}",')
+            if trailing_comment:
+                lines.append(f'    info="{info_escaped}",{trailing_comment}')
+            else:
+                lines.append(f'    info="{info_escaped}",')
     else:
         lines.append('    info="",')
 
@@ -127,7 +169,7 @@ def generate_function(cab_file: Path, output_file: Path, config_file: Path | Non
     for output_name, output_def in outputs.items():
         # Sanitize output name
         output_dtype = output_def.get("dtype", "File")
-        # Get info - could be under 'info'
+        # Get info - already has comment applied from earlier
         output_info_raw = output_def.get("info", "")
         output_required = output_def.get("required", False)
 
@@ -137,7 +179,9 @@ def generate_function(cab_file: Path, output_file: Path, config_file: Path | Non
 
         # Format output info with sentence splitting
         if output_info_raw:
-            output_info_split = split_info_at_periods(output_info_raw)
+            # Extract trailing comment before splitting
+            output_info_no_comment, output_trailing_comment = extract_trailing_comment(output_info_raw)
+            output_info_split = split_info_at_periods(output_info_no_comment)
             if "\n" in output_info_split:
                 # Multi-line info
                 info_lines = output_info_split.split("\n")
@@ -146,13 +190,23 @@ def generate_function(cab_file: Path, output_file: Path, config_file: Path | Non
                     lines.append(f'    info="{info_lines_escaped[0]} "')
                     for line in info_lines_escaped[1:-1]:
                         lines.append(f'         "{line} "')
-                    lines.append(f'         "{info_lines_escaped[-1]}",')
+                    # Add comment to last line if present
+                    if output_trailing_comment:
+                        lines.append(f'         "{info_lines_escaped[-1]}",{output_trailing_comment}')
+                    else:
+                        lines.append(f'         "{info_lines_escaped[-1]}",')
                 else:
-                    lines.append(f'    info="{info_lines_escaped[0]}",')
+                    if output_trailing_comment:
+                        lines.append(f'    info="{info_lines_escaped[0]}",{output_trailing_comment}')
+                    else:
+                        lines.append(f'    info="{info_lines_escaped[0]}",')
             else:
                 # Single line info
                 output_info_escaped = output_info_split.replace('"', '\\"')
-                lines.append(f'    info="{output_info_escaped}",')
+                if output_trailing_comment:
+                    lines.append(f'    info="{output_info_escaped}",{output_trailing_comment}')
+                else:
+                    lines.append(f'    info="{output_info_escaped}",')
         else:
             lines.append('    info="",')
 
@@ -184,8 +238,16 @@ def generate_function(cab_file: Path, output_file: Path, config_file: Path | Non
     required_params = []
     optional_params = []
 
-    # Process inputs
+    # Process inputs and apply comments
     for param_name, param_def in inputs.items():
+        # Apply comment to input info if found
+        param_info = param_def.get("info", "")
+        if param_info:
+            param_comment = find_comment_for_text(param_info)
+            if param_comment:
+                param_def = param_def.copy()
+                param_def["info"] = f"{param_info}  {param_comment}"
+
         if param_def.get("required", False):
             required_params.append((param_name, param_def, False))
         else:

@@ -6,6 +6,30 @@ from typing import Any, Optional
 CUSTOM_STIMELA_TYPES = {"File", "Directory", "MS", "URI"}
 
 
+def extract_trailing_comment(text: str) -> tuple[str, str]:
+    """
+    Extract trailing comment from text (e.g., "  # noqa: E501").
+
+    Args:
+        text: Text that may contain a trailing comment
+
+    Returns:
+        Tuple of (text_without_comment, comment) where comment includes the "#"
+        If no comment found, returns (text, "")
+    """
+    if not text:
+        return text, ""
+
+    # Look for "  #" pattern (double space before comment)
+    if "  #" in text:
+        comment_idx = text.rfind("  #")
+        comment = text[comment_idx:]
+        text_without = text[:comment_idx].rstrip()
+        return text_without, comment
+
+    return text, ""
+
+
 def is_custom_type(dtype: str) -> bool:
     """
     Check if a dtype is a custom Stimela type.
@@ -192,6 +216,9 @@ def generate_parameter_signature(
         # Determine Python type normally
         py_type = stimela_dtype_to_python_type(dtype, preserve_custom=True)
 
+    # Extract trailing comment before splitting
+    info, trailing_comment = extract_trailing_comment(info)
+
     # Split info at periods to avoid long lines (after all modifications)
     info = split_info_at_periods(info)
 
@@ -270,14 +297,23 @@ def generate_parameter_signature(
             # Subsequent lines (except last) also need trailing space
             for line in info_lines_escaped[1:-1]:
                 lines_out.append(f'                 "{line} "')
-            # Last line has no trailing space and ends with comma
-            lines_out.append(f'                 "{info_lines_escaped[-1]}",')
+            # Last line has no trailing space and ends with comma, plus optional comment
+            if trailing_comment:
+                lines_out.append(f'                 "{info_lines_escaped[-1]}",{trailing_comment}')
+            else:
+                lines_out.append(f'                 "{info_lines_escaped[-1]}",')
         else:
-            lines_out.append(f'            help="{info_lines_escaped[0]}",')
+            if trailing_comment:
+                lines_out.append(f'            help="{info_lines_escaped[0]}",{trailing_comment}')
+            else:
+                lines_out.append(f'            help="{info_lines_escaped[0]}",')
     else:
         # Single-line help text
         info_escaped = info.replace('"', '\\"')
-        lines_out.append(f'            help="{info_escaped}",')
+        if trailing_comment:
+            lines_out.append(f'            help="{info_escaped}",{trailing_comment}')
+        else:
+            lines_out.append(f'            help="{info_escaped}",')
 
     lines_out.append("        ),")
 
