@@ -17,6 +17,11 @@ def get_current_branch():
             check=True,
         )
         branch = result.stdout.strip()
+
+        # Use 'latest' for main branch, branch name for others
+        if branch == "main":
+            return "latest"
+
         # Sanitize branch name for use in image tags (replace / with -)
         return branch.replace("/", "-")
     except subprocess.CalledProcessError:
