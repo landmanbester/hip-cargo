@@ -1,13 +1,33 @@
 """Generate Python function signatures from Stimela cab definitions."""
 
-import re
-from pathlib import Path
 from typing import Any, Optional
-
-import yaml
 
 # Custom Stimela types that need NewType declarations
 CUSTOM_STIMELA_TYPES = {"File", "Directory", "MS", "URI"}
+
+
+def extract_trailing_comment(text: str) -> tuple[str, str]:
+    """
+    Extract trailing comment from text (e.g., "  # noqa: E501").
+
+    Args:
+        text: Text that may contain a trailing comment
+
+    Returns:
+        Tuple of (text_without_comment, comment) where comment includes the "#"
+        If no comment found, returns (text, "")
+    """
+    if not text:
+        return text, ""
+
+    # Look for "  #" pattern (double space before comment)
+    if "  #" in text:
+        comment_idx = text.rfind("  #")
+        comment = text[comment_idx:]
+        text_without = text[:comment_idx].rstrip()
+        return text_without, comment
+
+    return text, ""
 
 
 def is_custom_type(dtype: str) -> bool:
@@ -27,7 +47,7 @@ def is_custom_type(dtype: str) -> bool:
     return False
 
 
-def extract_custom_types_from_inputs(inputs: dict[str, Any]) -> set[str]:
+def extract_custom_types(dct: dict[str, Any]) -> set[str]:
     """
     Extract all custom types used in input parameters.
 
@@ -38,27 +58,8 @@ def extract_custom_types_from_inputs(inputs: dict[str, Any]) -> set[str]:
         Set of custom type names used
     """
     custom_types = set()
-    for param_def in inputs.values():
+    for param_def in dct.values():
         dtype = param_def.get("dtype", "str")
-        for custom_type in CUSTOM_STIMELA_TYPES:
-            if custom_type in str(dtype):
-                custom_types.add(custom_type)
-    return custom_types
-
-
-def extract_custom_types_from_outputs(outputs: dict[str, Any]) -> set[str]:
-    """
-    Extract all custom types used in output parameters.
-
-    Args:
-        outputs: Dictionary of output parameters
-
-    Returns:
-        Set of custom type names used
-    """
-    custom_types = set()
-    for output_def in outputs.values():
-        dtype = output_def.get("dtype", "File")
         for custom_type in CUSTOM_STIMELA_TYPES:
             if custom_type in str(dtype):
                 custom_types.add(custom_type)
@@ -109,37 +110,6 @@ def stimela_dtype_to_python_type(dtype: str, preserve_custom: bool = True) -> st
     return type_map.get(dtype, "str")
 
 
-def sanitize_param_name(name: str) -> str:
-    """
-    Convert parameter name to valid Python identifier.
-
-    Args:
-        name: Parameter name (may contain hyphens)
-
-    Returns:
-        Valid Python identifier (hyphens replaced with underscores)
-    """
-    return name.replace("-", "_")
-
-
-def sanitize_fstring_refs(text: str) -> str:
-    """
-    Replace hyphenated parameter names in f-string references with underscores.
-
-    Args:
-        text: String that may contain {param-name} references
-
-    Returns:
-        String with sanitized references {param_name}
-    """
-
-    # Find all {something} patterns and replace hyphens with underscores
-    def replace_hyphens(match):
-        return "{" + match.group(1).replace("-", "_") + "}"
-
-    return re.sub(r"\{([^}]+)\}", replace_hyphens, text)
-
-
 def extract_info_string(info: Any) -> str:
     """
     Extract info string from cab definition.
@@ -163,43 +133,52 @@ def extract_info_string(info: Any) -> str:
         return ""
 
 
-def load_cab_definition(cab_file: Path) -> dict[str, Any]:
+def split_info_at_periods(info: str) -> str:
     """
-    Load a Stimela cab definition from YAML file.
+    Split info string at periods to create multi-line help text.
+
+    This helps avoid long line issues in generated code.
 
     Args:
-        cab_file: Path to YAML cab definition
+        info: Info string to split
 
     Returns:
-        Dictionary containing cab definition
-
-    Raises:
-        ValueError: If no cab definition found in file
+        Info string with newlines after periods
     """
-    with open(cab_file) as f:
-        data = yaml.safe_load(f)
+    if not info:
+        return info
 
-    # Support both old format (with "cabs:" wrapper) and new format (without it)
-    if "cabs" in data:
-        # Old format: cabs: { cab_name: { ... } }
-        cab_name = next(iter(data["cabs"]))
-        cab_def = data["cabs"][cab_name]
-    else:
-        # New format: cab_name: { ... }
-        # Get the first (and usually only) top-level key that's not metadata
-        cab_name = next(iter(data))
-        cab_def = data[cab_name]
+    # Split at ". " (period followed by space) to preserve sentence boundaries
+    # This avoids splitting on periods in numbers like "1.5" or file extensions
+    sentences = []
+    current = ""
+    i = 0
 
-    cab_def["_name"] = cab_name
+    while i < len(info):
+        current += info[i]
+        # Check if we hit a period followed by space (or end of string)
+        if info[i] == "." and (i + 1 >= len(info) or info[i + 1] == " "):
+            # Found end of sentence
+            sentence = current.strip()
+            if sentence:
+                sentences.append(sentence)
+            current = ""
+            # Skip the space after the period
+            if i + 1 < len(info) and info[i + 1] == " ":
+                i += 1
+        i += 1
 
-    return cab_def
+    # Add any remaining text
+    remaining = current.strip()
+    if remaining:
+        sentences.append(remaining)
+
+    # Join with newlines
+    return "\n".join(sentences)
 
 
 def generate_parameter_signature(
-    param_name: str,
-    param_def: dict[str, Any],
-    policies: Optional[dict[str, Any]] = None,
-    is_output: bool = False,
+    param_name: str, param_def: dict[str, Any], policies: Optional[dict[str, Any]] = None
 ) -> str:
     """
     Generate parameter signature for a single parameter using Annotated style.
@@ -208,20 +187,18 @@ def generate_parameter_signature(
         param_name: Parameter name (will be sanitized)
         param_def: Parameter definition from cab
         policies: Global policies (can be overridden by param policies)
-        is_output: Whether this is an output parameter
 
     Returns:
         Parameter signature string
     """
     # Sanitize parameter name (replace hyphens with underscores)
-    py_param_name = sanitize_param_name(param_name)
+    py_param_name = param_name.replace("-", "_")
 
     dtype = param_def.get("dtype", "str")
     info_raw = param_def.get("info", "")
     info = extract_info_string(info_raw) if info_raw else ""
     required = param_def.get("required", False)
     default = param_def.get("default")
-    param_policies = param_def.get("policies", policies)
     choices = param_def.get("choices")
 
     # Check if this needs comma-separated conversion (List[int] or List[float])
@@ -230,10 +207,20 @@ def generate_parameter_signature(
         # These are passed as comma-separated strings, not actual lists
         py_type = "str"
         # Append metadata to help string for round-trip compatibility
-        info = info + "Stimela dtype: " + dtype
+        if info:
+            # Remove trailing period if present, then add period and metadata
+            info = info.rstrip(".") + ".\nStimela dtype: " + dtype
+        else:
+            info = "Stimela dtype: " + dtype
     else:
         # Determine Python type normally
         py_type = stimela_dtype_to_python_type(dtype, preserve_custom=True)
+
+    # Extract trailing comment before splitting
+    info, trailing_comment = extract_trailing_comment(info)
+
+    # Split info at periods to avoid long lines (after all modifications)
+    info = split_info_at_periods(info)
 
     # Check if this is a custom type that needs a parser
     needs_parser = is_custom_type(dtype)
@@ -247,252 +234,106 @@ def generate_parameter_signature(
         py_type = f"Literal[{choices_formatted}]"
         needs_parser = False  # Literal types don't need parser
 
-    # Determine if positional (Argument) or option
-    is_positional = param_policies.get("positional", False) if param_policies else False
-
     # Format default value for Python code
     def format_default(val):
-        if isinstance(val, str):
-            return f'"{val}"'
-        elif isinstance(val, bool):
+        # Handle boolean first (before int check, since bool is subclass of int)
+        if isinstance(val, bool):
             return "True" if val else "False"
         elif val is None:
             return "None"
         elif isinstance(val, (int, float)):
             return str(val)
+        elif isinstance(val, str):
+            # Check if this is a numeric string and dtype is numeric
+            if dtype in ["int", "float"]:
+                try:
+                    # Try to parse as float (handles scientific notation)
+                    float_val = float(val)
+                    # If dtype is int, convert to int
+                    if dtype == "int":
+                        return str(int(float_val))
+                    else:
+                        return str(float_val)
+                except (ValueError, TypeError):
+                    # Not a valid number, treat as string
+                    pass
+            # Regular string
+            return f'"{val}"'
         else:
             return str(val)
 
-    # Check if info contains newlines (needs special formatting for typer)
+    # Check if info contains newlines (for proper help text formatting)
     has_newlines = "\n" in info
 
     # Build the Typer annotation (Annotated style)
-    if is_positional:
-        # Arguments
-        parser_part = f", parser={dtype}" if needs_parser else ""
-        if has_newlines:
-            # Multi-line help - use triple quotes on separate lines
-            typer_part = f'typer.Argument({parser_part[2:] + ", " if parser_part else ""}help=\n"""{info}\n""")'
-        else:
-            # Escape quotes for single-line help
-            info_escaped = info.replace('"', '\\"')
-            typer_part = f'typer.Argument({parser_part[2:] + ", " if parser_part else ""}help="{info_escaped}")'
+    # ALWAYS use multi-line format with trailing commas to ensure ruff preserves the style
 
-        if required:
-            return f"    {py_param_name}: Annotated[{py_type}, {typer_part}],"
-        else:
-            # Positional with default (rare but possible)
-            default_val = format_default(default)
-            return f"    {py_param_name}: Annotated[{py_type}, {typer_part}] = {default_val},"
+    lines_out = []
+    lines_out.append(f"    {py_param_name}: Annotated[")
+    lines_out.append(f"        {py_type},")
+
+    # Build typer.Option with arguments on separate lines
+    if required:
+        lines_out.append("        typer.Option(")
+        lines_out.append("            ...,")
+        if needs_parser:
+            lines_out.append("            parser=Path,")
     else:
-        # Options - add parser for custom types
-        parser_part = f"parser={dtype}, " if needs_parser else ""
+        lines_out.append("        typer.Option(")
+        if needs_parser:
+            lines_out.append("            parser=Path,")
 
-        # Build the parameter signature differently for multi-line vs single-line
-        if has_newlines:
-            # Multi-line format with proper indentation
-            # Build the parameter line by line
-            lines_out = []
-            lines_out.append(f"    {py_param_name}: Annotated[")
-            lines_out.append(f"        {py_type},")
+    # Add help text (handle multi-line info)
+    if has_newlines:
+        # Split info by newlines and quote each sentence
+        info_lines = info.split("\n")
+        # Escape quotes in each line
+        info_lines_escaped = [line.replace('"', '\\"') for line in info_lines]
 
-            # Build typer.Option with multi-line help
-            if required:
-                if parser_part:
-                    lines_out.append(f"        typer.Option(..., {parser_part.rstrip(', ')},")
-                else:
-                    lines_out.append("        typer.Option(...,")
+        # First line starts with help=
+        # Add space at end of each line except the last for proper concatenation
+        if len(info_lines_escaped) > 1:
+            lines_out.append(f'            help="{info_lines_escaped[0]} "')
+            # Subsequent lines (except last) also need trailing space
+            for line in info_lines_escaped[1:-1]:
+                lines_out.append(f'                 "{line} "')
+            # Last line has no trailing space and ends with comma, plus optional comment
+            if trailing_comment:
+                lines_out.append(f'                 "{info_lines_escaped[-1]}",{trailing_comment}')
             else:
-                if parser_part:
-                    lines_out.append(f"        typer.Option({parser_part.rstrip(', ')},")
-                else:
-                    lines_out.append("        typer.Option(")
-            lines_out.append("            help=")
-            lines_out.append('"""' + info)
-            lines_out.append('"""')
-            lines_out.append("        ),")
-
-            # Add closing bracket and default if applicable
-            if default is not None and not required:
-                default_val = format_default(default)
-                lines_out.append(f"    ] = {default_val},")
-            elif not required:
-                # No default provided, use None for optional
-                if " | None" not in py_type and not uses_literal:
-                    # Need to go back and fix the type
-                    lines_out[1] = f"        {py_type} | None,"
-                lines_out.append("    ] = None,")
-            else:
-                lines_out.append("    ],")
-
-            return "\n".join(lines_out)
+                lines_out.append(f'                 "{info_lines_escaped[-1]}",')
         else:
-            # Single-line format
-            # Escape quotes for single-line help
-            info_escaped = info.replace('"', '\\"')
-            help_part = f'help="{info_escaped}"'
-
-            if required:
-                # Required parameters (both inputs and outputs) always use ...
-                typer_part = f"typer.Option(..., {parser_part}{help_part})"
-                return f"    {py_param_name}: Annotated[{py_type}, {typer_part}],"
+            if trailing_comment:
+                lines_out.append(f'            help="{info_lines_escaped[0]}",{trailing_comment}')
             else:
-                # Optional parameters or outputs
-                typer_part = f"typer.Option({parser_part}{help_part})"
-                if default is not None:
-                    default_val = format_default(default)
-                    return f"    {py_param_name}: Annotated[{py_type}, {typer_part}] = {default_val},"
-                else:
-                    # No default provided, use None
-                    # For optional types, add | None to type
-                    if " | None" not in py_type and not uses_literal:
-                        py_type = f"{py_type} | None"
-                    return f"    {py_param_name}: Annotated[{py_type}, {typer_part}] = None,"
-
-
-def generate_function_from_cab(cab_file: Path) -> str:
-    """
-    Generate a complete Python function from a Stimela cab definition.
-
-    Args:
-        cab_file: Path to YAML cab definition
-
-    Returns:
-        Python function code as string
-    """
-    cab_def = load_cab_definition(cab_file)
-
-    cab_name = cab_def["_name"]
-    # Try to get info from top level, or construct from cab name
-    raw_info = cab_def.get("info", "")
-    if raw_info:
-        info = extract_info_string(raw_info)
+                lines_out.append(f'            help="{info_lines_escaped[0]}",')
     else:
-        # Generate a reasonable default from cab name
-        info = cab_name.replace("_", " ").title()
-    policies = cab_def.get("policies", {})
-    inputs = cab_def.get("inputs", {})
-    outputs = cab_def.get("outputs", {})
-
-    # Extract function name from cab name (e.g., pfb_grid -> grid)
-    func_name = sanitize_param_name(cab_name)
-    if "_" in func_name:
-        # Take last part for function name
-        func_name = func_name.split("_")[-1]
-
-    # Detect which custom types and features are used
-    custom_types = extract_custom_types_from_inputs(inputs)
-    custom_types.update(extract_custom_types_from_outputs(outputs))
-
-    # Check if any parameters use choices (need Literal import)
-    uses_literal = any(param_def.get("choices") for param_def in inputs.values())
-
-    # Separate outputs into implicit and non-implicit
-    # Non-implicit outputs need to be added to function signature
-    explicit_outputs = {}
-    for output_name, output_def in outputs.items():
-        # If implicit field exists and is truthy (True or a string template), it's implicit
-        implicit_value = output_def.get("implicit")
-        is_implicit = bool(implicit_value)  # Any truthy value means implicit
-        if not is_implicit:
-            explicit_outputs[output_name] = output_def
-
-    # Start building the function
-    lines = []
-
-    # Imports
-    lines.append("from pathlib import Path")
-    lines.append("from typing import Annotated, NewType")
-    if uses_literal:
-        lines.append("from typing import Literal")
-    lines.append("")
-    lines.append("from hip_cargo import stimela_cab, stimela_output")
-    lines.append("import typer")
-    lines.append("")
-
-    # Add NewType declarations for custom types
-    if custom_types:
-        for custom_type in sorted(custom_types):  # Sort for consistent output
-            lines.append(f'{custom_type} = NewType("{custom_type}", Path)')
-        lines.append("")
-
-    # Decorators
-    lines.append("@stimela_cab(")
-    lines.append(f'    name="{cab_name}",')
-    lines.append(f'    info="{info}",')
-    # Format policies as dict, not string
-    if policies:
-        lines.append(f"    policies={policies},")
-    lines.append(")")
-
-    # Output decorators
-    for output_name, output_def in outputs.items():
-        # Sanitize output name
-        py_output_name = sanitize_param_name(output_name)
-        output_dtype = output_def.get("dtype", "File")
-        # Get info - could be under 'info' or 'implicit'
-        output_info_raw = output_def.get("info", "")
-        if not output_info_raw:
-            # Try implicit field
-            implicit_val = output_def.get("implicit", "")
-            if isinstance(implicit_val, str):
-                output_info_raw = implicit_val
-        output_info = extract_info_string(output_info_raw)
-        # Sanitize f-string references
-        output_info = sanitize_fstring_refs(output_info)
-        output_required = output_def.get("required", False)
-
-        lines.append("@stimela_output(")
-        lines.append(f'    name="{py_output_name}",')
-        lines.append(f'    dtype="{output_dtype}",')
-        lines.append(f'    info="{output_info}",')
-        if output_required:
-            lines.append(f"    required={output_required},")
-        lines.append(")")
-
-    # Function signature
-    lines.append(f"def {func_name}(")
-
-    # Separate required and optional parameters
-    # Python requires all required params before optional ones
-    required_params = []
-    optional_params = []
-
-    # Process inputs
-    for param_name, param_def in inputs.items():
-        if param_def.get("required", False):
-            required_params.append((param_name, param_def, False))
+        # Single-line help text
+        info_escaped = info.replace('"', '\\"')
+        if trailing_comment:
+            lines_out.append(f'            help="{info_escaped}",{trailing_comment}')
         else:
-            optional_params.append((param_name, param_def, False))
+            lines_out.append(f'            help="{info_escaped}",')
 
-    # Process non-implicit outputs
-    for output_name, output_def in explicit_outputs.items():
-        if output_def.get("required", False):
-            required_params.append((output_name, output_def, True))
-        else:
-            optional_params.append((output_name, output_def, True))
+    lines_out.append("        ),")
 
-    # Add required parameters first, then optional
-    for param_name, param_def, is_output in required_params:
-        param_sig = generate_parameter_signature(param_name, param_def, policies=policies, is_output=is_output)
-        lines.append(param_sig)
+    # Add closing bracket and default if applicable
+    if default is not None and not required:
+        default_val = format_default(default)
+        lines_out.append(f"    ] = {default_val},")
+    elif not required:
+        # No default provided, use None for optional
+        if " | None" not in py_type and not uses_literal:
+            # Need to go back and fix the type
+            lines_out[1] = f"        {py_type} | None,"
+        lines_out.append("    ] = None,")
+    else:
+        lines_out.append("    ],")
 
-    for param_name, param_def, is_output in optional_params:
-        param_sig = generate_parameter_signature(param_name, param_def, policies=policies, is_output=is_output)
-        lines.append(param_sig)
-
-    lines.append("):")
-    lines.append('    """')
-    lines.append(f"    {info}")
-    lines.append('    """')
-
-    # Function body - generate the implementation
-    lines.extend(_generate_function_body(cab_def, inputs, explicit_outputs))
-
-    return "\n".join(lines)
+    return "\n".join(lines_out)
 
 
-def _generate_function_body(cab_def: dict[str, Any], inputs: dict[str, Any], outputs: dict[str, Any]) -> list[str]:
+def generate_function_body(cab_def: dict[str, Any], inputs: dict[str, Any], outputs: dict[str, Any]) -> list[str]:
     """
     Generate the function body with lazy import and core function call.
 
@@ -508,21 +349,14 @@ def _generate_function_body(cab_def: dict[str, Any], inputs: dict[str, Any], out
 
     # Parse the command to get the import path
     command = cab_def.get("command", "")
-    # Format is: (module.path)function_name
-    if command and "(" in command and ")" in command:
-        import_path = command.split("(")[1].split(")")[0]
-        func_name = command.split(")")[1]
-
-        # Lazy import
-        lines.append("    # Lazy import the core implementation")
-        lines.append(f"    from {import_path} import {func_name} as {func_name}_core")
-        lines.append("")
-    else:
-        # Fallback - should not happen with valid cabs
-        lines.append("    # TODO: Add import statement")
-        lines.append("    # from mypackage.core.module import function as function_core")
-        lines.append("")
-        func_name = "function"
+    # Format is: module.path.function_name
+    command_parts = command.split(".")
+    import_path = ".".join(command_parts[:-1])
+    func_name = command_parts[-1]
+    # Lazy import
+    lines.append("    # Lazy import the core implementation")
+    lines.append(f"    from {import_path} import {func_name} as {func_name}_core  # noqa: E402")
+    lines.append("")
 
     # Detect and convert comma-separated string parameters
     # Check dtype field for List[int] or List[float]
@@ -530,10 +364,18 @@ def _generate_function_body(cab_def: dict[str, Any], inputs: dict[str, Any], out
     for param_name, param_def in inputs.items():
         dtype = param_def.get("dtype", "str")
 
+        if "Stimela dtype:" in extract_info_string(param_def.get("info", "")):
+            # Extract original Stimela dtype from help text
+            info_str = extract_info_string(param_def.get("info", ""))
+            for line in info_str.split("\n"):
+                if "Stimela dtype:" in line:
+                    dtype = line.split("Stimela dtype:")[-1].strip()
+                    break
+
         # Check if this parameter needs comma-separated conversion
         if dtype in ["List[int]", "List[float]"]:
             element_type = dtype[5:-1]  # Extract type from List[type]
-            py_param_name = sanitize_param_name(param_name)
+            py_param_name = param_name.replace("-", "_")
             var_name = f"{py_param_name}_list"
 
             # Generate conversion code
@@ -549,12 +391,15 @@ def _generate_function_body(cab_def: dict[str, Any], inputs: dict[str, Any], out
     lines.append("    # Call the core function with all parameters")
     lines.append(f"    {func_name}_core(")
 
-    # Add all parameters
-    all_params = []
+    # Separate required (positional) and optional (keyword) parameters
+    positional_params = []
+    keyword_params = []
 
     # Add input parameters
-    for param_name in inputs.keys():
-        py_param_name = sanitize_param_name(param_name)
+    for param_name, param_def in inputs.items():
+        py_param_name = param_name.replace("-", "_")
+        is_required = param_def.get("required", False)
+
         # Check if this parameter was converted
         converted_name = None
         for orig_name, converted in comma_sep_conversions:
@@ -562,37 +407,34 @@ def _generate_function_body(cab_def: dict[str, Any], inputs: dict[str, Any], out
                 converted_name = converted
                 break
 
-        if converted_name:
-            all_params.append(f"        {py_param_name}={converted_name},")
-        else:
-            all_params.append(f"        {py_param_name}={py_param_name},")
+        param_value = converted_name if converted_name else py_param_name
 
-    # Add output parameters
-    for output_name in outputs.keys():
-        py_output_name = sanitize_param_name(output_name)
-        all_params.append(f"        {py_output_name}={py_output_name},")
+        if is_required:
+            # Required parameters are passed positionally (no keyword)
+            positional_params.append(f"        {param_value},")
+        else:
+            # Optional parameters are passed as keyword arguments
+            keyword_params.append(f"        {py_param_name}={param_value},")
+
+    # Add output parameters (positional if they have positional policy, otherwise keyword)
+    for output_name, output_def in outputs.items():
+        py_output_name = output_name.replace("-", "_")
+        # Check if output has positional policy
+        policies = output_def.get("policies", {})
+        is_positional = policies.get("positional", False)
+
+        if is_positional:
+            # Positional outputs
+            positional_params.append(f"        {py_output_name},")
+        else:
+            # Keyword outputs
+            keyword_params.append(f"        {py_output_name}={py_output_name},")
+
+    # Combine: positional args first, then keyword args
+    all_params = positional_params + keyword_params
 
     # Add parameters to lines
     lines.extend(all_params)
     lines.append("    )")
 
     return lines
-
-
-def cab_to_function_cli(cab_file: Path, output_file: Path | None = None) -> None:
-    """
-    CLI function to generate Python function from cab definition.
-
-    Args:
-        cab_file: Path to YAML cab definition
-        output_file: Optional output file path (prints to stdout if None)
-    """
-    function_code = generate_function_from_cab(cab_file)
-
-    if output_file:
-        output_file.parent.mkdir(parents=True, exist_ok=True)
-        with open(output_file, "w") as f:
-            f.write(function_code)
-        print(f"✓ Generated function written to: {output_file}")
-    else:
-        print(function_code)

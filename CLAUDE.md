@@ -15,7 +15,7 @@
 ### 2. **Lightweight Dependencies**
 - Minimize external dependencies
 - Only add dependencies when absolutely necessary
-- Current dependencies: `typer`, `pyyaml`, `typing-extensions`
+- Current dependencies: `typer`, `pyyaml`, `libcst`, `typing-extensions`
 - Question: "Can this be done with stdlib?" before adding a dependency
 
 ### 3. **Modern Python Best Practices**
@@ -29,13 +29,30 @@
 ```
 hip-cargo/
 ├── src/hip_cargo/
-│   ├── __init__.py          # Exports decorators
-│   ├── cli.py               # Typer CLI application
-│   ├── decorators.py        # @stimela_cab, @stimela_output
-│   ├── introspector.py      # Extract info from functions
-│   └── yaml_generator.py    # Generate YAML output
+│   ├── __init__.py           # Exports decorators
+│   ├── cabs/                 # Generated cab definitions (YAML)
+│   │   ├── __init__.py
+│   │   ├── generate_cabs.yml
+│   │   └── generate_function.yml
+│   ├── cli/                  # Lightweight CLI wrappers
+│   │   ├── __init__.py       # Main Typer app, registers commands
+│   │   ├── generate_cabs.py
+│   │   └── generate_function.py
+│   ├── core/                 # Core implementations (lazy-loaded)
+│   │   ├── __init__.py
+│   │   ├── generate_cabs.py
+│   │   └── generate_function.py
+│   ├── recipes/              # Stimela recipes for running via stimela
+│   │   ├── __init__.py
+│   │   └── gen_cabs.yml
+│   └── utils/                # Shared utilities
+│       ├── __init__.py
+│       ├── cab_to_function.py   # Generate function from cab YAML
+│       ├── decorators.py        # @stimela_cab, @stimela_output
+│       └── introspector.py      # Extract metadata from functions
+├── scripts/                  # Automation scripts
+│   └── generate_cabs.py
 ├── tests/
-│   └── example_package/     # Example test cases
 └── pyproject.toml
 ```
 
@@ -54,22 +71,29 @@ uv run ruff format .
 # Check and auto-fix issues
 uv run ruff check . --fix
 
-# Run tests manually
-python tests/test_decorators.py
+# Run tests
+python -m pytest tests/ -v
 ```
+
+### Test Infrastructure
+
+- All tests use `tempfile.TemporaryDirectory()` for isolated temporary file handling
+- No test artifacts written to the repository directory
+- Tests automatically clean up after themselves
+- Comment preservation tested through multiple roundtrip scenarios
 
 ## Coding Standards
 
 ### Type Hints
 - Always use type hints for function signatures
 - Use `from typing import Any` for generic types
-- Use `typing_extensions.Annotated` when needed for forward compatibility
+- Use `typing_extensions.Annotated` when needed for forward compatibility but assume the project only supports python 3.10+. Do not import from `typing_extensions` unless required.
 
 ### Functions Over Classes
 - Prefer pure functions where possible
 - Use functions for transformations and data processing
 - Only use classes when:
-  - State management is truly necessary
+  - State management is truly beneficial
   - You need inheritance or polymorphism
   - The maintainer explicitly requests it
 
@@ -83,9 +107,17 @@ python tests/test_decorators.py
 - Use Google-style docstrings
 - Document Args, Returns, and Raises
 - Keep docstrings concise but informative
-- Add comments only when code intent isn't obvious
+- Add comments when code intent isn't obvious, don't add long unnecessary comments if the intent is clear, prefer short inline comments in this case
 
 ## What NOT to Do
+
+- Never delete a test unless instructed
+- Never keep unnecessary dependencies hanging around
+- Don't add one level deep utility functions like the following, rather just access the object method directly:
+```python
+def extract_name(func: Any) -> str:
+    return func.__name__
+```
 
 ❌ **Don't add these without explicit request:**
 - Complex abstractions or frameworks
@@ -97,6 +129,7 @@ python tests/test_decorators.py
 - Custom metaclasses or descriptors
 - Clever magic methods
 
+
 ❌ **Don't optimize prematurely:**
 - Keep code simple first
 - Only optimize if there's a measured performance problem
@@ -106,10 +139,6 @@ python tests/test_decorators.py
 
 ✅ **Simple, direct implementations:**
 ```python
-# Good: Simple and clear
-def extract_name(func: Any) -> str:
-    return func.__name__
-
 # Avoid: Over-engineered
 class FunctionMetadataExtractor:
     def __init__(self, strategy: ExtractionStrategy):
@@ -153,102 +182,37 @@ hip-cargo currently supports:
 - Extracting function metadata from `@stimela_cab` decorator
 - Parsing Google-style docstrings for parameter descriptions
 - Inferring Stimela dtypes from Python type hints and help strings
-- Supporting both old-style (`= typer.Option()`) and new-style (`Annotated`) Typer syntax
+- Only new-style (`Annotated`) Typer syntax
 - Generating YAML cab definitions with inputs and outputs
 - Multiple `@stimela_output` decorators for multi-output cabs
 - **Reverse generation**: Creating Python function signatures from existing Stimela cab YAML files
 - Automatic sanitization of parameter names (hyphens → underscores)
 - F-string reference sanitization in output definitions
+- **Comment preservation**: Full roundtrip preservation of inline comments (e.g., `# noqa: E501`)
 
-## Tool Architecture
+## Implementation Details
 
-### Core Modules
+### LibCST-based Parsing (Current)
 
-```
-hip-cargo/
-├── src/hip_cargo/
-│   ├── decorators.py          # @stimela_cab, @stimela_output
-│   ├── introspector.py        # Extract metadata from decorated functions
-│   ├── type_mapper.py         # Python types ↔ Stimela dtypes (embedded in introspector)
-│   ├── yaml_generator.py      # Generate cab YAML from function metadata
-│   ├── cab_to_function.py     # NEW: Generate function from cab YAML (reverse)
-│   └── cli.py                 # Typer CLI with two commands
-└── tests/
-```
+The project uses [LibCST](https://libcst.readthedocs.io/) (Concrete Syntax Tree) for parsing Python code. This preserves all formatting details including comments, whitespace, and formatting tokens.
 
-### CLI Commands
+**Key advantages:**
+- Preserves inline comments through full roundtrip (CLI → YAML → CLI)
+- Maintains code formatting and style
+- Provides native `.evaluated_value` for string literals
+- Avoids risky `eval()` calls
 
-**`cargo generate-cab`**: Function → YAML cab definition
-```bash
-cargo generate-cab mypackage.module /path/to/cab.yaml
-```
+**Key functions:**
+- `parse_decorator_libcst()`: Extract decorator metadata including inline comments
+- `extract_input_libcst()`: Parse function parameters with comment preservation
+- `parse_annotated_libcst()`: Parse `Annotated[Type, metadata]` directly from CST nodes
+- `get_cst_value()`: Recursively extract Python values from CST nodes without eval
 
-**`cargo generate-function`**: YAML cab → Python function (NEW)
-```bash
-cargo generate-function /path/to/cab.yaml -o function.py
-```
-
-## Target Package Structure
-
-Packages using hip-cargo should follow this structure:
-
-```
-scientific-package/
-├── src/
-│   └── package/
-│       ├── operators/         # Heavy algorithms
-│       ├── workers/          # Original implementations (optional)
-│       └── cli/              # Lightweight CLI wrappers
-│           ├── __init__.py   # Main Typer app, registers commands
-│           └── command.py    # Individual @stimela_cab decorated functions
-├── cabs/                     # Generated cabs at ROOT level (not in src/)
-│   ├── __init__.py
-│   └── *.yaml
-├── scripts/
-│   └── generate_cabs.py      # Automation
-└── pyproject.toml            # Split dependencies: base vs [full]
-```
-
-### Key Patterns
-
-**CLI module structure** (`src/package/cli/__init__.py`):
-```python
-import typer
-
-app = typer.Typer(name="package", help="...", no_args_is_help=True)
-
-from package.cli.command import command_func
-app.command(name="command")(command_func)
-```
-
-**Individual command** (`src/package/cli/command.py`):
-```python
-from typing_extensions import Annotated
-import typer
-from hip_cargo import stimela_cab, stimela_output
-
-@stimela_cab(name="pkg_cmd", info="...")
-@stimela_output(name="output", dtype="File", info="...")
-def command_func(
-    param: Annotated[Type, typer.Option(help="...")] = default,
-):
-    """Command description."""
-    # Lazy import heavy dependencies
-    from package.operators import algorithm
-    return algorithm(param)
-```
-
-**pyproject.toml pattern**:
-```toml
-[project]
-dependencies = ["typer>=0.12.0", "hip-cargo>=0.1.0"]
-
-[project.optional-dependencies]
-full = ["numpy", "jax", ...]  # Heavy scientific stack
-
-[project.scripts]
-package = "package.cli:app"
-```
+**Comment handling:**
+- Inline comments detected via regex pattern `r'\s{2,}#'` (PEP 8: 2+ spaces before #)
+- Comments stored in YAML as trailing YAML comments (e.g., `field: value  # comment`)
+- Multi-line info fields format each sentence on a new line, comment on last line
+- `format_info_fields()` ensures proper YAML formatting with comment preservation
 
 ## Critical Implementation Details
 
@@ -288,125 +252,6 @@ def process(...):
 ```
 
 This keeps CLI startup fast and allows lightweight installation for cab definitions only.
-
-## Generate-Function Implementation Details
-
-The `cargo generate-function` command creates Python functions from Stimela cab YAML files. This section documents critical implementation patterns.
-
-### Custom Stimela Types
-
-Custom types (File, MS, Directory, URI) require special handling:
-
-1. **NewType Declarations**: Automatically added to imports
-   ```python
-   from typing import NewType
-   File = NewType("File", Path)
-   MS = NewType("MS", Path)
-   ```
-
-2. **Parser Parameters**: Added to typer.Option for custom types
-   ```python
-   beam_model: Annotated[File | None, typer.Option(parser=File, help="...")]
-   ```
-
-3. **Type Preservation**: Custom types are preserved (not converted to Path) in annotations
-
-### Comma-Separated String Conversions
-
-Typer doesn't support variable-length list inputs directly. For `List[int]` and `List[float]` parameters:
-
-1. **CLI Parameter Type**: Always `str` (comma-separated input)
-   ```python
-   channel_freqs: Annotated[str | None, typer.Option(help="...Stimela dtype: List[float]")]
-   ```
-
-2. **Help String Metadata**: Includes `"Stimela dtype: List[type]"` suffix for round-trip conversion
-
-3. **Conversion Code**: Automatically generated in function body
-   ```python
-   channel_freqs_list = None
-   if channel_freqs is not None:
-       channel_freqs_list = [float(x.strip()) for x in channel_freqs.split(",")]
-   ```
-
-4. **Core Function Call**: Uses converted variable name
-   ```python
-   core_func(channel_freqs=channel_freqs_list, ...)
-   ```
-
-**IMPORTANT**: Only `List[int]` and `List[float]` get conversion code. `List[str]` uses the expand_patterns callback for wildcard expansion.
-
-### Round-Trip Conversion Support
-
-Functions can round-trip: `cab → function → cab` with full fidelity.
-
-**Key Implementation**: `introspector.py` has `_unwrap_optional_from_annotated()` helper that handles Python's automatic Optional wrapping:
-
-```python
-# Generated: param: Annotated[Type | None, ...] = None
-# Python sees: Optional[Annotated[Type | None, ...]]
-# Unwrapper extracts: Annotated[Type | None, ...]
-```
-
-The introspector also extracts "Stimela dtype:" metadata from help strings (lines 162-165) to restore the correct dtype in the cab.
-
-### Multi-Line Help Strings
-
-For help text containing newlines (e.g., multi-line descriptions), use triple-quoted strings:
-
-```python
-param: Annotated[
-    str,
-    typer.Option(
-        help="""First line
-Second line
-Third line"""
-    ),
-]
-```
-
-This is a typer quirk - the triple quotes must be on separate lines for proper formatting.
-
-### Function Body Generation
-
-The function body is automatically generated with:
-
-1. **Import Path Parsing**: Extracts from cab's `command` field
-   ```yaml
-   command: (spimple.core.module)function
-   ```
-   Generates:
-   ```python
-   from spimple.core.module import function as function_core
-   ```
-
-2. **Conversion Code**: For comma-separated parameters (as described above)
-
-3. **Complete Function Call**: All parameters passed to core function
-   ```python
-   function_core(
-       param1=param1,
-       param2=param2_list,  # Converted parameter
-       ...
-   )
-   ```
-
-### Parameter Ordering
-
-Python requires all required parameters before optional ones. The generator automatically:
-1. Collects required inputs and outputs
-2. Collects optional inputs and outputs
-3. Emits required parameters first, then optional ones
-
-This ensures generated functions are syntactically valid.
-
-When adding features, ask:
-1. Is this feature explicitly requested?
-2. Can it be implemented in <50 lines?
-3. Does it require new dependencies?
-4. Is there a simpler alternative?
-
-Only proceed if answers align with project philosophy.
 
 ## Examples of Good Changes
 

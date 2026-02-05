@@ -5,12 +5,12 @@ The core concept boils down to maintaining a lightweight package that only insta
 This makes it possible to install the package alongside `cult-cargo` and include cabs into recipes using the syntax
 ```yaml
 _include:
-  - (module)cab_name.yml
+  - (module.cabs)cab_name.yml
 ```
 In principle, that's all there is to it.
 The `hip-cargo` package does not dictate how you should go about structuring your package.
-Instead, it serves as an example of how to design auto-documenting CLI interfaces using Typer.
-It also provides some utilities to convert function signatures into `stimela` cabs and vice versa for packages that mimic its structure.
+Instead, it serves as an example of how to design auto-documenting CLI interfaces using Typer with automated cab generation and containerisation.
+It provides utilities to convert function signatures into `stimela` cabs (and vice versa) for packages that mimic its structure.
 
 ## Installation
 
@@ -23,15 +23,14 @@ Or for development:
 ```bash
 git clone https://github.com/landmanbester/hip-cargo.git
 cd hip-cargo
-uv sync
+uv sync --group dev --group test
+uv run pre-commit install
 ```
-
-The latter is probably more useful if you want to use `hip-cargo` as a template for your own package.
 
 ## Key Principles
 
 1. **Separate CLI from implementation**: Keep CLI modules lightweight with lazy imports. Keep them all in the `src/mypackage/cli` directory and define the CLI for each command in a separate file. Construct the main Typer app in `src/mypackage/cli/__init__.py` and register commands there.
-2. **Separate cabs directory at same level as `cli`**: Use `hip-cargo` to auto-generate cabs into in `src/mypackage/cabs/` directory with the `generate_cabs.py` script. There should be a separate file for each cab.
+2. **Separate cabs directory at same level as `cli`**: Use `hip-cargo` to auto-generate cabs into in `src/mypackage/cabs/` directory with the `generate_cabs.py` script. There should be a separate `src/mypackage/cli/mycommand.py` file corresponding to each cab.
 3. **Single app, multiple commands**: Use one Typer app that registers all commands. If you need a separate app you might as well create a separate repository for it.
 4. **Lazy imports**: Import heavy dependencies (NumPy, JAX, Dask) only when executing
 5. **Linked GitHub package with container image**: Maintain an up to date `Dockerfile` that installs the full package and use **Docker** (or **Podman**) to upload the image to the GitHub Container registry. Link this to your GitHub repository.
@@ -60,7 +59,7 @@ Documentation on each individual command can be obtained by calling help for the
 cargo generate-cabs --help
 ```
 The full package should be available as a container image on the [GitHub Container Registry](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry).
-The `Dockerfile` for the project should install the package in `full` mode.
+The `Dockerfile` for the project should install the full package, not the lightweight version.
 This is used to build the container image that is uploaded to the registry.
 The image should be tagged with a version so that `stimela` knows how to match cab configuration to images.
 The following versioning schema is proposed:
@@ -69,7 +68,9 @@ The following versioning schema is proposed:
 * use `latest` tag for `main`/`master` branch
 * use `branch-name` when developing new features
 
-This can all automated with GitHub actions, see the [update-cabs-and-publish](./.github/workflows/update-cabs-and-publish.yml) workflow for an example.
+This can all be automated with pre-commit hooks and GitHub actions.
+Use pre-commit hooks to auto-generate cab definitions on each commit.
+See the [publish-container](./.github/workflows/publish-container.yml) workflow for an example of how to set up GitHub Actions for automation.
 
 ## Package Structure
 
@@ -79,34 +80,44 @@ Initialize your project with the following structure (again using `hip-cargo` as
 ```
 hip-cargo/
 ├── .github
-│   ├── dependabot.yml
-│   └── workflows
-│       ├── ci.yml
-│       ├── update-cabs-and-publish.yml
-│       └── publish.yml
+│   ├── dependabot.yml
+│   └── workflows
+│       ├── ci.yml
+│       ├── publish-container.yml
+│       └── publish.yml
+├── scripts                      # Automation scripts
+│   └── generate_cabs.py
 ├── src
-│   └── hip_cargo
-│       ├── cabs
-│       │   ├── generate_cabs.yml
-│       │   ├── generate_function.yml
-│       │   ├── __init__.py
-│       ├── cli
-│       │   ├── generate_cabs.py
-│       │   ├── generate_function.py
-│       │   ├── __init__.py
-│       ├── core
-│       │   ├── generate_cabs.py
-│       │   ├── generate_function.py
-│       │   ├── __init__.py
+│   └── hip_cargo
+│       ├── cabs                 # Generated cab definitions (YAML)
+│       │   ├── __init__.py
+│       │   ├── generate_cabs.yml
+│       │   └── generate_function.yml
+│       ├── cli                  # Lightweight CLI wrappers
+│       │   ├── __init__.py
+│       │   ├── generate_cabs.py
+│       │   └── generate_function.py
+│       ├── core                 # Core implementations (lazy-loaded)
+│       │   ├── __init__.py
+│       │   ├── generate_cabs.py
+│       │   └── generate_function.py
+│       ├── recipes              # Stimela recipes for running commands via stimela
+│       │   ├── __init__.py
+│       │   └── gen_cabs.yml
+│       └── utils                # Shared utilities
+│           ├── __init__.py
+│           ├── cab_to_function.py
+│           ├── decorators.py
+│           └── introspector.py
+├── tests
+│   ├── __init__.py
+│   └── conftest.py
 ├── Dockerfile                   # For containerization
 ├── LICENSE                      # MIT or BSD3 license encouraged
 ├── .pre-commit-config.yaml      # You should use these if you don't already
 ├── .gitignore                   # make sure your .lock file is not ignored
 ├── pyproject.toml               # PEP 621 compliant
 ├── tbump.toml                   # this makes releases so much easier
-├── tests                        # obviously we need these
-│   ├── conftest.py
-│   ├── __init__.py
 └── README.md                    # We are going to put all the docs in the project README's :no_mouth:
 
 ```
@@ -119,86 +130,63 @@ As an example, let's see what the `generate-cabs` command looks like
 
 <!-- CODE:generate-cabs:START -->
 ```python
-"""CLI command for generating Stimela cab definitions."""
-
 from pathlib import Path
-from typing import NewType
+from typing import Annotated, NewType
 
 import typer
-from rich import print
-from typing_extensions import Annotated
 
 from hip_cargo.utils.decorators import stimela_cab, stimela_output
 
-File = NewType("File", Path)
 Directory = NewType("Directory", Path)
+File = NewType("File", Path)
 
 
 @stimela_cab(
     name="generate_cabs",
-    info="Generate Stimela cab definition from Python CLI function",
+    info="Generate Stimela cab definition from Python CLI function.",
 )
 @stimela_output(
     dtype="Directory",
-    name="output_dir",
-    info="Path to output directory where cab definitions will be saved. "
-    "The cab will have the exact same name as the command.",
+    name="output-dir",
+    info="Output directory for cab definition. The cab will have the exact same name as the command.",  # noqa: E501
 )
 def generate_cabs(
     module: Annotated[
-        File,
+        list[File],
         typer.Option(
             ...,
-            parser=File,
+            parser=Path,
             help="CLI module path. "
-            "Use wild card to generate cabs for multiple commands in module (e.g. package/cli/*). ",
-            rich_help_panel="Inputs",
+            "Use wild card to generate cabs for multiple commands in module. "
+            "For example, package/cli/*.",
         ),
     ],
-    output_dir: Annotated[
-        Directory,
+    image: Annotated[
+        str | None,
         typer.Option(
-            parser=Directory,
-            help="Output directory for cab definition. The cab will have the exact same name as the command.",
-            rich_help_panel="Outputs",
+            help="Name of container image.",
         ),
     ] = None,
-    image: Annotated[
-        File,
-        typer.Option(parser=File, help="Name of container image. ", rich_help_panel="Inputs"),
+    output_dir: Annotated[
+        Directory | None,
+        typer.Option(
+            parser=Path,
+            help="Output directory for cab definition. The cab will have the exact same name as the command.",  # noqa: E501
+        ),
     ] = None,
 ):
-    """Generate a Stimela cab definition from a Python module.
-
-    The module should contain a single Typer command decorated with
-    @stimela_cab and optionally @stimela_output decorators.
     """
-    # Lazy imports
+    Generate Stimela cab definition from Python CLI function.
+    """
+    # Lazy import the core implementation
     from hip_cargo.core.generate_cabs import generate_cabs as generate_cabs_core  # noqa: E402
 
-    # glob if wildcard in module
-    modpath = Path(module)
-    if "*" in module:
-        base_path = Path(str(modpath).split("*")[0].rstrip("/"))
-        modlist = [f for f in base_path.glob("*") if f.is_file() and not f.name.startswith("__")]
-        if len(modlist) == 0:
-            raise RuntimeError(f"No modules found matching {module}")
-    else:
-        if not modpath.is_file():
-            raise RuntimeError(f"No module file found at {module}")
-        modlist = [modpath]
-
-    # User feedback
-    for mod in modlist:
-        typer.echo(f"Loading file: {mod}")
-
-    typer.echo(f"Writing cabs to: {output_dir}")
-
-    # Call core logic
-    generate_cabs_core(modlist, str(output_dir), image)
-
-    # Success message
-    print(f":boom: [green] Successfully generated cabs in: {output_dir} [/green]")
+    # Call the core function with all parameters
+    generate_cabs_core(
+        module,
+        image=image,
+        output_dir=output_dir,
+    )
 ```
 <!-- CODE:generate-cabs:END -->
 
@@ -273,6 +261,7 @@ dependencies = [
     "typer>=0.12.0",
     "pyyaml>=6.0",
     "typing-extensions>=4.15.0",
+    "libcst==1.8.6",
 ]
 
 [project.urls]
@@ -333,11 +322,12 @@ test = [
 
 ## Container Images and GitHub Actions
 
-For Stimela to use your package in containerized environments, you should publish OCI container images to GitHub Container Registry (ghcr.io). This section shows how to automate this with GitHub Actions.
+For `stimela` to use your package in containerized environments, you should publish OCI container images to GitHub Container Registry (ghcr.io).
+This section shows how to automate this with GitHub Actions.
 
 ### 1. Create a Dockerfile
 
-Add a `Dockerfile` at the root of your repository:
+Add a `Dockerfile` at the root of your repository. For example:
 
 ```dockerfile
 FROM python:3.11-slim
@@ -358,19 +348,29 @@ RUN uv pip install --system --no-cache .
 CMD ["cargo", "--help"]
 ```
 
-### 2. Set up GitHub Actions Workflow
+### 2. Automate Cab Creation and Containerisation
 
-Copy `.github/workflows/update-cabs-and-publish.yml` from `hip-cargo` into your project and edit it from there if needs be.
-Although, it's fairly generic, so hopefully it just works. The basic workflow is the following:
-
-  1. Generate all `stimela` cabs from `src/hip_cargo/cli/*.py` into `src/hip_cargo/cabs` tagging the image with the appropriate tag.
-  2. Commit new cabs to the repo if they have changed.
-  3. Build and push the container to the GHCR.
-
+You can automate cab generation using pre-commit hooks.
+For example, you could define the following in your `.pre-commit-config.yaml`
+```yaml
+repos:
+  - repo: local
+    hooks:
+      - id: generate-cabs
+        name: Generate Stimela cab definitions
+        entry: python scripts/generate_cabs.py
+        language: system
+        files: ^src/hip_cargo/cli/.*\.py$
+        pass_filenames: false
+        stages: [pre-commit]
+```
+This uses [this script](./scripts/generate_cabs.py) to generate cabs for all commands defined in your CLI module.
+You should be able reuse the GitHub action for `hip-cargo` in `.github/workflows/update-cabs-and-publish.yml` to automate container creation for your project.
+The basic idea is to validate your cab definitions and then to build and push the container to the GHCR.
 The workflow will tag the container with the branch name if there is an open PR to your default branch.
 Once the PR is merged, an action is triggered to update the image name in the cab definitions and push a `latest` version to GHCR.
 Pushing semantically versioned tags will trigger the same workflow (this is where `tbump` is quite useful).
-In this cas ethe image name is tagged with the version.
+In this case the image name is tagged with the version.
 
 ### 3. Link Container to GitHub Package
 
@@ -387,24 +387,32 @@ To associate the container image with your repository:
 
 3. **Set package visibility**:
    - In the package settings, set visibility to "Public" for open-source projects
-   - This allows Stimela to pull images without authentication
+   - This allows `stimela` to pull images without authentication
 
-### 4. Using the Container with Stimela
+### 4. Using the Container with `stimela`
 
 Once published, users should be able to simply include the cab definitions in their recipes.
-This only requires installing the lightweight version of the package so it shouldn't clash with any other packages, in particular those maintained in `cult-cargo`.
-Use the following syntax
+This only requires installing the lightweight version of the package, so it shouldn't clash with any other packages, in particular `stimela` and `cult-cargo`.
+Use the following syntax to include a cab in a recipe
 ```yaml
 _include:
   - (mypackage.cabs)cab_name.yml
 ```
 
 `stimela` will automatically pull the matching version based on the cab configuration.
+You could optionally provide `stimela` recipes inside your project (see `src/hip_cargo/recipes`, for example).
+If the lightweight version if the package is installed it should be possible to run these recipes directly using the syntax
+
+```python
+stimela run 'mypackage.recipes::killer_recipe.yml' recipe_name option1=option1...
+```
 
 
 ## Type Inference
 
-`hip-cargo` automatically recognizes custom `stimela` types. In your CLI definitions, simply create a `NewType` and use it as the parser for the Typer Option/Argument. See the `generate-cabs` definition above for an example.
+`hip-cargo` automatically recognizes custom `stimela` types.
+These should be created using `typing.NewType`.
+See the `generate-cabs` definition above for an example.
 
 ## Decorators
 
@@ -418,13 +426,19 @@ Marks a function as a Stimela cab. (Probably incomplete but it's basically a dic
 
 ### `@stimela_output`
 
-Defines a `stimela` output. (Probably incomplete but it's basically a dictionary mapping.)
+Defines a `stimela` output supporting the following fields (Probably incomplete but it's basically a dictionary mapping):
 
 - `name`: Output name (top level, one below `cabs`)
 - `dtype`: Data type (File, Directory, MS, etc.)
 - `info`: Help string
-- `required`: Whether output is required (default: False)
+- `required`: Whether output is required (`default: False`)
 - `implicit`: Just use what you would put in the cab definition for `stimela`
+- `policies`: Parameter level policies provided as a `dict`. See `stimela` [docs](https://stimela.readthedocs.io/en/latest/reference/schema_ref.html)
+- `must_exist`: Whether an output has to exist when the task finishes (`default: False`)
+- `mkdir`: create the directory if it does not exist (`default: False`)
+- `path_policies`: Path policies provided as a `dict`. See `stimela` [docs](https://stimela.readthedocs.io/en/latest/reference/schema_ref.html)
+
+Note that the order is important if you want to implement a [roundtrip test](tests/test_roundtrip.py).
 
 ## Features
 
@@ -450,34 +464,14 @@ git clone https://github.com/landmanbester/hip-cargo.git
 cd hip-cargo
 
 # Install dependencies with development tools
-uv sync --group dev
+uv sync --group dev --group test
 
 # Install pre-commit hooks (recommended)
 uv run pre-commit install
 ```
 
-### Pre-commit Hooks
-
-This project uses [pre-commit](https://pre-commit.com/) to automatically check code quality before commits. The hooks run:
-
-- **ruff linting**: Checks code style and catches common errors
-- **ruff formatting**: Ensures consistent code formatting
-- **trailing whitespace**: Removes trailing whitespace
-- **end-of-file-fixer**: Ensures files end with a newline
-- **check-yaml**: Validates YAML syntax
-- **check-toml**: Validates TOML syntax
-- **check-merge-conflict**: Prevents committing merge conflict markers
-- **check-added-large-files**: Prevents accidentally committing large files
-
-#### Installing Pre-commit Hooks
-
-After cloning the repository, install the pre-commit hooks:
-
-```bash
-uv run pre-commit install
-```
-
-This will automatically run the hooks before each commit. If any checks fail, the commit will be blocked until you fix the issues.
+This will automatically run the hooks before each commit.
+If any checks fail, the commit will be blocked until you fix the issues.
 
 #### Running Hooks Manually
 
