@@ -582,9 +582,9 @@ def format_info_fields(yaml_str, comment_map=None):
             else:
                 # Single-line format for implicit (don't split at periods)
                 if trailing_comment:
-                    result.append(f"{indent}{field_name}: {content}  {trailing_comment}")
+                    result.append(f"{indent}{field_name}: '{content}'  {trailing_comment}")
                 else:
-                    result.append(f"{indent}{field_name}: {content}")
+                    result.append(f"{indent}{field_name}: '{content}'")
         else:
             result.append(line)
 
