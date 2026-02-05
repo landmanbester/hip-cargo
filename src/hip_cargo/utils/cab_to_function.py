@@ -204,6 +204,22 @@ def format_dict_multiline(d: dict[str, Any], indent_level: int = 0) -> str:
         # Format the value
         if isinstance(value, dict):
             value_str = format_dict_multiline(value, indent_level + 1)
+        elif isinstance(value, list):
+            # Format list values to ensure proper literal representation
+            item_strs = []
+            for item in value:
+                if isinstance(item, dict):
+                    item_repr = format_dict_multiline(item, indent_level + 2)
+                elif isinstance(item, bool):
+                    item_repr = "True" if item else "False"
+                elif isinstance(item, str):
+                    item_repr = f'"{item}"'
+                elif item is None:
+                    item_repr = "None"
+                else:
+                    item_repr = str(item)
+                item_strs.append(item_repr)
+            value_str = "[" + ", ".join(item_strs) + "]"
         elif isinstance(value, bool):
             value_str = "True" if value else "False"
         elif isinstance(value, str):
