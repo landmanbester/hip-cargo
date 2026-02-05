@@ -70,7 +70,7 @@ The following versioning schema is proposed:
 
 This can all be automated with pre-commit hooks and GitHub actions.
 Use pre-commit hooks to auto-generate cab definitions on each commit.
-See the [update-cabs-and-publish](./.github/workflows/update-cabs-and-publish.yml) workflow for an example of how to set up GitHub Actions for automation.
+See the [publish-container](./.github/workflows/publish-container.yml) workflow for an example of how to set up GitHub Actions for automation.
 
 ## Package Structure
 
@@ -83,7 +83,7 @@ hip-cargo/
 │   ├── dependabot.yml
 │   └── workflows
 │       ├── ci.yml
-│       ├── update-cabs-and-publish.yml
+│       ├── publish-container.yml
 │       └── publish.yml
 ├── scripts                      # Automation scripts
 │   └── generate_cabs.py
