@@ -27,7 +27,15 @@ def extract_yaml_comments(yaml_file: Path) -> dict[str, str]:
             if match:
                 content = match.group(1).strip()
                 comment = match.group(2).strip()
+
+                # Store the full content (with YAML key if present)
                 comments[content] = comment
+
+                # Also store just the value part (after colon) for fields like "implicit: value"
+                # This helps match when we have the value but not the key
+                if ": " in content:
+                    _, value = content.split(": ", 1)
+                    comments[value.strip()] = comment
 
     return comments
 

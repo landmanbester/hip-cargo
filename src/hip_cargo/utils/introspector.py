@@ -504,8 +504,8 @@ def parse_decorator_libcst(dec: cst.Decorator) -> dict:
                 # Keyword argument - extract the Python value directly using LibCST
                 value = get_cst_value(arg.value)
 
-                # If there's an inline comment and this is an "info" or "help" field, append it
-                if inline_comment and arg.keyword.value in ("info", "help"):
+                # If there's an inline comment and this is an "info", "help", or "implicit" field, append it
+                if inline_comment and arg.keyword.value in ("info", "help", "implicit"):
                     value = f"{value}  {inline_comment}"
 
                 kwargs[arg.keyword.value] = value
@@ -522,6 +522,7 @@ def parse_decorator_libcst(dec: cst.Decorator) -> dict:
 def format_info_fields(yaml_str, comment_map=None):
     """
     Replace inline info strings with multi-line format.
+    Also handles implicit fields to extract trailing comments.
 
     Args:
         yaml_str: YAML string to format
@@ -538,13 +539,16 @@ def format_info_fields(yaml_str, comment_map=None):
 
     while i < len(lines):
         line = lines[i]
-        match = re.match(r"^(\s*)info:\s*(.*)$", line)
+
+        # Match both 'info:' and 'implicit:' fields
+        match = re.match(r"^(\s*)(info|implicit):\s*(.*)$", line)
 
         if match:
             indent = match.group(1)
-            content = match.group(2)
+            field_name = match.group(2)
+            content = match.group(3)
 
-            # Collect continuation lines (indented more than 'info:')
+            # Collect continuation lines (indented more than 'field:')
             cond1 = i + 1 < len(lines)
             while cond1 and lines[i + 1].startswith(indent + "  ") and not re.match(r"^\s*\w+:", lines[i + 1]):
                 i += 1
@@ -564,15 +568,23 @@ def format_info_fields(yaml_str, comment_map=None):
                 trailing_comment = content[comment_idx:].strip()
                 content = content[:comment_idx].rstrip()
 
-            # Format the collected content
-            formatted_lines = content.replace(". ", ".\n").strip().split("\n")
-            result.append(f"{indent}info:")
-            for j, formatted_line in enumerate(formatted_lines):
-                if j == len(formatted_lines) - 1 and trailing_comment:
-                    # Add comment to last line as YAML comment (not string content)
-                    result.append(f"{indent}  {formatted_line}  {trailing_comment}")
+            # Format based on field type
+            if field_name == "info":
+                # Multi-line format for info (split at periods)
+                formatted_lines = content.replace(". ", ".\n").strip().split("\n")
+                result.append(f"{indent}{field_name}:")
+                for j, formatted_line in enumerate(formatted_lines):
+                    if j == len(formatted_lines) - 1 and trailing_comment:
+                        # Add comment to last line as YAML comment (not string content)
+                        result.append(f"{indent}  {formatted_line}  {trailing_comment}")
+                    else:
+                        result.append(f"{indent}  {formatted_line}")
+            else:
+                # Single-line format for implicit (don't split at periods)
+                if trailing_comment:
+                    result.append(f"{indent}{field_name}: {content}  {trailing_comment}")
                 else:
-                    result.append(f"{indent}  {formatted_line}")
+                    result.append(f"{indent}{field_name}: {content}")
         else:
             result.append(line)
 
