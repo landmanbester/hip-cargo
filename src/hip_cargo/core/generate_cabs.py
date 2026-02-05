@@ -7,8 +7,8 @@ import yaml
 
 from hip_cargo.utils.introspector import extract_input_libcst, format_info_fields, parse_decorator_libcst
 
-# Large width prevents YAML line wrapping, which would break trailing comments
-# (e.g., "  # noqa: E501"). YAML dumper would split long lines and lose the comment.
+# Large width prevents YAML line wrapping, which would break trailing comments.
+# YAML dumper would split long lines and lose the comment.
 YAML_MAX_WIDTH = 10000
 
 

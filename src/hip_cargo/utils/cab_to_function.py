@@ -177,6 +177,48 @@ def split_info_at_periods(info: str) -> str:
     return "\n".join(sentences)
 
 
+def format_dict_multiline(d: dict[str, Any], indent_level: int = 0) -> str:
+    """
+    Format a dictionary with each item on a new line and trailing commas.
+
+    This creates ruff-compatible formatting for nested dictionaries.
+
+    Args:
+        d: Dictionary to format
+        indent_level: Current indentation level (for recursion)
+
+    Returns:
+        Formatted dictionary string
+    """
+    if not d:
+        return "{}"
+
+    indent = "    " * indent_level
+    next_indent = "    " * (indent_level + 1)
+
+    lines = ["{"]
+    for key, value in d.items():
+        # Format the key
+        key_str = f'"{key}"' if isinstance(key, str) else str(key)
+
+        # Format the value
+        if isinstance(value, dict):
+            value_str = format_dict_multiline(value, indent_level + 1)
+        elif isinstance(value, bool):
+            value_str = "True" if value else "False"
+        elif isinstance(value, str):
+            value_str = f'"{value}"'
+        elif value is None:
+            value_str = "None"
+        else:
+            value_str = str(value)
+
+        lines.append(f"{next_indent}{key_str}: {value_str},")
+
+    lines.append(f"{indent}}}")
+    return "\n".join(lines)
+
+
 def generate_parameter_signature(
     param_name: str, param_def: dict[str, Any], policies: Optional[dict[str, Any]] = None
 ) -> str:
@@ -316,6 +358,49 @@ def generate_parameter_signature(
             lines_out.append(f'            help="{info_escaped}",')
 
     lines_out.append("        ),")
+
+    # Build stimela metadata dict for non-standard fields
+    stimela_meta = {}
+
+    # Fields that are handled by typer.Option or inferred from type hints
+    handled_fields = {
+        "info",  # becomes help= in typer.Option
+        "dtype",  # inferred from type hint (unless overridden)
+        "required",  # handled by default=... in typer.Option
+        "default",  # handled by function default value
+        "choices",  # handled by Literal type
+    }
+
+    # Check if dtype needs explicit override (can't be inferred from type hint alone)
+    # This happens when the type hint is generic (like str or Path) but dtype is specific (like File)
+    if dtype not in ["str", "int", "float", "bool"]:
+        # Normalize comparison: list[X] and List[X] are equivalent (Python 3.9+)
+        normalized_py_type = py_type.replace("list[", "List[")
+        normalized_dtype = dtype.replace("list[", "List[")
+
+        # Check if the actual dtype differs from what we'd infer from py_type
+        if normalized_py_type != normalized_dtype and not uses_literal:
+            # Need to preserve explicit dtype
+            stimela_meta["dtype"] = dtype
+
+    # Check policies - only add if they contain non-standard fields
+    if "policies" in param_def:
+        policies_dict = param_def["policies"]
+        # Standard policies that can be inferred: positional (from required), repeat (from List)
+        non_standard_policies = {k: v for k, v in policies_dict.items() if k not in ["positional", "repeat"]}
+        if non_standard_policies:
+            stimela_meta["policies"] = non_standard_policies
+
+    # Add all other arbitrary fields from param_def
+    for key, value in param_def.items():
+        if key not in handled_fields and key != "policies":
+            stimela_meta[key] = value
+
+    # If there are stimela metadata fields, add them as a dict to Annotated
+    if stimela_meta:
+        # Format with multi-line style and trailing commas for ruff compatibility
+        stimela_dict_str = format_dict_multiline({"stimela": stimela_meta}, indent_level=2)
+        lines_out.append(f"        {stimela_dict_str},")
 
     # Add closing bracket and default if applicable
     if default is not None and not required:

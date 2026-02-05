@@ -155,6 +155,28 @@ def extract_typer_metadata_libcst(metadata_nodes: list[cst.CSTNode]) -> dict[str
     return metadata
 
 
+def extract_stimela_metadata_libcst(metadata_nodes: list[cst.CSTNode]) -> dict[str, Any]:
+    """
+    Extract custom Stimela metadata dict from Annotated metadata items.
+
+    Looks for dict literals with a "stimela" key:
+        Annotated[Type, typer.Option(...), {"stimela": {...}}]
+
+    Args:
+        metadata_nodes: List of metadata CST nodes from Annotated
+
+    Returns:
+        Dict with Stimela-specific metadata, or empty dict if not found
+    """
+    for node in metadata_nodes:
+        if isinstance(node, cst.Dict):
+            # Use get_cst_value to safely extract the dict
+            dict_value = get_cst_value(node)
+            if isinstance(dict_value, dict) and "stimela" in dict_value:
+                return dict_value["stimela"]
+    return {}
+
+
 def extract_input_libcst(param: cst.Param) -> tuple[str, dict[str, Any]]:
     """
     Extract input schema from a single function parameter LibCST node.
@@ -165,6 +187,7 @@ def extract_input_libcst(param: cst.Param) -> tuple[str, dict[str, Any]]:
     Returns:
         Tuple of (param_name, input_def) where input_def is a dictionary
         with input configuration (dtype, info, required, default, policies)
+        plus any additional fields from optional stimela metadata dict
     """
     param_name = param.name.value
 
@@ -183,9 +206,13 @@ def extract_input_libcst(param: cst.Param) -> tuple[str, dict[str, Any]]:
 
         # Extract typer metadata from the metadata items
         typer_metadata = extract_typer_metadata_libcst(metadata_nodes)
+
+        # Extract Stimela metadata from the metadata items
+        stimela_metadata = extract_stimela_metadata_libcst(metadata_nodes)
     else:
         dtype_str = "str"
         typer_metadata = {}
+        stimela_metadata = {}
 
     # Get parameter description from typer metadata
     param_info = typer_metadata.get("help")
@@ -204,16 +231,22 @@ def extract_input_libcst(param: cst.Param) -> tuple[str, dict[str, Any]]:
         else:
             input_def["info"] = param_info
 
-    # dtype_str is already a string representation, no need to convert
-    # Just normalize it using _dtype_to_str (handles Union, Literal, etc.)
-    dtype = _dtype_to_str_from_string(dtype_str)
-
-    if dtype != "str" and dtype != "NoneType":
-        # if it's a Literal we add a choices field and assume param dtype is str
-        if "Literal" in dtype:
-            input_def["choices"] = ast.literal_eval(dtype.removeprefix("Literal").strip())
-        else:
+    # dtype: use Stimela override if provided, else infer from type hint
+    if "dtype" in stimela_metadata:
+        dtype = stimela_metadata["dtype"]
+        # When explicitly provided, always add to input_def
+        if dtype != "str":
             input_def["dtype"] = dtype
+    else:
+        # Infer dtype from type hint
+        dtype = _dtype_to_str_from_string(dtype_str)
+
+        if dtype != "str" and dtype != "NoneType":
+            # if it's a Literal we add a choices field and assume param dtype is str
+            if "Literal" in dtype:
+                input_def["choices"] = ast.literal_eval(dtype.removeprefix("Literal").strip())
+            else:
+                input_def["dtype"] = dtype
 
     # Get default value from param.default
     if param.default is not None:
@@ -246,6 +279,19 @@ def extract_input_libcst(param: cst.Param) -> tuple[str, dict[str, Any]]:
         if dtype == "list" or dtype == "List":
             input_def["policies"] = {}
             input_def["policies"]["repeat"] = "list"
+
+    # Merge Stimela metadata - arbitrary fields allowed
+    # Stimela metadata overrides inferred values
+    for key, value in stimela_metadata.items():
+        if key == "dtype":
+            # Already handled above
+            continue
+        elif key == "policies" and "policies" in input_def:
+            # Merge policies: inferred + explicit
+            input_def["policies"].update(value)
+        else:
+            # Override or add any field (arbitrary fields allowed)
+            input_def[key] = value
 
     return param_name, input_def
 
