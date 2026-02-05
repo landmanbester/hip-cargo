@@ -155,6 +155,28 @@ def extract_typer_metadata_libcst(metadata_nodes: list[cst.CSTNode]) -> dict[str
     return metadata
 
 
+def extract_stimela_metadata_libcst(metadata_nodes: list[cst.CSTNode]) -> dict[str, Any]:
+    """
+    Extract custom Stimela metadata dict from Annotated metadata items.
+
+    Looks for dict literals with a "stimela" key:
+        Annotated[Type, typer.Option(...), {"stimela": {...}}]
+
+    Args:
+        metadata_nodes: List of metadata CST nodes from Annotated
+
+    Returns:
+        Dict with Stimela-specific metadata, or empty dict if not found
+    """
+    for node in metadata_nodes:
+        if isinstance(node, cst.Dict):
+            # Use get_cst_value to safely extract the dict
+            dict_value = get_cst_value(node)
+            if isinstance(dict_value, dict) and "stimela" in dict_value:
+                return dict_value["stimela"]
+    return {}
+
+
 def extract_input_libcst(param: cst.Param) -> tuple[str, dict[str, Any]]:
     """
     Extract input schema from a single function parameter LibCST node.
@@ -165,6 +187,7 @@ def extract_input_libcst(param: cst.Param) -> tuple[str, dict[str, Any]]:
     Returns:
         Tuple of (param_name, input_def) where input_def is a dictionary
         with input configuration (dtype, info, required, default, policies)
+        plus any additional fields from optional stimela metadata dict
     """
     param_name = param.name.value
 
@@ -183,9 +206,13 @@ def extract_input_libcst(param: cst.Param) -> tuple[str, dict[str, Any]]:
 
         # Extract typer metadata from the metadata items
         typer_metadata = extract_typer_metadata_libcst(metadata_nodes)
+
+        # Extract Stimela metadata from the metadata items
+        stimela_metadata = extract_stimela_metadata_libcst(metadata_nodes)
     else:
         dtype_str = "str"
         typer_metadata = {}
+        stimela_metadata = {}
 
     # Get parameter description from typer metadata
     param_info = typer_metadata.get("help")
@@ -204,16 +231,22 @@ def extract_input_libcst(param: cst.Param) -> tuple[str, dict[str, Any]]:
         else:
             input_def["info"] = param_info
 
-    # dtype_str is already a string representation, no need to convert
-    # Just normalize it using _dtype_to_str (handles Union, Literal, etc.)
-    dtype = _dtype_to_str_from_string(dtype_str)
-
-    if dtype != "str" and dtype != "NoneType":
-        # if it's a Literal we add a choices field and assume param dtype is str
-        if "Literal" in dtype:
-            input_def["choices"] = ast.literal_eval(dtype.removeprefix("Literal").strip())
-        else:
+    # dtype: use Stimela override if provided, else infer from type hint
+    if "dtype" in stimela_metadata:
+        dtype = stimela_metadata["dtype"]
+        # When explicitly provided, always add to input_def
+        if dtype != "str":
             input_def["dtype"] = dtype
+    else:
+        # Infer dtype from type hint
+        dtype = _dtype_to_str_from_string(dtype_str)
+
+        if dtype != "str" and dtype != "NoneType":
+            # if it's a Literal we add a choices field and assume param dtype is str
+            if "Literal" in dtype:
+                input_def["choices"] = ast.literal_eval(dtype.removeprefix("Literal").strip())
+            else:
+                input_def["dtype"] = dtype
 
     # Get default value from param.default
     if param.default is not None:
@@ -246,6 +279,19 @@ def extract_input_libcst(param: cst.Param) -> tuple[str, dict[str, Any]]:
         if dtype == "list" or dtype == "List":
             input_def["policies"] = {}
             input_def["policies"]["repeat"] = "list"
+
+    # Merge Stimela metadata - arbitrary fields allowed
+    # Stimela metadata overrides inferred values
+    for key, value in stimela_metadata.items():
+        if key == "dtype":
+            # Already handled above
+            continue
+        elif key == "policies" and "policies" in input_def:
+            # Merge policies: inferred + explicit
+            input_def["policies"].update(value)
+        else:
+            # Override or add any field (arbitrary fields allowed)
+            input_def[key] = value
 
     return param_name, input_def
 
@@ -458,8 +504,8 @@ def parse_decorator_libcst(dec: cst.Decorator) -> dict:
                 # Keyword argument - extract the Python value directly using LibCST
                 value = get_cst_value(arg.value)
 
-                # If there's an inline comment and this is an "info" or "help" field, append it
-                if inline_comment and arg.keyword.value in ("info", "help"):
+                # If there's an inline comment and this is an "info", "help", or "implicit" field, append it
+                if inline_comment and arg.keyword.value in ("info", "help", "implicit"):
                     value = f"{value}  {inline_comment}"
 
                 kwargs[arg.keyword.value] = value
@@ -476,6 +522,7 @@ def parse_decorator_libcst(dec: cst.Decorator) -> dict:
 def format_info_fields(yaml_str, comment_map=None):
     """
     Replace inline info strings with multi-line format.
+    Also handles implicit fields to extract trailing comments.
 
     Args:
         yaml_str: YAML string to format
@@ -492,13 +539,16 @@ def format_info_fields(yaml_str, comment_map=None):
 
     while i < len(lines):
         line = lines[i]
-        match = re.match(r"^(\s*)info:\s*(.*)$", line)
+
+        # Match both 'info:' and 'implicit:' fields
+        match = re.match(r"^(\s*)(info|implicit):\s*(.*)$", line)
 
         if match:
             indent = match.group(1)
-            content = match.group(2)
+            field_name = match.group(2)
+            content = match.group(3)
 
-            # Collect continuation lines (indented more than 'info:')
+            # Collect continuation lines (indented more than 'field:')
             cond1 = i + 1 < len(lines)
             while cond1 and lines[i + 1].startswith(indent + "  ") and not re.match(r"^\s*\w+:", lines[i + 1]):
                 i += 1
@@ -518,15 +568,23 @@ def format_info_fields(yaml_str, comment_map=None):
                 trailing_comment = content[comment_idx:].strip()
                 content = content[:comment_idx].rstrip()
 
-            # Format the collected content
-            formatted_lines = content.replace(". ", ".\n").strip().split("\n")
-            result.append(f"{indent}info:")
-            for j, formatted_line in enumerate(formatted_lines):
-                if j == len(formatted_lines) - 1 and trailing_comment:
-                    # Add comment to last line as YAML comment (not string content)
-                    result.append(f"{indent}  {formatted_line}  {trailing_comment}")
+            # Format based on field type
+            if field_name == "info":
+                # Multi-line format for info (split at periods)
+                formatted_lines = content.replace(". ", ".\n").strip().split("\n")
+                result.append(f"{indent}{field_name}:")
+                for j, formatted_line in enumerate(formatted_lines):
+                    if j == len(formatted_lines) - 1 and trailing_comment:
+                        # Add comment to last line as YAML comment (not string content)
+                        result.append(f"{indent}  {formatted_line}  {trailing_comment}")
+                    else:
+                        result.append(f"{indent}  {formatted_line}")
+            else:
+                # Single-line format for implicit (don't split at periods)
+                if trailing_comment:
+                    result.append(f"{indent}{field_name}: {content}  {trailing_comment}")
                 else:
-                    result.append(f"{indent}  {formatted_line}")
+                    result.append(f"{indent}{field_name}: {content}")
         else:
             result.append(line)
 

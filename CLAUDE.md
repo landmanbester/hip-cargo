@@ -214,6 +214,69 @@ The project uses [LibCST](https://libcst.readthedocs.io/) (Concrete Syntax Tree)
 - Multi-line info fields format each sentence on a new line, comment on last line
 - `format_info_fields()` ensures proper YAML formatting with comment preservation
 
+### Stimela Metadata Dictionary (Optional)
+
+Input parameters can optionally include a `stimela` metadata dict in their `Annotated` type hints to specify Stimela-specific cab metadata that can't be inferred from type hints or typer.Option():
+
+**Syntax:**
+```python
+from pathlib import Path
+from typing import Annotated, NewType
+import typer
+
+File = NewType("File", Path)
+
+def process_data(
+    input_file: Annotated[
+        File,
+        typer.Option(..., parser=Path, help="Input file"),
+        {"stimela": {
+            "must_exist": True,           # File must exist before task runs
+            "policies": {"io": "copy"},   # Custom policies beyond positional/repeat
+        }}
+    ],
+    output_dir: Annotated[
+        Path | None,
+        typer.Option(parser=Path, help="Output directory"),
+        {"stimela": {
+            "dtype": "Directory",  # Override inferred dtype (Path -> Directory)
+            "mkdir": True,         # Create directory if it doesn't exist
+        }}
+    ] = None,
+):
+    """Process data files."""
+    pass
+```
+
+**Behavior:**
+- **Completely optional**: Dict can be omitted entirely
+- **All fields optional**: Any subset of fields can be specified
+- **Namespaced**: Use `{"stimela": {...}}` to avoid conflicts
+- **Explicit override**: Values in stimela dict always override inference
+- **Policies merge**: Inferred policies (positional, repeat) + explicit policies combine
+- **Arbitrary fields**: Any field allowed (forward-compatible, no validation yet)
+- **Full roundtrip**: CLI → YAML → CLI preserves all stimela metadata
+
+**Handled automatically (don't need stimela dict):**
+- `dtype`: Inferred from type hint (File, Directory, str, int, etc.)
+- `required`: Inferred from `...` vs default value
+- `default`: From function default value
+- `info`: From typer.Option(help="...")
+- `choices`: From Literal[...] type
+- `policies.positional`: Auto-added for required params
+- `policies.repeat`: Auto-added for List types
+
+**When to use stimela dict:**
+- Override dtype (e.g., Path → Directory)
+- Add Stimela-specific fields: `must_exist`, `mkdir`, `implicit`
+- Add custom policies: `io`, `skip`, `copy_to_output`
+- Add arbitrary metadata for future Stimela features
+
+**Implementation:**
+- Parsed by `extract_stimela_metadata_libcst()` in `introspector.py`
+- Merged with inferred metadata in `extract_input_libcst()`
+- Generated in roundtrip by `generate_parameter_signature()` in `cab_to_function.py`
+
 ## Critical Implementation Details
 
 ### Typer Option/Argument Syntax (IMPORTANT)

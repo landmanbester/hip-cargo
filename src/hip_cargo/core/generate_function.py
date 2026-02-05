@@ -82,6 +82,13 @@ def generate_function(cab_file: Path, output_file: Path, config_file: Path | Non
             if output_comment:
                 output_def["info"] = f"{output_info}  {output_comment}"
 
+        # Also check for comments on implicit field
+        output_implicit = output_def.get("implicit", "")
+        if output_implicit:
+            implicit_comment = find_comment_for_text(output_implicit)
+            if implicit_comment:
+                output_def["implicit"] = f"{output_implicit}  {implicit_comment}"
+
     # sanitize function name
     func_name = cab_name.replace("-", "_")
 
@@ -217,7 +224,13 @@ def generate_function(cab_file: Path, output_file: Path, config_file: Path | Non
             lines.append(f"    policies={output_def.get('policies')},")
 
         if output_def.get("implicit", None):
-            lines.append(f'    implicit="{output_def.get("implicit")}",')
+            implicit_value_raw = output_def.get("implicit")
+            # Extract trailing comment from implicit value
+            implicit_value, implicit_trailing_comment = extract_trailing_comment(implicit_value_raw)
+            if implicit_trailing_comment:
+                lines.append(f'    implicit="{implicit_value}",{implicit_trailing_comment}')
+            else:
+                lines.append(f'    implicit="{implicit_value}",')
 
         if "must_exist" in output_def:
             lines.append(f"    must_exist={output_def.get('must_exist')},")
