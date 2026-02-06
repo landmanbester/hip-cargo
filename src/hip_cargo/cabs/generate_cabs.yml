@@ -2,7 +2,7 @@ cabs:
   generate_cabs:
     flavour: python
     command: hip_cargo.core.generate_cabs.generate_cabs
-    image: ghcr.io/landmanbester/hip-cargo:main
+    image: ghcr.io/landmanbester/hip-cargo:latest
     name: generate_cabs
     info:
       Generate Stimela cab definition from Python CLI function.
