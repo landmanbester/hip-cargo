@@ -260,16 +260,11 @@ def generate_parameter_signature(
     choices = param_def.get("choices")
 
     # Check if this needs comma-separated conversion (List[int] or List[float])
+    # These are passed as comma-separated strings, not actual lists
+    # The dtype is preserved in the stimela metadata dict for roundtrip
     needs_comma_conversion = dtype in ["List[int]", "List[float]"]
     if needs_comma_conversion:
-        # These are passed as comma-separated strings, not actual lists
         py_type = "str"
-        # Append metadata to help string for round-trip compatibility
-        if info:
-            # Remove trailing period if present, then add period and metadata
-            info = info.rstrip(".") + ".\nStimela dtype: " + dtype
-        else:
-            info = "Stimela dtype: " + dtype
     else:
         # Determine Python type normally
         py_type = stimela_dtype_to_python_type(dtype, preserve_custom=True)
@@ -464,14 +459,6 @@ def generate_function_body(cab_def: dict[str, Any], inputs: dict[str, Any], outp
     comma_sep_conversions = []
     for param_name, param_def in inputs.items():
         dtype = param_def.get("dtype", "str")
-
-        if "Stimela dtype:" in extract_info_string(param_def.get("info", "")):
-            # Extract original Stimela dtype from help text
-            info_str = extract_info_string(param_def.get("info", ""))
-            for line in info_str.split("\n"):
-                if "Stimela dtype:" in line:
-                    dtype = line.split("Stimela dtype:")[-1].strip()
-                    break
 
         # Check if this parameter needs comma-separated conversion
         if dtype in ["List[int]", "List[float]"]:
