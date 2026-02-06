@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Generate Stimela cab definitions from CLI functions."""
 
+import argparse
 import subprocess
 from pathlib import Path
 
@@ -31,6 +32,14 @@ def get_current_branch():
 
 def main():
     """Generate cabs for all CLI functions in src/hip_cargo/cli."""
+    parser = argparse.ArgumentParser(description="Generate Stimela cab definitions")
+    parser.add_argument(
+        "--version",
+        type=str,
+        help="Semantic version for the image tag (e.g., 0.1.3). If not provided, uses current branch.",
+    )
+    args = parser.parse_args()
+
     # Find all CLI module files
     cli_dir = Path("src/hip_cargo/cli")
     cli_modules = list(cli_dir.glob("*.py"))
@@ -45,9 +54,13 @@ def main():
     # Output directory for cabs
     cabs_dir = Path("src/hip_cargo/cabs")
 
-    # Get current branch for image tag
-    branch = get_current_branch()
-    image_name = f"ghcr.io/landmanbester/hip-cargo:{branch}"
+    # Determine image tag: use --version if provided, else current branch
+    if args.version:
+        image_tag = args.version
+    else:
+        image_tag = get_current_branch()
+
+    image_name = f"ghcr.io/landmanbester/hip-cargo:{image_tag}"
 
     # Generate cabs
     generate_cabs(cli_modules, image=image_name, output_dir=cabs_dir)
