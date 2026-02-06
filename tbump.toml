@@ -17,6 +17,11 @@ regex = '''
 message_template = "Bump version to {new_version}"
 tag_template = "v{new_version}"
 
+# Hook to regenerate cabs with new version before pushing
+[[before_push]]
+name = "Regenerate cab definitions with new version"
+cmd = "python scripts/generate_cabs.py --version {new_version}"
+
 # Files to update with the new version
 [[file]]
 src = "pyproject.toml"

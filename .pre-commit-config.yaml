@@ -47,5 +47,5 @@ repos:
         name: Generate Stimela cab definitions
         entry: python scripts/generate_cabs.py
         language: system
-        files: ^src/hip_cargo/cli/.*\.py$
+        always_run: true
         pass_filenames: false
