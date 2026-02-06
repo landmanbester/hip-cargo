@@ -60,8 +60,20 @@ def generate_function(cab_file: Path, output_file: Path, config_file: Path | Non
             return ""
         # Check if any line in yaml_comments matches the end of this text
         for content, comment in yaml_comments.items():
-            if text.rstrip().endswith(content.rstrip()):
+            content_stripped = content.rstrip()
+            text_stripped = text.rstrip()
+
+            # Try direct match first (for block scalars)
+            if text_stripped.endswith(content_stripped):
                 return comment
+
+            # Try matching with quotes stripped (for quoted strings)
+            # YAML-loaded values have quotes stripped, but extracted content includes them
+            if content_stripped.startswith(("'", '"')) and content_stripped.endswith(("'", '"')):
+                content_unquoted = content_stripped[1:-1]  # Strip first and last char
+                if text_stripped.endswith(content_unquoted):
+                    return comment
+
         return ""
 
     # Apply comment to main info if found

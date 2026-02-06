@@ -99,6 +99,15 @@ def generate_cabs(module: list[Path], image: str | None = None, output_dir: Path
                     else:  # must be outputs
                         # there are no args in outputs decorator, they are all kwargs
                         kwargs = decorator_content["kwargs"].copy()
+                        # Remove empty info fields to avoid trailing whitespace in YAML
+                        # Also remove info fields that only contain whitespace or comments
+                        if "info" in kwargs:
+                            info_value = kwargs["info"]
+                            if isinstance(info_value, str):
+                                info_stripped = info_value.strip()
+                                # Remove if empty or only contains a comment
+                                if not info_stripped or info_stripped.startswith("#"):
+                                    del kwargs["info"]
                         cab_def[node.name.value]["outputs"][decorator_name] = kwargs
                 cab_def[node.name.value]["inputs"] = {}
                 # LibCST: use node.params.params instead of node.args.args

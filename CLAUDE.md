@@ -181,7 +181,7 @@ class YamlGenerator:
 hip-cargo currently supports:
 - Extracting function metadata from `@stimela_cab` decorator
 - Parsing Google-style docstrings for parameter descriptions
-- Inferring Stimela dtypes from Python type hints and help strings
+- Inferring Stimela dtypes from Python type hints
 - Only new-style (`Annotated`) Typer syntax
 - Generating YAML cab definitions with inputs and outputs
 - Multiple `@stimela_output` decorators for multi-output cabs
@@ -189,6 +189,7 @@ hip-cargo currently supports:
 - Automatic sanitization of parameter names (hyphens → underscores)
 - F-string reference sanitization in output definitions
 - **Comment preservation**: Full roundtrip preservation of inline comments (e.g., `# noqa: E501`)
+- **Stimela metadata dictionary**: Optional `{"stimela": {...}}` dict in `Annotated` type hints for explicit dtype overrides and Stimela-specific fields
 
 ## Implementation Details
 
@@ -214,9 +215,9 @@ The project uses [LibCST](https://libcst.readthedocs.io/) (Concrete Syntax Tree)
 - Multi-line info fields format each sentence on a new line, comment on last line
 - `format_info_fields()` ensures proper YAML formatting with comment preservation
 
-### Stimela Metadata Dictionary (Optional)
+### Stimela Metadata Dictionary (Recommended for Dtype Overrides)
 
-Input parameters can optionally include a `stimela` metadata dict in their `Annotated` type hints to specify Stimela-specific cab metadata that can't be inferred from type hints or typer.Option():
+Input parameters can optionally include a `stimela` metadata dict in their `Annotated` type hints to specify Stimela-specific cab metadata that can't be inferred from type hints or typer.Option(). This is the **recommended and current way** to override dtypes and add Stimela-specific fields:
 
 **Syntax:**
 ```python
@@ -267,10 +268,11 @@ def process_data(
 - `policies.repeat`: Auto-added for List types
 
 **When to use stimela dict:**
-- Override dtype (e.g., Path → Directory)
+- Override dtype (e.g., Path → Directory, or str → List[int] for comma-separated values)
 - Add Stimela-specific fields: `must_exist`, `mkdir`, `implicit`
 - Add custom policies: `io`, `skip`, `copy_to_output`
 - Add arbitrary metadata for future Stimela features
+- **Note**: For List[int] and List[float] dtypes, the type hint should be `str` (for comma-separated input) and the stimela dict should specify `{"stimela": {"dtype": "List[int]"}}` to preserve the dtype during roundtrip
 
 **Implementation:**
 - Parsed by `extract_stimela_metadata_libcst()` in `introspector.py`
