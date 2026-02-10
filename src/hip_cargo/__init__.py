@@ -2,5 +2,5 @@
 
 from hip_cargo.utils.decorators import stimela_cab, stimela_output
 
-__version__ = "0.1.2"
+__version__ = "0.1.3"
 __all__ = ["stimela_cab", "stimela_output"]
