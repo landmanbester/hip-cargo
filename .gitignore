@@ -1,3 +1,6 @@
+# tbump release sentinel (consumed by generate-cabs pre-commit hook)
+.tbump_version
+
 # Python
 __pycache__/
 *.py[cod]

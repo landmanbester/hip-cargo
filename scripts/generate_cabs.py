@@ -8,8 +8,20 @@ from pathlib import Path
 from hip_cargo.core.generate_cabs import generate_cabs
 
 
-def get_current_branch():
-    """Get the current git branch name."""
+def get_image_tag():
+    """Get the image tag for the current context.
+
+    During a tbump release, reads the version from the .tbump_version sentinel
+    file (written by tbump's before_push hook) and deletes it so that subsequent
+    commits revert to branch-based tagging. Otherwise derives the tag from the
+    current git branch: 'latest' for main, branch name for feature branches.
+    """
+    sentinel = Path(".tbump_version")
+    if sentinel.exists():
+        version = sentinel.read_text().strip()
+        sentinel.unlink()
+        return version
+
     try:
         result = subprocess.run(
             ["git", "rev-parse", "--abbrev-ref", "HEAD"],
@@ -18,15 +30,10 @@ def get_current_branch():
             check=True,
         )
         branch = result.stdout.strip()
-
-        # Use 'latest' for main branch, branch name for others
         if branch == "main":
             return "latest"
-
-        # Sanitize branch name for use in image tags (replace / with -)
         return branch.replace("/", "-")
     except subprocess.CalledProcessError:
-        # Fallback if not in a git repo
         return "latest"
 
 
@@ -36,7 +43,7 @@ def main():
     parser.add_argument(
         "--version",
         type=str,
-        help="Semantic version for the image tag (e.g., 0.1.3). If not provided, uses current branch.",
+        help="Semantic version for the image tag (e.g., 0.1.2). If not provided, uses current branch.",
     )
     args = parser.parse_args()
 
@@ -58,7 +65,7 @@ def main():
     if args.version:
         image_tag = args.version
     else:
-        image_tag = get_current_branch()
+        image_tag = get_image_tag()
 
     image_name = f"ghcr.io/landmanbester/hip-cargo:{image_tag}"
 
