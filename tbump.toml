@@ -17,7 +17,11 @@ regex = '''
 message_template = "Bump version to {new_version}"
 tag_template = "v{new_version}"
 
-# Hook to regenerate cabs with new version before pushing
+# Hooks to update generated files with new version before committing
+[[before_push]]
+name = "Write release version sentinel for pre-commit hooks"
+cmd = "python -c \"from pathlib import Path; Path('.tbump_version').write_text('{new_version}')\""
+
 [[before_push]]
 name = "Regenerate cab definitions with new version"
 cmd = "python scripts/generate_cabs.py --version {new_version}"
