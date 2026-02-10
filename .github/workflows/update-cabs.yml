@@ -10,7 +10,7 @@ jobs:
     name: Update cab image tags to latest
     runs-on: ubuntu-latest
     # Prevents loops if the App or the bot pushes
-    if: github.actor != 'github-actions[bot]'
+    if: github.actor != 'github-actions[bot]' && !contains(github.event.head_commit.message, '[skip ci]')
 
     steps:
       - name: Generate Token
