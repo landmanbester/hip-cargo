@@ -212,6 +212,8 @@ def init(
     _run_command(["uv", "run", "ruff", "format", "."], cwd=project_dir)
     _run_command(["uv", "run", "ruff", "check", ".", "--fix"], cwd=project_dir)
     _run_command(["git", "init", "-b", default_branch], cwd=project_dir)
+    _run_command(["git", "config", "user.name", author_name], cwd=project_dir)
+    _run_command(["git", "config", "user.email", author_email], cwd=project_dir)
     _run_command(["git", "add", "."], cwd=project_dir)
     _run_command(["git", "commit", "-m", "chore: initial project scaffold"], cwd=project_dir)
     _run_command(["uv", "run", "pre-commit", "install"], cwd=project_dir)
