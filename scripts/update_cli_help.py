@@ -11,7 +11,7 @@ def update_help_svg():
     """Generate SVG from cargo --help output."""
 
     # Run the CLI command
-    result = subprocess.run(["cargo", "--help"], capture_output=True, text=True, check=True)
+    result = subprocess.run(["hip-cargo", "--help"], capture_output=True, text=True, check=True)
 
     # Determine the actual width needed by finding the longest line
     lines = result.stdout.split("\n")
@@ -43,7 +43,7 @@ def update_help_svg():
 def update_generate_cabs_help_svg():
     """Generate SVG from cargo generate-cabs --help output."""
     # Run the CLI command
-    result = subprocess.run(["cargo", "generate-cabs", "--help"], capture_output=True, text=True, check=True)
+    result = subprocess.run(["hip-cargo", "generate-cabs", "--help"], capture_output=True, text=True, check=True)
 
     # Determine the actual width needed by finding the longest line
     lines = result.stdout.split("\n")
@@ -75,7 +75,7 @@ def update_generate_cabs_help_svg():
 def update_generate_function_help_svg():
     """Generate SVG from cargo generate-function --help output."""
     # Run the CLI command
-    result = subprocess.run(["cargo", "generate-function", "--help"], capture_output=True, text=True, check=True)
+    result = subprocess.run(["hip-cargo", "generate-function", "--help"], capture_output=True, text=True, check=True)
 
     # Determine the actual width needed by finding the longest line
     lines = result.stdout.split("\n")

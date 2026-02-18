@@ -27,6 +27,59 @@ uv sync --group dev --group test
 uv run pre-commit install
 ```
 
+## Using `hip-cargo` to initialise a project
+
+The `hip-cargo init` command scaffolds a complete project with CI/CD pipelines, containerisation, pre-commit hooks, and Stimela cab support. Run it with:
+
+```bash
+hip-cargo init --project-name my-project --github-user myuser
+```
+
+This creates a ready-to-use project directory with:
+
+- **src layout** with separate `cli/`, `core/`, and `cabs/` directories
+- **pyproject.toml** (PEP 621 compliant) with `uv` as the build backend
+- **GitHub Actions workflows** for CI, PyPI publishing, container publishing, and automated cab updates
+- **Pre-commit hooks** for ruff formatting/linting and automatic cab regeneration
+- **Dockerfile** for building container images uploaded to GitHub Container Registry
+- **tbump configuration** with hooks for version bumping and cab regeneration
+- **License file** (MIT, Apache-2.0, or BSD-3-Clause)
+- **An `onboard` command** that prints step-by-step instructions for completing CI/CD setup
+
+The generated project includes an `onboard` command that guides you through the remaining setup steps:
+
+```bash
+cd my-project
+uv run my_project onboard
+```
+
+This prints instructions for:
+
+1. Creating a GitHub repository (with `gh` CLI)
+2. Setting up PyPI trusted publishing (OIDC, no API keys needed)
+3. Creating a GitHub environment for publishing
+4. Creating a GitHub App for automated cab update commits
+5. Configuring branch protection with the App in the bypass list
+6. Making your first release with `tbump`
+
+Once setup is complete, you can delete the onboard command and start adding your own commands following the same pattern.
+
+### Init options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--project-name` | *required* | Hyphenated project name (e.g. `my-project`) |
+| `--github-user` | *required* | GitHub username or organisation |
+| `--description` | `"A Python project"` | Short project description |
+| `--author-name` | *from git config* | Author name |
+| `--author-email` | *from git config* | Author email |
+| `--cli-command` | *from project name* | CLI entry point name |
+| `--initial-version` | `0.0.0` | Starting version string |
+| `--license-type` | `MIT` | License (MIT, Apache-2.0, BSD-3-Clause) |
+| `--cli-mode` | `multi` | `single` (one command) or `multi` (subcommands) |
+| `--default-branch` | `main` | Default git branch name |
+| `--project-dir` | `./<project-name>/` | Output directory |
+
 ## Key Principles
 
 1. **Separate CLI from implementation**: Keep CLI modules lightweight with lazy imports. Keep them all in the `src/mypackage/cli` directory and define the CLI for each command in a separate file. Construct the main Typer app in `src/mypackage/cli/__init__.py` and register commands there.
@@ -44,11 +97,11 @@ It provides two utility functions viz.
 * `generate-function`: Generate a Typer CLI definition from a cab.
 
 By default, `hip-cargo` installs a lightweight version of the package that only provides the CLI and the cab definitions required for using the linked container image with `stimela`.
-Upon installation, an executable called `cargo` is added to the `PATH`.
-`cargo` is a Typer command group containing multiple commands.
+Upon installation, an executable called `hip-cargo` is added to the `PATH`.
+`hip-cargo` is a Typer command group containing multiple commands.
 Available commands can be listed using
 ```bash
-cargo --help
+hip-cargo --help
 ```
 This should print something like the following
 
@@ -56,7 +109,7 @@ This should print something like the following
 
 Documentation on each individual command can be obtained by calling help for the command e.g.
 ```bash
-cargo generate-cabs --help
+hip-cargo generate-cabs --help
 ```
 The full package should be available as a container image on the [GitHub Container Registry](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry).
 The `Dockerfile` for the project should install the full package, not the lightweight version.
@@ -84,7 +137,8 @@ hip-cargo/
 │   └── workflows
 │       ├── ci.yml
 │       ├── publish-container.yml
-│       └── publish.yml
+│       ├── publish.yml
+│       └── update-cabs.yml
 ├── scripts                      # Automation scripts
 │   └── generate_cabs.py
 ├── src
@@ -118,7 +172,7 @@ hip-cargo/
 ├── .gitignore                   # make sure your .lock file is not ignored
 ├── pyproject.toml               # PEP 621 compliant
 ├── tbump.toml                   # this makes releases so much easier
-└── README.md                    # We are going to put all the docs in the project README's :no_mouth:
+└── README.md                    # project README
 
 ```
 With this in place, we are ready to start.
@@ -200,7 +254,7 @@ For `hip-cargo`, this is what it looks like
 import typer
 
 app = typer.Typer(
-    name="cargo",
+    name="hip-cargo",
     help="Tools for generating Stimela cab definitions from Python functions",
     no_args_is_help=True,
 )
@@ -235,7 +289,7 @@ For `hip-cargo`, it looks like the following:
 ```python
 [project]
 name = "hip-cargo"
-version = "0.1.2"
+version = "0.1.3"
 description = "Tools for generating Stimela cab definitions from Python functions"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -270,7 +324,7 @@ Repository = "https://github.com/landmanbester/hip-cargo"
 "Bug Tracker" = "https://github.com/landmanbester/hip-cargo/issues"
 
 [project.scripts]
-cargo = "hip_cargo.cli:app"
+hip-cargo = "hip_cargo.cli:app"
 
 [build-system]
 requires = ["uv_build>=0.8.3,<0.11.0"]
@@ -345,7 +399,7 @@ COPY src/ src/
 RUN uv pip install --system --no-cache .
 
 # Make CLI available
-CMD ["cargo", "--help"]
+CMD ["hip-cargo", "--help"]
 ```
 
 ### 2. Automate Cab Creation and Containerisation
@@ -365,7 +419,7 @@ repos:
         stages: [pre-commit]
 ```
 This uses [this script](./scripts/generate_cabs.py) to generate cabs for all commands defined in your CLI module.
-You should be able reuse the GitHub action for `hip-cargo` in `.github/workflows/update-cabs-and-publish.yml` to automate container creation for your project.
+You should be able reuse the GitHub action for `hip-cargo` in `.github/workflows/update-cabs.yml` to automate container creation for your project.
 The basic idea is to validate your cab definitions and then to build and push the container to the GHCR.
 The workflow will tag the container with the branch name if there is an open PR to your default branch.
 Once the PR is merged, an action is triggered to update the image name in the cab definitions and push a `latest` version to GHCR.
@@ -442,11 +496,14 @@ Note that the order is important if you want to implement a [roundtrip test](tes
 
 ## Features
 
-- ✅ Automatic type inference from Python type hints
-- ✅ Support for Typer Arguments (positional) and Options
-- ✅ Multiple outputs automatically added to function signature if they are not implicit
-- ✅ List types with automatic `repeat: list` policy
-- ✅ Proper handling of default values and required parameters
+- Automatic type inference from Python type hints
+- Support for Typer Arguments (positional) and Options
+- Multiple outputs automatically added to function signature if they are not implicit
+- List types with automatic `repeat: list` policy
+- Proper handling of default values and required parameters
+- Full roundtrip preservation of inline comments (e.g., `# noqa: E501`)
+- Optional `{"stimela": {...}}` metadata dict in `Annotated` type hints for explicit dtype overrides
+- Project scaffolding with `hip-cargo init` including CI/CD, containerisation, and onboarding
 
 ## Development
 
@@ -456,7 +513,7 @@ This project uses:
 - [typer](https://typer.tiangolo.com/) for the CLI
 
 
-### Setting Up Development Environment (Incomplete below)
+### Setting Up Development Environment
 
 ```bash
 # Clone the repository

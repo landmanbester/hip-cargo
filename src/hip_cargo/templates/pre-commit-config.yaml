@@ -1,4 +1,4 @@
-# Pre-commit hooks for hip-cargo
+# Pre-commit hooks for <PROJECT_NAME>
 # See https://pre-commit.com for more information
 #
 # NOTE: When hooks modify files, pre-commit will "fail" and abort the commit.
@@ -12,9 +12,7 @@ repos:
     hooks:
       - id: ruff-check
         args: [--fix]
-        exclude: ^src/hip_cargo/templates/
       - id: ruff-format
-        exclude: ^src/hip_cargo/templates/
 
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v5.0.0
@@ -26,7 +24,6 @@ repos:
         args: ['--maxkb=1000']
       - id: check-merge-conflict
       - id: check-toml
-        exclude: ^src/hip_cargo/templates/
       - id: mixed-line-ending
 
   # Local hooks run after external hooks, ensuring they see formatted code

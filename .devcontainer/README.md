@@ -39,10 +39,10 @@ Once your Codespace is ready, you can:
 pytest
 
 # Run the CLI
-cargo --help
+hip-cargo --help
 
 # Generate a cab
-cargo generate-cab mypackage.process output.yaml
+hip-cargo generate-cabs --module mypackage/cli/process.py --output-dir mypackage/cabs/
 
 # Format code
 ruff format .

@@ -1,50 +1,41 @@
 [project]
-name = "hip-cargo"
-version = "0.1.3"
-description = "Tools for generating Stimela cab definitions from Python functions"
+name = "<PROJECT_NAME>"
+version = "<INITIAL_VERSION>"
+description = "<DESCRIPTION>"
 readme = "README.md"
 requires-python = ">=3.10"
-license = { text = "MIT" }
+license = { text = "<LICENSE_TYPE>" }
 authors = [
-    { name = "landmanbester", email = "lbester@sarao.ac.za" }
+    { name = "<AUTHOR_NAME>", email = "<AUTHOR_EMAIL>" }
 ]
-keywords = ["stimela", "typer", "cli", "yaml", "code-generation", "radio-astronomy"]
 classifiers = [
-    "Development Status :: 4 - Beta",
-    "Intended Audience :: Developers",
-    "Intended Audience :: Science/Research",
-    "License :: OSI Approved :: MIT License",
+    "<LICENSE_CLASSIFIER>",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
-    "Topic :: Software Development :: Code Generators",
-    "Topic :: Software Development :: Libraries :: Python Modules",
-    "Topic :: Scientific/Engineering :: Astronomy",
 ]
 dependencies = [
-    "typer>=0.12.0",
-    "pyyaml>=6.0",
-    "typing-extensions>=4.15.0",
-    "libcst==1.8.6",
+    "hip-cargo>=0.1.3",
 ]
 
 [project.urls]
-Homepage = "https://github.com/landmanbester/hip-cargo"
-Repository = "https://github.com/landmanbester/hip-cargo"
-"Bug Tracker" = "https://github.com/landmanbester/hip-cargo/issues"
+Homepage = "<GITHUB_URL>"
+Repository = "<GITHUB_URL>"
+"Bug Tracker" = "<GITHUB_URL>/issues"
 
 [project.scripts]
-hip-cargo = "hip_cargo.cli:app"
+<CLI_COMMAND> = "<PACKAGE_NAME>.cli:app"
 
 [build-system]
+# NOTE: This uv_build constraint is intentionally aligned with hip-cargo's own pyproject.toml.
+# If you bump uv_build in hip-cargo, update this template constraint to match.
 requires = ["uv_build>=0.8.3,<0.11.0"]
 build-backend = "uv_build"
 
 [tool.ruff]
 line-length = 120
 target-version = "py310"
-extend-exclude = ["src/hip_cargo/templates"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W"]
@@ -72,11 +63,10 @@ markers = [
 
 [dependency-groups]
 dev = [
-    "pytest>=8.4.2",
-    "ruff>=0.13.2",
+    "pytest>=8.0.0",
+    "ruff>=0.9.0",
     "tbump>=6.11.0",
     "pre-commit>=4.0.0",
-    "ipdb"
 ]
 test = [
     "pytest>=8.0.0",
