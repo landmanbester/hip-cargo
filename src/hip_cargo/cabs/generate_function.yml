@@ -2,7 +2,7 @@ cabs:
   generate_function:
     flavour: python
     command: hip_cargo.core.generate_function.generate_function
-    image: ghcr.io/landmanbester/hip-cargo:0.1.3
+    image: ghcr.io/landmanbester/hip-cargo:initcmd
     name: generate_function
     info:
       Generate Python function from Stimela cab definition.

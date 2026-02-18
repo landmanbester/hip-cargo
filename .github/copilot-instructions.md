@@ -29,7 +29,7 @@ src/hip_cargo/
 
 **Key separation**: CLI modules must stay lightweight. Import heavy dependencies inside function bodies, not at module level. This enables fast CLI startup and lightweight installations.
 
-**Entry point**: `cargo` command (see `pyproject.toml` `[project.scripts]`)
+**Entry point**: `hip-cargo` command (see `pyproject.toml` `[project.scripts]`)
 
 ## Critical Patterns
 

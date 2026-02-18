@@ -58,7 +58,7 @@ class TestCLI:
         """Test CLI help command."""
         result = runner.invoke(app, ["--help"])
         assert result.exit_code == 0
-        assert "hip-cargo" in result.stdout or "cargo" in result.stdout
+        assert "hip-cargo" in result.stdout
 
     @pytest.mark.integration
     def test_generate_command_help(self, runner):

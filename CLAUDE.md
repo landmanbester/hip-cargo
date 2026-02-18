@@ -33,18 +33,33 @@ hip-cargo/
 │   ├── cabs/                 # Generated cab definitions (YAML)
 │   │   ├── __init__.py
 │   │   ├── generate_cabs.yml
-│   │   └── generate_function.yml
+│   │   ├── generate_function.yml
+│   │   └── init.yml
 │   ├── cli/                  # Lightweight CLI wrappers
 │   │   ├── __init__.py       # Main Typer app, registers commands
 │   │   ├── generate_cabs.py
-│   │   └── generate_function.py
+│   │   ├── generate_function.py
+│   │   └── init.py           # hip-cargo init command
 │   ├── core/                 # Core implementations (lazy-loaded)
 │   │   ├── __init__.py
 │   │   ├── generate_cabs.py
-│   │   └── generate_function.py
+│   │   ├── generate_function.py
+│   │   └── init.py           # Project scaffolding logic
 │   ├── recipes/              # Stimela recipes for running via stimela
 │   │   ├── __init__.py
 │   │   └── gen_cabs.yml
+│   ├── templates/            # Template files for hip-cargo init
+│   │   ├── __init__.py
+│   │   ├── cli_multi.py      # Multi-command CLI template
+│   │   ├── cli_single.py     # Single-command CLI template
+│   │   ├── Dockerfile
+│   │   ├── generate_cabs.py  # Template generate_cabs script
+│   │   ├── onboard_cli.py    # Onboard command CLI template
+│   │   ├── onboard_core.py   # Onboard command core template
+│   │   ├── pyproject.toml
+│   │   ├── tbump.toml
+│   │   ├── licenses/         # MIT, Apache-2.0, BSD-3-Clause
+│   │   └── workflows/        # GitHub Actions workflow templates
 │   └── utils/                # Shared utilities
 │       ├── __init__.py
 │       ├── cab_to_function.py   # Generate function from cab YAML
@@ -73,6 +88,9 @@ uv run ruff check . --fix
 
 # Run tests
 python -m pytest tests/ -v
+
+# Run the CLI
+hip-cargo --help
 ```
 
 ### Test Infrastructure
@@ -190,6 +208,20 @@ hip-cargo currently supports:
 - F-string reference sanitization in output definitions
 - **Comment preservation**: Full roundtrip preservation of inline comments (e.g., `# noqa: E501`)
 - **Stimela metadata dictionary**: Optional `{"stimela": {...}}` dict in `Annotated` type hints for explicit dtype overrides and Stimela-specific fields
+- **Project scaffolding**: `hip-cargo init` creates a complete project with CI/CD, containerisation, pre-commit hooks, and an onboarding command
+
+### Init Command (`hip-cargo init`)
+
+Scaffolds a new project with:
+- src layout with `cli/`, `core/`, `cabs/` directories
+- GitHub Actions workflows (CI, publish, container, update-cabs)
+- Pre-commit hooks (ruff + cab generation)
+- Dockerfile, tbump config, license
+- An `onboard` command that prints CI/CD setup instructions
+
+Templates live in `src/hip_cargo/templates/` and use `<PLACEHOLDER>` substitution (e.g. `<PROJECT_NAME>`, `<PACKAGE_NAME>`, `<GITHUB_USER>`).
+
+Post-generation steps in `core/init.py`: `uv sync` → `pytest` → `hip-cargo generate-cabs` → `ruff format/check` → `git init/add/commit` → `pre-commit install`.
 
 ## Implementation Details
 
