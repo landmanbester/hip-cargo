@@ -64,7 +64,9 @@ hip-cargo/
 │       ├── __init__.py
 │       ├── cab_to_function.py   # Generate function from cab YAML
 │       ├── decorators.py        # @stimela_cab, @stimela_output
-│       └── introspector.py      # Extract metadata from functions
+│       ├── introspector.py      # Extract metadata from functions
+│       ├── runner.py            # Container fallback execution
+│       └── yaml_comments.py     # YAML comment extraction/preservation
 ├── scripts/                  # Automation scripts
 │   └── generate_cabs.py
 ├── tests/
@@ -209,6 +211,26 @@ hip-cargo currently supports:
 - **Comment preservation**: Full roundtrip preservation of inline comments (e.g., `# noqa: E501`)
 - **Stimela metadata dictionary**: Optional `{"stimela": {...}}` dict in `Annotated` type hints for explicit dtype overrides and Stimela-specific fields
 - **Project scaffolding**: `hip-cargo init` creates a complete project with CI/CD, containerisation, pre-commit hooks, and an onboarding command
+- **Container fallback**: Generated functions automatically fall back to container execution when core module imports fail (lightweight installation mode)
+- **Skip metadata**: Parameters marked with `{"stimela": {"skip": True}}` are excluded from cab YAML generation (used for infrastructure params like `backend`)
+
+### Container Fallback Execution
+
+When a package is installed in lightweight mode (no heavy dependencies), generated CLI functions detect the `ImportError` and fall back to running the command inside a container. This is implemented in `src/hip_cargo/utils/runner.py`.
+
+**How it works:**
+- `generate-function` wraps the lazy import in try/except `ImportError` when the cab has an `image` field
+- On import failure, `run_in_container()` reconstructs the CLI command from `sys.argv` and runs it inside the container with `--backend native`
+- Volume mounts are resolved from function type hints (Path-like types) and `@stimela_output` decorators (input=ro, output=rw)
+- Mount resolution respects stimela path policies: `write_parent`, `access_parent`, `mkdir`, `must_exist`
+- Backend detection priority: apptainer → singularity → docker → podman
+- Docker/podman run as the current user (`--user uid:gid`) to avoid root-owned output files
+
+**Generated parameters** (only when cab has `image`):
+- `--backend`: Literal choice of `auto`, `native`, `apptainer`, `singularity`, `docker`, `podman`
+- `--always-pull-images`: Force re-pull of container image before execution
+
+Both are marked `{"stimela": {"skip": True}}` so they don't appear in cab YAML.
 
 ### Init Command (`hip-cargo init`)
 

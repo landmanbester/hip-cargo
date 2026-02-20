@@ -108,8 +108,10 @@ uv run ruff check . --fix
 
 - `src/hip_cargo/utils/decorators.py`: `@stimela_cab`, `@stimela_output` decorators
 - `src/hip_cargo/utils/introspector.py`: LibCST-based metadata extraction (comment-preserving)
-- `src/hip_cargo/utils/cab_to_function.py`: Reverse generation (YAML → Python)
-- `src/hip_cargo/core/generate_cabs.py`: Core cab generation logic
+- `src/hip_cargo/utils/cab_to_function.py`: Reverse generation (YAML → Python), generates try/except fallback body
+- `src/hip_cargo/utils/runner.py`: Container fallback execution (mount resolution, backend detection, command assembly)
+- `src/hip_cargo/core/generate_cabs.py`: Core cab generation logic (skips `skip: True` params)
+- `src/hip_cargo/core/generate_function.py`: Generates Python CLI functions from cab YAML (emits `image`, `backend`, `always_pull_images`)
 - `CLAUDE.md`: Extended philosophy and anti-patterns
 
 ## What NOT to Do

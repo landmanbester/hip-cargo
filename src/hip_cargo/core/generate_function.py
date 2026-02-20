@@ -106,7 +106,7 @@ def generate_function(cab_file: Path, output_file: Path, config_file: Path | Non
 
     custom_types = extract_custom_types(inputs)
     custom_types.update(extract_custom_types(outputs))
-    uses_literal = any(param_def.get("choices") for param_def in inputs.values())
+    uses_literal = any(param_def.get("choices") for param_def in inputs.values()) or bool(cab_def.get("image"))
 
     # Separate outputs into implicit and non-implicit
     # Non-implicit outputs need to be added to function signature
@@ -182,6 +182,11 @@ def generate_function(cab_file: Path, output_file: Path, config_file: Path | Non
     # Format policies as dict, not string
     if policies:
         lines.append(f"    policies={policies},")
+
+    # Include image for container fallback
+    if cab_def.get("image"):
+        lines.append(f'    image="{cab_def["image"]}",')
+
     lines.append(")")
 
     # Output decorators
@@ -293,6 +298,23 @@ def generate_function(cab_file: Path, output_file: Path, config_file: Path | Non
     for param_name, param_def, is_output in optional_params:
         param_sig = generate_parameter_signature(param_name, param_def, policies=policies)
         lines.append(param_sig)
+
+    # Inject container fallback parameters when image is present
+    if cab_def.get("image"):
+        lines.append("    backend: Annotated[")
+        lines.append('        Literal["auto", "native", "apptainer", "singularity", "docker", "podman"],')
+        lines.append("        typer.Option(")
+        lines.append('            help="Execution backend.",')
+        lines.append("        ),")
+        lines.append('        {"stimela": {"skip": True}},')
+        lines.append('    ] = "auto",')
+        lines.append("    always_pull_images: Annotated[")
+        lines.append("        bool,")
+        lines.append("        typer.Option(")
+        lines.append('            help="Always pull container images, even if cached locally.",')
+        lines.append("        ),")
+        lines.append('        {"stimela": {"skip": True}},')
+        lines.append("    ] = False,")
 
     lines.append("):")
 

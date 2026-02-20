@@ -426,7 +426,49 @@ Once the PR is merged, an action is triggered to update the image name in the ca
 Pushing semantically versioned tags will trigger the same workflow (this is where `tbump` is quite useful).
 In this case the image name is tagged with the version.
 
-### 3. Link Container to GitHub Package
+### 3. Build and Push the Container Image Manually
+
+If you need to build and push the container image without GitHub Actions (e.g. during initial setup or for debugging), you can do so directly from the command line.
+
+First, authenticate with the GitHub Container Registry:
+
+```bash
+echo $GITHUB_TOKEN | docker login ghcr.io -u GITHUB_USERNAME --password-stdin
+```
+
+Build the image, tagging it with your repository name and version:
+
+```bash
+docker build -t ghcr.io/GITHUB_USERNAME/REPO_NAME:IMAGE_TAG .
+```
+
+Then you can test it locally using e.g.
+
+```bash
+docker run --rm -it ghcr.io/GITHUB_USERNAME/REPO_NAME:IMAGE_TAG /bin/bash
+```
+
+Push the image to GHCR:
+
+```bash
+docker push ghcr.io/GITHUB_USERNAME/REPO_NAME:IMAGE_TAG
+```
+
+You can also tag with a specific version:
+
+```bash
+docker tag ghcr.io/GITHUB_USERNAME/REPO_NAME:IMAGE_TAG ghcr.io/GITHUB_USERNAME/REPO_NAME:0.1.0
+docker push ghcr.io/GITHUB_USERNAME/REPO_NAME:0.1.0
+```
+
+If you prefer **Podman** (no daemon required):
+
+```bash
+podman build -t ghcr.io/GITHUB_USERNAME/REPO_NAME:IMAGE_TAG .
+podman push ghcr.io/GITHUB_USERNAME/REPO_NAME:IMAGE_TAG
+```
+
+### 4. Link Container to GitHub Package
 
 To associate the container image with your repository:
 
@@ -443,7 +485,7 @@ To associate the container image with your repository:
    - In the package settings, set visibility to "Public" for open-source projects
    - This allows `stimela` to pull images without authentication
 
-### 4. Using the Container with `stimela`
+### 5. Using the Container with `stimela`
 
 Once published, users should be able to simply include the cab definitions in their recipes.
 This only requires installing the lightweight version of the package, so it shouldn't clash with any other packages, in particular `stimela` and `cult-cargo`.
@@ -472,15 +514,17 @@ See the `generate-cabs` definition above for an example.
 
 ### `@stimela_cab`
 
-Marks a function as a Stimela cab. (Probably incomplete but it's basically a dictionary mapping.)
+Marks a function as a Stimela cab.
 
 - `name`: Cab name
 - `info`: Description
 - `policies`: Optional dict of cab-level policies
+- `image`: Container image for fallback execution (e.g. `ghcr.io/user/pkg:tag`)
+- `**kwargs`: Additional cab metadata stored in `func.__stimela_cab_config__`
 
 ### `@stimela_output`
 
-Defines a `stimela` output supporting the following fields (Probably incomplete but it's basically a dictionary mapping):
+Defines a `stimela` output supporting the following fields:
 
 - `name`: Output name (top level, one below `cabs`)
 - `dtype`: Data type (File, Directory, MS, etc.)
@@ -494,6 +538,23 @@ Defines a `stimela` output supporting the following fields (Probably incomplete 
 
 Note that the order is important if you want to implement a [roundtrip test](tests/test_roundtrip.py).
 
+## Container Fallback Execution
+
+When a hip-cargo package is installed in lightweight mode (without heavy dependencies like NumPy, JAX, or Dask), CLI commands automatically fall back to running inside a container. This means users can run commands without installing the full dependency stack — they just need a container runtime.
+
+The fallback is transparent: if the core module import succeeds, the command runs natively. If it fails with `ImportError`, the same CLI command is re-executed inside the container with `--backend native` to force native execution (avoiding infinite recursion).
+
+Every generated CLI function gets two additional options when the cab has a container image:
+
+- `--backend`: Choose the execution backend — `auto` (default), `native`, `apptainer`, `singularity`, `docker`, or `podman`
+- `--always-pull-images`: Force re-pull of the container image before execution
+
+Volume mounts are resolved automatically from the function's type hints:
+- Path-like parameters (File, Directory, MS) are detected and mounted
+- Input parameters are mounted read-only, output parameters read-write
+- Stimela path policies (`write_parent`, `access_parent`, `mkdir`) are respected
+- Docker/podman run as the current user to avoid root-owned output files
+
 ## Features
 
 - Automatic type inference from Python type hints
@@ -504,6 +565,8 @@ Note that the order is important if you want to implement a [roundtrip test](tes
 - Full roundtrip preservation of inline comments (e.g., `# noqa: E501`)
 - Optional `{"stimela": {...}}` metadata dict in `Annotated` type hints for explicit dtype overrides
 - Project scaffolding with `hip-cargo init` including CI/CD, containerisation, and onboarding
+- Container fallback execution with automatic volume mount resolution from type hints
+- Support for apptainer, singularity, docker, and podman backends
 
 ## Development
 

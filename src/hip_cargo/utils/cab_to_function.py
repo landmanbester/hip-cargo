@@ -433,6 +433,10 @@ def generate_function_body(cab_def: dict[str, Any], inputs: dict[str, Any], outp
     """
     Generate the function body with lazy import and core function call.
 
+    When the cab definition includes an image, the body is wrapped in a try/except
+    ImportError block with a container fallback. Otherwise, the existing direct
+    lazy import pattern is used.
+
     Args:
         cab_def: Cab definition dictionary
         inputs: Input parameters dictionary
@@ -441,17 +445,26 @@ def generate_function_body(cab_def: dict[str, Any], inputs: dict[str, Any], outp
     Returns:
         List of code lines for the function body
     """
+    has_image = bool(cab_def.get("image"))
+    # Indentation: extra two levels inside the if/try block when image is present
+    indent = "            " if has_image else "    "
+
     lines = []
+    func_name = cab_def.get("_name", "").replace("-", "_")
+
+    if has_image:
+        lines.append("    if backend == 'native' or backend == 'auto':")
+        lines.append("        try:")
 
     # Parse the command to get the import path
     command = cab_def.get("command", "")
     # Format is: module.path.function_name
     command_parts = command.split(".")
     import_path = ".".join(command_parts[:-1])
-    func_name = command_parts[-1]
+    core_func_name = command_parts[-1]
     # Lazy import
-    lines.append("    # Lazy import the core implementation")
-    lines.append(f"    from {import_path} import {func_name} as {func_name}_core  # noqa: E402")
+    lines.append(f"{indent}# Lazy import the core implementation")
+    lines.append(f"{indent}from {import_path} import {core_func_name} as {core_func_name}_core  # noqa: E402")
     lines.append("")
 
     # Detect and convert comma-separated string parameters
@@ -467,17 +480,17 @@ def generate_function_body(cab_def: dict[str, Any], inputs: dict[str, Any], outp
             var_name = f"{py_param_name}_list"
 
             # Generate conversion code
-            lines.append(f"    # Parse {py_param_name} if provided as comma-separated string")
-            lines.append(f"    {var_name} = None")
-            lines.append(f"    if {py_param_name} is not None:")
-            lines.append(f'        {var_name} = [{element_type}(x.strip()) for x in {py_param_name}.split(",")]')
+            lines.append(f"{indent}# Parse {py_param_name} if provided as comma-separated string")
+            lines.append(f"{indent}{var_name} = None")
+            lines.append(f"{indent}if {py_param_name} is not None:")
+            lines.append(f'{indent}    {var_name} = [{element_type}(x.strip()) for x in {py_param_name}.split(",")]')
             lines.append("")
 
             comma_sep_conversions.append((py_param_name, var_name))
 
     # Generate the function call
-    lines.append("    # Call the core function with all parameters")
-    lines.append(f"    {func_name}_core(")
+    lines.append(f"{indent}# Call the core function with all parameters")
+    lines.append(f"{indent}{core_func_name}_core(")
 
     # Separate required (positional) and optional (keyword) parameters
     positional_params = []
@@ -498,31 +511,49 @@ def generate_function_body(cab_def: dict[str, Any], inputs: dict[str, Any], outp
         param_value = converted_name if converted_name else py_param_name
 
         if is_required:
-            # Required parameters are passed positionally (no keyword)
-            positional_params.append(f"        {param_value},")
+            positional_params.append(f"{indent}    {param_value},")
         else:
-            # Optional parameters are passed as keyword arguments
-            keyword_params.append(f"        {py_param_name}={param_value},")
+            keyword_params.append(f"{indent}    {py_param_name}={param_value},")
 
     # Add output parameters (positional if they have positional policy, otherwise keyword)
     for output_name, output_def in outputs.items():
         py_output_name = output_name.replace("-", "_")
-        # Check if output has positional policy
         policies = output_def.get("policies", {})
         is_positional = policies.get("positional", False)
 
         if is_positional:
-            # Positional outputs
-            positional_params.append(f"        {py_output_name},")
+            positional_params.append(f"{indent}    {py_output_name},")
         else:
-            # Keyword outputs
-            keyword_params.append(f"        {py_output_name}={py_output_name},")
+            keyword_params.append(f"{indent}    {py_output_name}={py_output_name},")
 
     # Combine: positional args first, then keyword args
     all_params = positional_params + keyword_params
-
-    # Add parameters to lines
     lines.extend(all_params)
-    lines.append("    )")
+    lines.append(f"{indent})")
+
+    if has_image:
+        lines.append(f"{indent}return")
+        lines.append("        except ImportError:")
+        lines.append("            if backend == 'native':")
+        lines.append("                raise")
+        lines.append("")
+        lines.append("    # Fall back to container execution")
+        lines.append("    from hip_cargo.utils.runner import run_in_container  # noqa: E402")
+        lines.append("")
+
+        # Build the params dict for run_in_container (excludes backend)
+        lines.append("    run_in_container(")
+        lines.append(f"        {func_name},")
+        lines.append("        dict(")
+        for param_name in inputs:
+            py_name = param_name.replace("-", "_")
+            lines.append(f"            {py_name}={py_name},")
+        for output_name in outputs:
+            py_name = output_name.replace("-", "_")
+            lines.append(f"            {py_name}={py_name},")
+        lines.append("        ),")
+        lines.append("        backend=backend,")
+        lines.append("        always_pull_images=always_pull_images,")
+        lines.append("    )")
 
     return lines

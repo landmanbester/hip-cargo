@@ -117,6 +117,8 @@ def generate_cabs(module: list[Path], image: str | None = None, output_dir: Path
                         continue  # skip outputs
                     # Use extract_input_libcst which handles LibCST Param nodes
                     param_name, input_def = extract_input_libcst(param)
+                    if input_def.get("skip"):
+                        continue  # skip infrastructure params (e.g. backend)
                     # Convert underscores to hyphens for cab input names
                     cab_def[node.name.value]["inputs"][param_name.replace("_", "-")] = input_def
 

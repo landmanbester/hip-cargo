@@ -53,6 +53,11 @@ def stimela_output(
         dtype: Data type (File, Directory, MS, int, str, etc.)
         info: Description (can include f-string patterns like {input_param})
         required: Whether this output is required
+        implicit: Whether the output is implicit (True or a string template)
+        policies: Parameter-level policies dict (e.g. positional, repeat)
+        must_exist: Whether the output path must exist before the task runs
+        mkdir: Whether to create the directory if it doesn't exist
+        path_policies: Path-specific policies (e.g. write_parent, access_parent)
     """
 
     def decorator(func: Callable) -> Callable:
