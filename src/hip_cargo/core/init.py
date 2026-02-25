@@ -42,14 +42,16 @@ def init(
         project_dir: Output directory (defaults to ./<project_name>/).
     """
     # Derive values
-    package_name = project_name.replace("-", "_")
+    project_name = Path(project_name).expanduser().resolve()
+    package_name = project_name.name.replace("-", "_")
+    if project_dir is None:
+        project_dir = project_name
+    if not isinstance(project_dir, Path):
+        project_dir = Path(project_dir).expanduser().resolve()
+    project_name = project_name.name  # Use the final directory name as the project name
     github_url = f"https://github.com/{github_user}/{project_name}"
     if cli_command is None:
-        cli_command = project_name.replace("-", "_")
-    if project_dir is None:
-        project_dir = Path(project_name)
-    if not isinstance(project_dir, Path):
-        project_dir = Path(project_dir)
+        cli_command = project_name
     license_classifier = LICENSE_CLASSIFIERS.get(license_type, LICENSE_CLASSIFIERS["MIT"])
     year = str(datetime.datetime.now().year)
 
