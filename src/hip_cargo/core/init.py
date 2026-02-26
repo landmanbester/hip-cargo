@@ -213,7 +213,7 @@ def init(
     )
     _run_command(["uv", "run", "ruff", "format", "."], cwd=project_dir)
     _run_command(["uv", "run", "ruff", "check", ".", "--fix"], cwd=project_dir)
-    _run_command(["git", "init", "-b", default_branch], cwd=project_dir)
+    _git_init(default_branch, cwd=project_dir)
     _run_command(["git", "config", "user.name", author_name], cwd=project_dir)
     _run_command(["git", "config", "user.email", author_email], cwd=project_dir)
     _run_command(["git", "add", "."], cwd=project_dir)
@@ -263,6 +263,16 @@ def _get_git_config(key: str) -> str | None:
         return result.stdout.strip() or None
     except subprocess.CalledProcessError:
         return None
+
+
+def _git_init(branch: str, cwd: Path) -> None:
+    """Initialise a git repo, falling back for old git without -b flag."""
+    print(f"  Running: git init -b {branch}")
+    result = subprocess.run(["git", "init", "-b", branch], cwd=cwd, capture_output=True, text=True)
+    if result.returncode != 0:
+        # Git < 2.28 doesn't support -b; init then rename the branch
+        _run_command(["git", "init"], cwd=cwd)
+        _run_command(["git", "checkout", "-b", branch], cwd=cwd)
 
 
 def _run_command(cmd: list[str], cwd: Path) -> None:
