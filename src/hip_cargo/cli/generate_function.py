@@ -3,7 +3,7 @@ from typing import Annotated, NewType
 
 import typer
 
-from hip_cargo.utils.decorators import stimela_cab, stimela_output
+from hip_cargo import stimela_cab, stimela_output
 
 File = NewType("File", Path)
 

@@ -27,6 +27,7 @@ from hip_cargo.core.generate_function import generate_function
 PFB_IMAGING_ROOT = Path.home() / "software" / "pfb-imaging"
 PFB_IMAGING_CLI = PFB_IMAGING_ROOT / "src" / "pfb_imaging" / "cli"
 PFB_IMAGING_CABS = PFB_IMAGING_ROOT / "src" / "pfb_imaging" / "cabs"
+PFB_IMAGING_CONFIG = PFB_IMAGING_ROOT / "pyproject.toml"
 
 # List of CLI modules to test
 CLI_MODULES = [
@@ -47,7 +48,6 @@ def check_pfb_imaging_available():
     return PFB_IMAGING_CLI.exists()
 
 
-@pytest.mark.skip(reason="Features pending")
 @pytest.mark.skipif(
     not check_pfb_imaging_available(),
     reason="pfb-imaging package not found at ~/software/pfb-imaging",
@@ -114,7 +114,7 @@ def test_pfb_imaging_roundtrip(module_name):
             generate_function(
                 original_cab_file,
                 output_file=generated_file,
-                config_file=Path("pyproject.toml"),  # Use hip-cargo's ruff config
+                config_file=PFB_IMAGING_CONFIG,
             )
         except Exception as e:
             pytest.fail(f"Failed to regenerate function for {module_name}: {e}")
@@ -129,8 +129,23 @@ def test_pfb_imaging_roundtrip(module_name):
         except SyntaxError as e:
             pytest.fail(f"Generated code for {module_name} has syntax error: {e}")
 
+        # Step 4: Compare generated code with original CLI module
+        original_code = original_file.read_text()
+        original_lines = original_code.splitlines()
+        generated_lines = generated_code.splitlines()
 
-@pytest.mark.skip(reason="Features pending")
+        assert len(original_lines) == len(generated_lines), (
+            f"Line count mismatch for {module_name}: "
+            f"original has {len(original_lines)} lines, "
+            f"generated has {len(generated_lines)} lines"
+        )
+
+        for i, (orig_line, gen_line) in enumerate(zip(original_lines, generated_lines), 1):
+            assert orig_line == gen_line, (
+                f"Line {i} differs for {module_name}:\n  Original:  {orig_line}\n  Generated: {gen_line}"
+            )
+
+
 @pytest.mark.skipif(
     not check_pfb_imaging_available(),
     reason="pfb-imaging package not found at ~/software/pfb-imaging",

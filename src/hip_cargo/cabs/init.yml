@@ -1,0 +1,64 @@
+cabs:
+  init:
+    flavour: python
+    command: hip_cargo.core.init.init
+    image: ghcr.io/landmanbester/hip-cargo:initcmd
+    name: init
+    info:
+      Initialize a new hip-cargo project with scaffolding and Stimela cab support.
+    inputs:
+      project-name:
+        info:
+          Hyphenated project name (e.g.
+          my-project).
+        required: true
+        policies:
+          positional: true
+      github-user:
+        info:
+          GitHub username or organization.
+        required: true
+        policies:
+          positional: true
+      description:
+        info:
+          Short project description.
+        default: A Python project
+      author-name:
+        info:
+          Author name (auto-detected from git config if omitted).
+      author-email:
+        info:
+          Author email (auto-detected from git config if omitted).
+      cli-command:
+        info:
+          CLI entry point name (derived from project-name if omitted).
+      initial-version:
+        info:
+          Starting version string.
+        default: 0.0.0
+      license-type:
+        info:
+          License type.
+        choices:
+        - MIT
+        - Apache-2.0
+        - BSD-3-Clause
+        default: MIT
+      cli-mode:
+        info:
+          CLI mode: single (one command) or multi (subcommands).
+        choices:
+        - single
+        - multi
+        default: multi
+      default-branch:
+        info:
+          Default git branch name.
+        default: main
+    outputs:
+      project-dir:
+        dtype: Directory
+        info:
+          Output directory for the generated project.
+        must_exist: true

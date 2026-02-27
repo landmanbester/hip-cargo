@@ -29,27 +29,43 @@
 ```
 hip-cargo/
 ├── src/hip_cargo/
-│   ├── __init__.py           # Exports decorators
+│   ├── __init__.py           # Exports decorators, list types, and parsers
 │   ├── cabs/                 # Generated cab definitions (YAML)
 │   │   ├── __init__.py
 │   │   ├── generate_cabs.yml
-│   │   └── generate_function.yml
+│   │   ├── generate_function.yml
+│   │   └── init.yml
 │   ├── cli/                  # Lightweight CLI wrappers
 │   │   ├── __init__.py       # Main Typer app, registers commands
 │   │   ├── generate_cabs.py
-│   │   └── generate_function.py
+│   │   ├── generate_function.py
+│   │   └── init.py           # hip-cargo init command
 │   ├── core/                 # Core implementations (lazy-loaded)
 │   │   ├── __init__.py
 │   │   ├── generate_cabs.py
-│   │   └── generate_function.py
+│   │   ├── generate_function.py
+│   │   └── init.py           # Project scaffolding logic
 │   ├── recipes/              # Stimela recipes for running via stimela
 │   │   ├── __init__.py
 │   │   └── gen_cabs.yml
+│   ├── templates/            # Template files for hip-cargo init
+│   │   ├── __init__.py
+│   │   ├── cli_multi.py      # Multi-command CLI template
+│   │   ├── cli_single.py     # Single-command CLI template
+│   │   ├── Dockerfile
+│   │   ├── generate_cabs.py  # Template generate_cabs script
+│   │   ├── onboard_cli.py    # Onboard command CLI template
+│   │   ├── onboard_core.py   # Onboard command core template
+│   │   ├── pyproject.toml
+│   │   ├── tbump.toml
+│   │   ├── licenses/         # MIT, Apache-2.0, BSD-3-Clause
+│   │   └── workflows/        # GitHub Actions workflow templates
 │   └── utils/                # Shared utilities
 │       ├── __init__.py
 │       ├── cab_to_function.py   # Generate function from cab YAML
 │       ├── decorators.py        # @stimela_cab, @stimela_output
-│       └── introspector.py      # Extract metadata from functions
+│       ├── introspector.py      # Extract metadata from functions
+│       └── types.py             # ListInt, ListFloat, ListStr NewTypes + parsers
 ├── scripts/                  # Automation scripts
 │   └── generate_cabs.py
 ├── tests/
@@ -73,6 +89,9 @@ uv run ruff check . --fix
 
 # Run tests
 python -m pytest tests/ -v
+
+# Run the CLI
+hip-cargo --help
 ```
 
 ### Test Infrastructure
@@ -189,7 +208,22 @@ hip-cargo currently supports:
 - Automatic sanitization of parameter names (hyphens → underscores)
 - F-string reference sanitization in output definitions
 - **Comment preservation**: Full roundtrip preservation of inline comments (e.g., `# noqa: E501`)
-- **Stimela metadata dictionary**: Optional `{"stimela": {...}}` dict in `Annotated` type hints for explicit dtype overrides and Stimela-specific fields
+- **Comma-separated list types**: `ListInt`, `ListFloat`, `ListStr` NewTypes with built-in parsers for `List[int]`, `List[float]`, `List[str]` Stimela dtypes (see `utils/types.py`)
+- **Stimela metadata dictionary**: Optional `{"stimela": {...}}` dict in `Annotated` type hints for Stimela-specific fields (must_exist, mkdir, custom policies, etc.)
+- **Project scaffolding**: `hip-cargo init` creates a complete project with CI/CD, containerisation, pre-commit hooks, and an onboarding command
+
+### Init Command (`hip-cargo init`)
+
+Scaffolds a new project with:
+- src layout with `cli/`, `core/`, `cabs/` directories
+- GitHub Actions workflows (CI, publish, container, update-cabs)
+- Pre-commit hooks (ruff + cab generation)
+- Dockerfile, tbump config, license
+- An `onboard` command that prints CI/CD setup instructions
+
+Templates live in `src/hip_cargo/templates/` and use `<PLACEHOLDER>` substitution (e.g. `<PROJECT_NAME>`, `<PACKAGE_NAME>`, `<GITHUB_USER>`).
+
+Post-generation steps in `core/init.py`: `uv sync` → `pytest` → `hip-cargo generate-cabs` → `ruff format/check` → `git init/add/commit` → `pre-commit install`.
 
 ## Implementation Details
 
@@ -215,9 +249,38 @@ The project uses [LibCST](https://libcst.readthedocs.io/) (Concrete Syntax Tree)
 - Multi-line info fields format each sentence on a new line, comment on last line
 - `format_info_fields()` ensures proper YAML formatting with comment preservation
 
-### Stimela Metadata Dictionary (Recommended for Dtype Overrides)
+### Comma-separated List Types (ListInt, ListFloat, ListStr)
 
-Input parameters can optionally include a `stimela` metadata dict in their `Annotated` type hints to specify Stimela-specific cab metadata that can't be inferred from type hints or typer.Option(). This is the **recommended and current way** to override dtypes and add Stimela-specific fields:
+Typer/Click cannot handle variable-length lists as a single option value. `hip-cargo` provides dedicated `NewType` wrappers with paired parser functions in `utils/types.py`:
+
+```python
+from hip_cargo.utils.types import ListInt, parse_list_int
+
+def my_func(
+    channels: Annotated[
+        ListInt,
+        typer.Option(parser=parse_list_int, help="Channel indices"),
+    ],
+):
+    # channels is already list[int] at runtime
+    ...
+```
+
+**How it works:**
+- `ListInt`/`ListFloat`/`ListStr` wrap `str` (Typer sees a single string argument)
+- Parsers (`parse_list_int`, etc.) run at the Click level, so the function receives `list[int]` directly
+- The introspector maps `ListInt` → `List[int]` stimela dtype via `_dtype_to_str_from_string()`
+- The reverse generator maps `List[int]` dtype → `ListInt` type + `parse_list_int` parser
+- No stimela metadata dict needed — dtype is inferred from the NewType name
+- No manual comma-splitting code is generated in the function body
+
+**Mappings (in `cab_to_function.py`):**
+- `STIMELA_DTYPE_TO_LIST_TYPE`: `{"List[int]": "ListInt", "List[float]": "ListFloat", "List[str]": "ListStr"}`
+- `LIST_TYPE_PARSERS`: `{"ListInt": "parse_list_int", ...}`
+
+### Stimela Metadata Dictionary
+
+Input parameters can optionally include a `stimela` metadata dict in their `Annotated` type hints to specify Stimela-specific cab metadata that can't be inferred from type hints or typer.Option():
 
 **Syntax:**
 ```python
@@ -259,7 +322,7 @@ def process_data(
 - **Full roundtrip**: CLI → YAML → CLI preserves all stimela metadata
 
 **Handled automatically (don't need stimela dict):**
-- `dtype`: Inferred from type hint (File, Directory, str, int, etc.)
+- `dtype`: Inferred from type hint (File, Directory, str, int, ListInt, ListFloat, ListStr, etc.)
 - `required`: Inferred from `...` vs default value
 - `default`: From function default value
 - `info`: From typer.Option(help="...")
@@ -268,11 +331,10 @@ def process_data(
 - `policies.repeat`: Auto-added for List types
 
 **When to use stimela dict:**
-- Override dtype (e.g., Path → Directory, or str → List[int] for comma-separated values)
+- Override dtype (e.g., Path → Directory)
 - Add Stimela-specific fields: `must_exist`, `mkdir`, `implicit`
 - Add custom policies: `io`, `skip`, `copy_to_output`
 - Add arbitrary metadata for future Stimela features
-- **Note**: For List[int] and List[float] dtypes, the type hint should be `str` (for comma-separated input) and the stimela dict should specify `{"stimela": {"dtype": "List[int]"}}` to preserve the dtype during roundtrip
 
 **Implementation:**
 - Parsed by `extract_stimela_metadata_libcst()` in `introspector.py`
@@ -303,6 +365,10 @@ param: Annotated[str | None, typer.Option(help="...")] = None
 - All parameter names: hyphens → underscores (`model-name` → `model_name`)
 - F-string references in outputs: `{current.output-filename}` → `{current.output_filename}`
 - This is handled automatically by `cab_to_function.py`
+
+### Ruff Working Directory in `generate_function`
+
+`generate_function()` runs ruff via subprocess to format generated code. Ruff infers first-party packages from the working directory, which affects import grouping. When a `config_file` is provided, ruff is run from the config file's parent directory (`cwd=config_file.parent`) so that first-party detection matches the target project. This is critical for roundtrip tests against external projects like pfb-imaging where `hip_cargo` is a third-party import.
 
 ### Lazy Imports Pattern
 

@@ -38,17 +38,18 @@ uv run pre-commit install
 ## Quick Start
 The following instructions provide a guide on how to structure a package for use with `hip-cargo`.
 Note that `hip-cargo` itself follows exactly this structure and will be used as the running example throughout.
-It provides two utility functions viz.
+It provides three utility functions viz.
 
 * `generate-cabs`: Generate cabs from Typer CLI definitions.
 * `generate-function`: Generate a Typer CLI definition from a cab.
+* `init`: Initialize and new project.
 
 By default, `hip-cargo` installs a lightweight version of the package that only provides the CLI and the cab definitions required for using the linked container image with `stimela`.
-Upon installation, an executable called `cargo` is added to the `PATH`.
-`cargo` is a Typer command group containing multiple commands.
+Upon installation, an executable called `hip-cargo` is added to the `PATH`.
+`hip-cargo` is a Typer command group containing multiple commands.
 Available commands can be listed using
 ```bash
-cargo --help
+hip-cargo --help
 ```
 This should print something like the following
 
@@ -56,7 +57,7 @@ This should print something like the following
 
 Documentation on each individual command can be obtained by calling help for the command e.g.
 ```bash
-cargo generate-cabs --help
+hip-cargo generate-cabs --help
 ```
 The full package should be available as a container image on the [GitHub Container Registry](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry).
 The `Dockerfile` for the project should install the full package, not the lightweight version.
@@ -71,6 +72,65 @@ The following versioning schema is proposed:
 This can all be automated with pre-commit hooks and GitHub actions.
 Use pre-commit hooks to auto-generate cab definitions on each commit.
 See the [publish-container](./.github/workflows/publish-container.yml) workflow for an example of how to set up GitHub Actions for automation.
+We distinguish between two cases viz. initialising a project from scratch or converting an existing project.
+
+### Using `hip-cargo` to initialise a project
+
+The `hip-cargo init` command scaffolds a complete project with CI/CD pipelines, containerisation, pre-commit hooks, and Stimela cab support. Run it with:
+
+```bash
+hip-cargo init --project-name my-project --github-user myuser
+```
+
+This creates a ready-to-use project directory with:
+
+- **src layout** with separate `cli/`, `core/`, and `cabs/` directories
+- **pyproject.toml** (PEP 621 compliant) with `uv` as the build backend
+- **GitHub Actions workflows** for CI, PyPI publishing, container publishing, and automated cab updates
+- **Pre-commit hooks** for ruff formatting/linting and automatic cab regeneration
+- **Dockerfile** for building container images uploaded to GitHub Container Registry
+- **tbump configuration** with hooks for version bumping and cab regeneration
+- **License file** (MIT, Apache-2.0, or BSD-3-Clause)
+- **An `onboard` command** that prints step-by-step instructions for completing CI/CD setup
+
+The generated project includes an `onboard` command that guides you through the remaining setup steps:
+
+```bash
+cd my-project
+uv run my_project onboard
+```
+
+This prints instructions for:
+
+1. Creating a GitHub repository (with `gh` CLI)
+2. Setting up PyPI trusted publishing (OIDC, no API keys needed)
+3. Creating a GitHub environment for publishing
+4. Creating a GitHub App for automated cab update commits
+5. Configuring branch protection with the App in the bypass list
+6. Making your first release with `tbump`
+
+Once setup is complete, you can delete the onboard command and start adding your own commands following the same pattern.
+
+#### Init options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--project-name` | *required* | Hyphenated project name (e.g. `my-project`) |
+| `--github-user` | *required* | GitHub username or organisation |
+| `--description` | `"A Python project"` | Short project description |
+| `--author-name` | *from git config* | Author name |
+| `--author-email` | *from git config* | Author email |
+| `--cli-command` | *from project name* | CLI entry point name |
+| `--initial-version` | `0.0.0` | Starting version string |
+| `--license-type` | `MIT` | License (MIT, Apache-2.0, BSD-3-Clause) |
+| `--cli-mode` | `multi` | `single` (one command) or `multi` (subcommands) |
+| `--default-branch` | `main` | Default git branch name |
+| `--project-dir` | `./<project-name>/` | Output directory |
+
+### Transitioning an existing package
+
+To transition an existing package that already contains `stimela` cab definitions, it is probably easiest to manually create the required directory structure (see below) and to use the `generate-function` command to convert your cabs into CLI definitions. Do this for each cab separately and register the relevant commands in your CLI module's `__init__.py`. You might want to take a look at the [template](src/hip_cargo/templates/) files and copy the necessary files across (or initialize a new blank project and just use those). This is currently a manual process, we might add an automation script (or skill) to do this in the future. Further details are provided below.
+
 
 ## Package Structure
 
@@ -84,7 +144,8 @@ hip-cargo/
 │   └── workflows
 │       ├── ci.yml
 │       ├── publish-container.yml
-│       └── publish.yml
+│       ├── publish.yml
+│       └── update-cabs.yml
 ├── scripts                      # Automation scripts
 │   └── generate_cabs.py
 ├── src
@@ -108,7 +169,8 @@ hip-cargo/
 │           ├── __init__.py
 │           ├── cab_to_function.py
 │           ├── decorators.py
-│           └── introspector.py
+│           ├── introspector.py
+│           └── types.py         # ListInt, ListFloat, ListStr NewTypes + parsers
 ├── tests
 │   ├── __init__.py
 │   └── conftest.py
@@ -118,12 +180,11 @@ hip-cargo/
 ├── .gitignore                   # make sure your .lock file is not ignored
 ├── pyproject.toml               # PEP 621 compliant
 ├── tbump.toml                   # this makes releases so much easier
-└── README.md                    # We are going to put all the docs in the project README's :no_mouth:
+└── README.md                    # project README
 
 ```
-With this in place, we are ready to start.
 
-### 1. Decorate your Python CLI
+## Python CLI
 
 `uv` expects your modules to live in `src/mypackage/`.
 As an example, let's see what the `generate-cabs` command looks like
@@ -135,7 +196,7 @@ from typing import Annotated, NewType
 
 import typer
 
-from hip_cargo.utils.decorators import stimela_cab, stimela_output
+from hip_cargo import stimela_cab, stimela_output
 
 Directory = NewType("Directory", Path)
 File = NewType("File", Path)
@@ -200,7 +261,7 @@ For `hip-cargo`, this is what it looks like
 import typer
 
 app = typer.Typer(
-    name="cargo",
+    name="hip-cargo",
     help="Tools for generating Stimela cab definitions from Python functions",
     no_args_is_help=True,
 )
@@ -215,9 +276,11 @@ def callback():
 # Register commands
 from hip_cargo.cli.generate_cabs import generate_cabs  # noqa: E402
 from hip_cargo.cli.generate_function import generate_function  # noqa: E402
+from hip_cargo.cli.init import init  # noqa: E402
 
 app.command(name="generate-cabs")(generate_cabs)
 app.command(name="generate-function")(generate_function)
+app.command(name="init")(init)
 
 __all__ = ["app"]
 ```
@@ -226,7 +289,7 @@ __all__ = ["app"]
 So we have two commands registered.
 That's all we'll need for this demo.
 
-## 2 Packaging
+## Packaging
 This is one of the core design principles.
 The package `pyproject.toml` needs to be PEP 621 compliant, and it needs to enable a lightweight mode by default but also specify what the full dependencies are.
 For `hip-cargo`, it looks like the following:
@@ -235,7 +298,7 @@ For `hip-cargo`, it looks like the following:
 ```python
 [project]
 name = "hip-cargo"
-version = "0.1.2"
+version = "0.1.3"
 description = "Tools for generating Stimela cab definitions from Python functions"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -270,7 +333,7 @@ Repository = "https://github.com/landmanbester/hip-cargo"
 "Bug Tracker" = "https://github.com/landmanbester/hip-cargo/issues"
 
 [project.scripts]
-cargo = "hip_cargo.cli:app"
+hip-cargo = "hip_cargo.cli:app"
 
 [build-system]
 requires = ["uv_build>=0.8.3,<0.11.0"]
@@ -279,6 +342,7 @@ build-backend = "uv_build"
 [tool.ruff]
 line-length = 120
 target-version = "py310"
+extend-exclude = ["src/hip_cargo/templates"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W"]
@@ -345,7 +409,7 @@ COPY src/ src/
 RUN uv pip install --system --no-cache .
 
 # Make CLI available
-CMD ["cargo", "--help"]
+CMD ["hip-cargo", "--help"]
 ```
 
 ### 2. Automate Cab Creation and Containerisation
@@ -360,12 +424,12 @@ repos:
         name: Generate Stimela cab definitions
         entry: python scripts/generate_cabs.py
         language: system
-        files: ^src/hip_cargo/cli/.*\.py$
+        always_run: true
         pass_filenames: false
         stages: [pre-commit]
 ```
 This uses [this script](./scripts/generate_cabs.py) to generate cabs for all commands defined in your CLI module.
-You should be able reuse the GitHub action for `hip-cargo` in `.github/workflows/update-cabs-and-publish.yml` to automate container creation for your project.
+You should be able reuse the GitHub action for `hip-cargo` in `.github/workflows/update-cabs.yml` to automate container creation for your project.
 The basic idea is to validate your cab definitions and then to build and push the container to the GHCR.
 The workflow will tag the container with the branch name if there is an open PR to your default branch.
 Once the PR is merged, an action is triggered to update the image name in the cab definitions and push a `latest` version to GHCR.
@@ -407,7 +471,6 @@ If the lightweight version if the package is installed it should be possible to 
 stimela run 'mypackage.recipes::killer_recipe.yml' recipe_name option1=option1...
 ```
 
-
 ## Type Inference
 
 `hip-cargo` automatically recognizes custom `stimela` types.
@@ -442,11 +505,65 @@ Note that the order is important if you want to implement a [roundtrip test](tes
 
 ## Features
 
-- ✅ Automatic type inference from Python type hints
-- ✅ Support for Typer Arguments (positional) and Options
-- ✅ Multiple outputs automatically added to function signature if they are not implicit
-- ✅ List types with automatic `repeat: list` policy
-- ✅ Proper handling of default values and required parameters
+- Automatic type inference from Python type hints
+- Support for Typer Arguments (positional) and Options
+- Multiple outputs automatically added to function signature if they are not implicit
+- List types with automatic `repeat: list` policy
+- First-class comma-separated list types (`ListInt`, `ListFloat`, `ListStr`) with built-in parsers
+- Proper handling of default values and required parameters
+- Full roundtrip preservation of inline comments (e.g., `# noqa: E501`)
+- Optional `{"stimela": {...}}` metadata dict in `Annotated` type hints for Stimela-specific fields
+- Project scaffolding with `hip-cargo init` including CI/CD, containerisation, and onboarding
+
+## Quirks
+
+### Comma-separated list types (`ListInt`, `ListFloat`, `ListStr`)
+
+Typer (and Click underneath it) does not support variable-length lists as a single CLI option value.
+For example, `--channels 1,2,3` cannot be directly typed as `list[int]` because Click sees the entire `1,2,3` as one string argument.
+
+The standard Typer workaround is to repeat the flag (`--channel 1 --channel 2 --channel 3`), which maps to `list[int]` with Typer's `repeat` mechanism.
+However, this is inconvenient for parameters that naturally take comma-separated values and results in a CLI interface that is different from the `stimela` interface.
+
+`hip-cargo` solves this with dedicated `NewType` wrappers defined in `hip_cargo.utils.types`:
+
+```python
+from hip_cargo.utils.types import ListInt, parse_list_int
+
+@stimela_cab(...)
+def my_func(
+    channels: Annotated[
+        ListInt,
+        typer.Option(parser=parse_list_int, help="Channel indices"),
+    ],
+):
+    # channels is already list[int] at runtime — no manual splitting needed
+    ...
+```
+
+- `ListInt`, `ListFloat`, and `ListStr` wrap `str` (so Typer sees a single string argument)
+- Paired parser functions (`parse_list_int`, `parse_list_float`, `parse_list_str`) handle comma-splitting at the Click level, so the function body receives the already-parsed list
+- The introspector maps these types to the correct Stimela dtypes (`List[int]`, `List[float]`, `List[str]`)
+- The reverse generator (`generate-function`) automatically uses these types when it encounters a `List[int]`/`List[float]`/`List[str]` dtype in a cab YAML
+
+### Custom Stimela types via `NewType`
+
+Stimela has its own type system (`File`, `Directory`, `MS`, `URI`) that doesn't map 1:1 to Python types.
+We use `typing.NewType` to create thin wrappers around `Path`:
+
+```python
+from typing import NewType
+File = NewType("File", Path)
+```
+
+These NewTypes serve double duty: they're valid Python type hints for Typer, and `hip-cargo` introspects the name to produce the correct Stimela dtype in the cab YAML.
+For `File` and `Directory` types, you also need `parser=Path` in the `typer.Option()` so Click knows how to parse the string argument.
+
+### Ruff formatting and `config_file`
+
+The `generate-function` command runs `ruff check --fix` and `ruff format` on generated code.
+Ruff infers first-party packages from the working directory, which affects import grouping (e.g., whether `import typer` and `from hip_cargo...` get a blank line between them).
+When a `--config-file` is provided, `hip-cargo` runs ruff from the config file's parent directory so that first-party detection matches the target project rather than wherever `hip-cargo` happens to be invoked from.
 
 ## Development
 
@@ -456,7 +573,7 @@ This project uses:
 - [typer](https://typer.tiangolo.com/) for the CLI
 
 
-### Setting Up Development Environment (Incomplete below)
+### Setting Up Development Environment
 
 ```bash
 # Clone the repository
@@ -513,7 +630,7 @@ uv run pytest -v
 
 1. **Create a feature branch**:
    ```bash
-   git checkout -b feature/your-feature-name
+   git checkout -b your-feature-name
    ```
 
 2. **Make your changes** and ensure tests pass:
@@ -530,7 +647,7 @@ uv run pytest -v
 
 4. **Push and create a pull request**:
    ```bash
-   git push origin feature/your-feature-name
+   git push origin your-feature-name
    ```
 
 ## License

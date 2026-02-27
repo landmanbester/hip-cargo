@@ -23,13 +23,14 @@ src/hip_cargo/
 ├── cli/           # Lightweight CLI wrappers (lazy imports only)
 ├── core/          # Core implementations (heavy dependencies here)
 ├── cabs/          # Generated YAML cab definitions (git-tracked, auto-updated)
-├── utils/         # Shared utilities (decorators, introspection, conversion)
+├── utils/         # Shared utilities (decorators, introspection, conversion, types)
+│   └── types.py   # ListInt, ListFloat, ListStr NewTypes + parsers
 └── recipes/       # Stimela recipes for running via stimela
 ```
 
 **Key separation**: CLI modules must stay lightweight. Import heavy dependencies inside function bodies, not at module level. This enables fast CLI startup and lightweight installations.
 
-**Entry point**: `cargo` command (see `pyproject.toml` `[project.scripts]`)
+**Entry point**: `hip-cargo` command (see `pyproject.toml` `[project.scripts]`)
 
 ## Critical Patterns
 
@@ -59,7 +60,29 @@ Stimela cabs use hyphens (`model-name`), but Python requires underscores (`model
 - F-string references in outputs: `{current.output-filename}` → `{current.output_filename}`
 - Handled by `src/hip_cargo/utils/cab_to_function.py`
 
-### 4. Lazy Import Pattern
+### 4. Comma-separated List Types
+
+Typer/Click can't handle variable-length lists as a single option value. `hip-cargo` provides `ListInt`, `ListFloat`, `ListStr` NewTypes in `utils/types.py` with paired parser functions:
+
+```python
+from hip_cargo.utils.types import ListInt, parse_list_int
+
+channels: Annotated[
+    ListInt,
+    typer.Option(parser=parse_list_int, help="Channel indices"),
+]
+# channels is list[int] at runtime — no manual splitting
+```
+
+- Introspector maps `ListInt` → `List[int]` stimela dtype
+- Reverse generator maps `List[int]` dtype → `ListInt` + `parse_list_int`
+- No stimela metadata dict or manual comma-splitting code needed
+
+### 5. Ruff Working Directory
+
+`generate_function()` runs ruff with `cwd=config_file.parent` so first-party package detection matches the target project, not wherever hip-cargo is invoked from. This is critical for roundtrip correctness against external projects.
+
+### 6. Lazy Import Pattern
 
 ```python
 # In cli/mycommand.py
@@ -109,6 +132,7 @@ uv run ruff check . --fix
 - `src/hip_cargo/utils/decorators.py`: `@stimela_cab`, `@stimela_output` decorators
 - `src/hip_cargo/utils/introspector.py`: LibCST-based metadata extraction (comment-preserving)
 - `src/hip_cargo/utils/cab_to_function.py`: Reverse generation (YAML → Python)
+- `src/hip_cargo/utils/types.py`: `ListInt`, `ListFloat`, `ListStr` NewTypes and parser functions
 - `src/hip_cargo/core/generate_cabs.py`: Core cab generation logic
 - `CLAUDE.md`: Extended philosophy and anti-patterns
 
