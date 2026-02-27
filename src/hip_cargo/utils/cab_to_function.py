@@ -5,6 +5,27 @@ from typing import Any, Optional
 # Custom Stimela types that need NewType declarations
 CUSTOM_STIMELA_TYPES = {"File", "Directory", "MS", "URI"}
 
+# Mapping from stimela dtype to ListType NewType name
+STIMELA_DTYPE_TO_LIST_TYPE = {
+    "List[int]": "ListInt",
+    "List[float]": "ListFloat",
+    "List[str]": "ListStr",
+}
+
+# Mapping from ListType name to parser function name
+LIST_TYPE_PARSERS = {
+    "ListInt": "parse_list_int",
+    "ListFloat": "parse_list_float",
+    "ListStr": "parse_list_str",
+}
+
+# Mapping from ListType name to stimela dtype
+CUSTOM_LIST_TYPES = {
+    "ListInt": "List[int]",
+    "ListFloat": "List[float]",
+    "ListStr": "List[str]",
+}
+
 
 def extract_trailing_comment(text: str) -> tuple[str, str]:
     """
@@ -259,12 +280,11 @@ def generate_parameter_signature(
     default = param_def.get("default")
     choices = param_def.get("choices")
 
-    # Check if this needs comma-separated conversion (List[int] or List[float])
-    # These are passed as comma-separated strings, not actual lists
-    # The dtype is preserved in the stimela metadata dict for roundtrip
-    needs_comma_conversion = dtype in ["List[int]", "List[float]"]
-    if needs_comma_conversion:
-        py_type = "str"
+    # Check if this is a comma-separated list type (List[int], List[float], List[str])
+    # These use dedicated ListType NewTypes with parser functions
+    list_type_name = STIMELA_DTYPE_TO_LIST_TYPE.get(dtype)
+    if list_type_name:
+        py_type = list_type_name
     else:
         # Determine Python type normally
         py_type = stimela_dtype_to_python_type(dtype, preserve_custom=True)
@@ -325,16 +345,23 @@ def generate_parameter_signature(
     lines_out.append(f"    {py_param_name}: Annotated[")
     lines_out.append(f"        {py_type},")
 
+    # Determine parser: list types use their own parser, custom types use Path
+    parser_str = None
+    if list_type_name:
+        parser_str = LIST_TYPE_PARSERS[list_type_name]
+    elif needs_parser:
+        parser_str = "Path"
+
     # Build typer.Option with arguments on separate lines
     if required:
         lines_out.append("        typer.Option(")
         lines_out.append("            ...,")
-        if needs_parser:
-            lines_out.append("            parser=Path,")
+        if parser_str:
+            lines_out.append(f"            parser={parser_str},")
     else:
         lines_out.append("        typer.Option(")
-        if needs_parser:
-            lines_out.append("            parser=Path,")
+        if parser_str:
+            lines_out.append(f"            parser={parser_str},")
 
     # Add help text (handle multi-line info)
     if has_newlines:
@@ -384,10 +411,12 @@ def generate_parameter_signature(
 
     # Check if dtype needs explicit override (can't be inferred from type hint alone)
     # This happens when the type hint is generic (like str or Path) but dtype is specific (like File)
-    if dtype not in ["str", "int", "float", "bool"]:
-        # Normalize comparison: list[X] and List[X] are equivalent (Python 3.9+)
-        normalized_py_type = py_type.replace("list[", "List[")
-        normalized_dtype = dtype.replace("list[", "List[")
+    # Skip for ListType NewTypes — their dtype is inferred from the type name
+    if dtype not in ["str", "int", "float", "bool"] and not list_type_name:
+        # Normalize comparison: lowercase generics (list, tuple, dict) are equivalent
+        # to their capitalized forms (List, Tuple, Dict) since Python 3.9+
+        normalized_py_type = py_type.replace("list[", "List[").replace("tuple[", "Tuple[").replace("dict[", "Dict[")
+        normalized_dtype = dtype.replace("list[", "List[").replace("tuple[", "Tuple[").replace("dict[", "Dict[")
 
         # Check if the actual dtype differs from what we'd infer from py_type
         if normalized_py_type != normalized_dtype and not uses_literal:
@@ -454,27 +483,6 @@ def generate_function_body(cab_def: dict[str, Any], inputs: dict[str, Any], outp
     lines.append(f"    from {import_path} import {func_name} as {func_name}_core  # noqa: E402")
     lines.append("")
 
-    # Detect and convert comma-separated string parameters
-    # Check dtype field for List[int] or List[float]
-    comma_sep_conversions = []
-    for param_name, param_def in inputs.items():
-        dtype = param_def.get("dtype", "str")
-
-        # Check if this parameter needs comma-separated conversion
-        if dtype in ["List[int]", "List[float]"]:
-            element_type = dtype[5:-1]  # Extract type from List[type]
-            py_param_name = param_name.replace("-", "_")
-            var_name = f"{py_param_name}_list"
-
-            # Generate conversion code
-            lines.append(f"    # Parse {py_param_name} if provided as comma-separated string")
-            lines.append(f"    {var_name} = None")
-            lines.append(f"    if {py_param_name} is not None:")
-            lines.append(f'        {var_name} = [{element_type}(x.strip()) for x in {py_param_name}.split(",")]')
-            lines.append("")
-
-            comma_sep_conversions.append((py_param_name, var_name))
-
     # Generate the function call
     lines.append("    # Call the core function with all parameters")
     lines.append(f"    {func_name}_core(")
@@ -488,21 +496,12 @@ def generate_function_body(cab_def: dict[str, Any], inputs: dict[str, Any], outp
         py_param_name = param_name.replace("-", "_")
         is_required = param_def.get("required", False)
 
-        # Check if this parameter was converted
-        converted_name = None
-        for orig_name, converted in comma_sep_conversions:
-            if orig_name == py_param_name:
-                converted_name = converted
-                break
-
-        param_value = converted_name if converted_name else py_param_name
-
         if is_required:
             # Required parameters are passed positionally (no keyword)
-            positional_params.append(f"        {param_value},")
+            positional_params.append(f"        {py_param_name},")
         else:
             # Optional parameters are passed as keyword arguments
-            keyword_params.append(f"        {py_param_name}={param_value},")
+            keyword_params.append(f"        {py_param_name}={py_param_name},")
 
     # Add output parameters (positional if they have positional policy, otherwise keyword)
     for output_name, output_def in outputs.items():
