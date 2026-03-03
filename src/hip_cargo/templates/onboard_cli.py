@@ -1,4 +1,4 @@
-from hip_cargo.utils.decorators import stimela_cab
+from hip_cargo import stimela_cab
 
 
 @stimela_cab(

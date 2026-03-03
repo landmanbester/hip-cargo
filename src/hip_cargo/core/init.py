@@ -42,14 +42,16 @@ def init(
         project_dir: Output directory (defaults to ./<project_name>/).
     """
     # Derive values
-    package_name = project_name.replace("-", "_")
+    project_name = Path(project_name).expanduser().resolve()
+    package_name = project_name.name.replace("-", "_")
+    if project_dir is None:
+        project_dir = project_name
+    if not isinstance(project_dir, Path):
+        project_dir = Path(project_dir).expanduser().resolve()
+    project_name = project_name.name  # Use the final directory name as the project name
     github_url = f"https://github.com/{github_user}/{project_name}"
     if cli_command is None:
-        cli_command = project_name.replace("-", "_")
-    if project_dir is None:
-        project_dir = Path(project_name)
-    if not isinstance(project_dir, Path):
-        project_dir = Path(project_dir)
+        cli_command = project_name
     license_classifier = LICENSE_CLASSIFIERS.get(license_type, LICENSE_CLASSIFIERS["MIT"])
     year = str(datetime.datetime.now().year)
 
@@ -211,7 +213,7 @@ def init(
     )
     _run_command(["uv", "run", "ruff", "format", "."], cwd=project_dir)
     _run_command(["uv", "run", "ruff", "check", ".", "--fix"], cwd=project_dir)
-    _run_command(["git", "init", "-b", default_branch], cwd=project_dir)
+    _git_init(default_branch, cwd=project_dir)
     _run_command(["git", "config", "user.name", author_name], cwd=project_dir)
     _run_command(["git", "config", "user.email", author_email], cwd=project_dir)
     _run_command(["git", "add", "."], cwd=project_dir)
@@ -261,6 +263,16 @@ def _get_git_config(key: str) -> str | None:
         return result.stdout.strip() or None
     except subprocess.CalledProcessError:
         return None
+
+
+def _git_init(branch: str, cwd: Path) -> None:
+    """Initialise a git repo, falling back for old git without -b flag."""
+    print(f"  Running: git init -b {branch}")
+    result = subprocess.run(["git", "init", "-b", branch], cwd=cwd, capture_output=True, text=True)
+    if result.returncode != 0:
+        # Git < 2.28 doesn't support -b; init then rename the branch
+        _run_command(["git", "init"], cwd=cwd)
+        _run_command(["git", "checkout", "-b", branch], cwd=cwd)
 
 
 def _run_command(cmd: list[str], cwd: Path) -> None:

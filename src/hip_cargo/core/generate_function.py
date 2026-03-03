@@ -7,6 +7,8 @@ from pathlib import Path
 import yaml
 
 from hip_cargo.utils.cab_to_function import (
+    LIST_TYPE_PARSERS,
+    STIMELA_DTYPE_TO_LIST_TYPE,
     extract_custom_types,
     extract_trailing_comment,
     generate_function_body,
@@ -121,6 +123,14 @@ def generate_function(cab_file: Path, output_file: Path, config_file: Path | Non
         if not implicit_value and output_name_sanitized not in input_names_sanitized:
             explicit_outputs[output_name] = output_def
 
+    # Detect which ListType NewTypes are needed
+    all_params = {**inputs, **outputs}
+    list_types_used = set()
+    for param_def in all_params.values():
+        dtype = param_def.get("dtype", "str")
+        if dtype in STIMELA_DTYPE_TO_LIST_TYPE:
+            list_types_used.add(STIMELA_DTYPE_TO_LIST_TYPE[dtype])
+
     # Start building the function
     lines = []
 
@@ -129,11 +139,18 @@ def generate_function(cab_file: Path, output_file: Path, config_file: Path | Non
     if uses_literal:
         lines.append("from typing import Annotated, Literal, NewType")
     else:
-        lines.append("from typing import Annotated, NewType")
+        typing_imports = ["Annotated"]
+        if custom_types:
+            typing_imports.append("NewType")
+        lines.append(f"from typing import {', '.join(sorted(typing_imports))}")
     lines.append("")
     lines.append("import typer")
-    lines.append("")
-    lines.append("from hip_cargo.utils.decorators import stimela_cab, stimela_output")
+
+    # Build a single import line from hip_cargo with decorators + list types
+    hip_cargo_imports = sorted(list_types_used) + sorted(LIST_TYPE_PARSERS[t] for t in list_types_used)
+    hip_cargo_imports.extend(["stimela_cab", "stimela_output"])
+    lines.append(f"from hip_cargo import {', '.join(hip_cargo_imports)}")
+
     lines.append("")
 
     # Add NewType declarations for custom types
@@ -343,9 +360,12 @@ def generate_function(cab_file: Path, output_file: Path, config_file: Path | Non
     # 2. Prepare the Formatter command
     format_cmd = ["ruff", "format", "--stdin-filename", "generated.py", "-"]
 
+    # Run ruff from the config file's directory so it infers first-party imports correctly
+    ruff_cwd = None
     if config_file:
         check_cmd.extend(["--config", str(config_file)])
         format_cmd.extend(["--config", str(config_file)])
+        ruff_cwd = str(Path(config_file).resolve().parent)
 
     try:
         # First Pass: Lint and Fix
@@ -355,6 +375,7 @@ def generate_function(cab_file: Path, output_file: Path, config_file: Path | Non
             capture_output=True,
             text=True,
             check=True,
+            cwd=ruff_cwd,
         )
 
         # Second Pass: Format the result of the linting
@@ -364,6 +385,7 @@ def generate_function(cab_file: Path, output_file: Path, config_file: Path | Non
             capture_output=True,
             text=True,
             check=True,
+            cwd=ruff_cwd,
         )
 
         formatted_code = final_result.stdout

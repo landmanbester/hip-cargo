@@ -322,6 +322,15 @@ def _dtype_to_str_from_string(dtype_str: str) -> str:
     if not dtype_str:
         return "str"
 
+    # Map custom list NewTypes to their stimela dtypes
+    list_type_mapping = {
+        "ListInt": "List[int]",
+        "ListFloat": "List[float]",
+        "ListStr": "List[str]",
+    }
+    if dtype_str in list_type_mapping:
+        return list_type_mapping[dtype_str]
+
     # Map lowercase built-in types to stimela-compatible names
     # Handle both simple types (list) and generic types (list[File])
     type_mapping = {
