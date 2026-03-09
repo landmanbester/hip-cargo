@@ -42,6 +42,7 @@ def stimela_output(
     must_exist: bool = False,
     mkdir: bool = False,
     path_policies: Optional[dict[str, Any]] = None,
+    metadata: Optional[dict[str, Any]] = None,
 ) -> Callable:
     """
     Decorator to define an output of a Stimela cab.
@@ -58,6 +59,7 @@ def stimela_output(
         must_exist: Whether the output path must exist before the task runs
         mkdir: Whether to create the directory if it doesn't exist
         path_policies: Path-specific policies (e.g. write_parent, access_parent)
+        metadata: Optional metadata dictionary for extensibility (e.g. for rich help panel categorization)
     """
 
     def decorator(func: Callable) -> Callable:
@@ -77,6 +79,7 @@ def stimela_output(
                 "must_exist": must_exist,
                 "mkdir": mkdir,
                 "path_policies": path_policies or {},
+                "metadata": metadata or {},
             }
         )
 

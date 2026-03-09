@@ -16,12 +16,18 @@ cabs:
         required: true
         policies:
           positional: true
+        metadata:
+          rich_help_panel: Inputs
       image:
         info:
           Name of container image.
+        metadata:
+          rich_help_panel: Inputs
     outputs:
       output-dir:
         dtype: Directory
         info:
           Output directory for cab definition.
           The cab will have the exact same name as the command.  # noqa: E501
+        metadata:
+          rich_help_panel: Outputs

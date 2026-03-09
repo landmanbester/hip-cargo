@@ -14,10 +14,14 @@ cabs:
         required: true
         policies:
           positional: true
+        metadata:
+          rich_help_panel: Inputs
       config-file:
         info:
           Optional path to ruff config file to use when generating function.
         dtype: File
+        metadata:
+          rich_help_panel: Inputs
     outputs:
       output-file:
         dtype: File
@@ -26,3 +30,5 @@ cabs:
         required: true
         policies:
           positional: true
+        metadata:
+          rich_help_panel: Outputs

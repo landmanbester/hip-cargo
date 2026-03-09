@@ -395,6 +395,12 @@ def generate_parameter_signature(
         else:
             lines_out.append(f'            help="{info_escaped}",')
 
+    # Add rich_help_panel if present in metadata
+    param_metadata = param_def.get("metadata", {})
+    rich_help_panel = param_metadata.get("rich_help_panel")
+    if rich_help_panel:
+        lines_out.append(f'            rich_help_panel="{rich_help_panel}",')
+
     lines_out.append("        ),")
 
     # Build stimela metadata dict for non-standard fields
@@ -407,6 +413,7 @@ def generate_parameter_signature(
         "required",  # handled by default=... in typer.Option
         "default",  # handled by function default value
         "choices",  # handled by Literal type
+        "metadata",  # handled by rich_help_panel in typer.Option
     }
 
     # Check if dtype needs explicit override (can't be inferred from type hint alone)

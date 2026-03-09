@@ -275,6 +275,9 @@ def generate_function(cab_file: Path, output_file: Path, config_file: Path | Non
         if "path_policies" in output_def:
             lines.append(f"    path_policies={output_def.get('path_policies')},")
 
+        if output_def.get("metadata"):
+            lines.append(f"    metadata={output_def['metadata']},")
+
         lines.append(")")
 
     # Function signature
