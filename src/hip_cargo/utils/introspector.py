@@ -588,6 +588,9 @@ def format_info_fields(yaml_str, comment_map=None):
                 formatted_lines = content.replace(". ", ".\n").strip().split("\n")
                 result.append(f"{indent}{field_name}:")
                 for j, formatted_line in enumerate(formatted_lines):
+                    # Quote lines containing colons to prevent YAML mapping interpretation
+                    if ": " in formatted_line:
+                        formatted_line = f"'{formatted_line}'"
                     if j == len(formatted_lines) - 1 and trailing_comment:
                         # Add comment to last line as YAML comment (not string content)
                         result.append(f"{indent}  {formatted_line}  {trailing_comment}")

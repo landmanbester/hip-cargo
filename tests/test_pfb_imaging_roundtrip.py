@@ -28,6 +28,7 @@ PFB_IMAGING_ROOT = Path.home() / "software" / "pfb-imaging"
 PFB_IMAGING_CLI = PFB_IMAGING_ROOT / "src" / "pfb_imaging" / "cli"
 PFB_IMAGING_CABS = PFB_IMAGING_ROOT / "src" / "pfb_imaging" / "cabs"
 PFB_IMAGING_CONFIG = PFB_IMAGING_ROOT / "pyproject.toml"
+PFB_IMAGING_IMAGE_NAME = "ghcr.io/ratt-ru/pfb-imaging:typer"
 
 # List of CLI modules to test
 CLI_MODULES = [
@@ -89,6 +90,7 @@ def test_pfb_imaging_roundtrip(module_name):
             generate_cabs(
                 [copied_file],
                 output_dir=cab_dir,
+                image=PFB_IMAGING_IMAGE_NAME,
             )
         except Exception as e:
             pytest.fail(f"Failed to generate cab for {module_name}: {e}")
@@ -101,7 +103,6 @@ def test_pfb_imaging_roundtrip(module_name):
         original_cab_file = PFB_IMAGING_CABS / f"{module_name}.yml"
         with open(original_cab_file) as f:
             original_cab = yaml.safe_load(f)
-            original_cab["cabs"][module_name].pop("image")
 
         with open(cab_file) as f:
             generated_cab = yaml.safe_load(f)

@@ -14,29 +14,43 @@ cabs:
         required: true
         policies:
           positional: true
+        metadata:
+          rich_help_panel: Inputs
       github-user:
         info:
           GitHub username or organization.
         required: true
         policies:
           positional: true
+        metadata:
+          rich_help_panel: Inputs
       description:
         info:
           Short project description.
         default: A Python project
+        metadata:
+          rich_help_panel: Inputs
       author-name:
         info:
           Author name (auto-detected from git config if omitted).
+        metadata:
+          rich_help_panel: Inputs
       author-email:
         info:
           Author email (auto-detected from git config if omitted).
+        metadata:
+          rich_help_panel: Inputs
       cli-command:
         info:
           CLI entry point name (derived from project-name if omitted).
+        metadata:
+          rich_help_panel: Inputs
       initial-version:
         info:
           Starting version string.
         default: 0.0.0
+        metadata:
+          rich_help_panel: Inputs
       license-type:
         info:
           License type.
@@ -45,20 +59,28 @@ cabs:
         - Apache-2.0
         - BSD-3-Clause
         default: MIT
+        metadata:
+          rich_help_panel: Inputs
       cli-mode:
         info:
-          CLI mode: single (one command) or multi (subcommands).
+          'CLI mode: single (one command) or multi (subcommands).'
         choices:
         - single
         - multi
         default: multi
+        metadata:
+          rich_help_panel: Inputs
       default-branch:
         info:
           Default git branch name.
         default: main
+        metadata:
+          rich_help_panel: Inputs
     outputs:
       project-dir:
         dtype: Directory
         info:
           Output directory for the generated project.
         must_exist: true
+        metadata:
+          rich_help_panel: Outputs
