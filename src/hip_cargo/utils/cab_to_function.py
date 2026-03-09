@@ -285,6 +285,9 @@ def generate_parameter_signature(
     list_type_name = STIMELA_DTYPE_TO_LIST_TYPE.get(dtype)
     if list_type_name:
         py_type = list_type_name
+        # Convert list defaults to comma-separated strings (ListType takes a string at CLI level)
+        if isinstance(default, list):
+            default = ",".join(str(v) for v in default)
     else:
         # Determine Python type normally
         py_type = stimela_dtype_to_python_type(dtype, preserve_custom=True)
