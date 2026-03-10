@@ -34,3 +34,7 @@ search = 'version = "{current_version}"'
 [[file]]
 src = "src/hip_cargo/__init__.py"
 search = '__version__ = "{current_version}"'
+
+[[file]]
+src = "uv.lock"
+search = 'name = "hip-cargo"\nversion = "{current_version}"'
