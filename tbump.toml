@@ -35,6 +35,10 @@ search = 'version = "{current_version}"'
 src = "src/hip_cargo/__init__.py"
 search = '__version__ = "{current_version}"'
 
-[[file]]
-src = "uv.lock"
-search = 'name = "hip-cargo"\nversion = "{current_version}"'
+[[before_commit]]
+name = "Update uv.lock"
+cmd = "uv lock"
+
+[[before_commit]]
+name = "Stage uv.lock"
+cmd = "git add uv.lock"
