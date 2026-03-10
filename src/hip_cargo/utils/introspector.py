@@ -280,6 +280,11 @@ def extract_input_libcst(param: cst.Param) -> tuple[str, dict[str, Any]]:
             input_def["policies"] = {}
             input_def["policies"]["repeat"] = "list"
 
+    # Extract rich_help_panel from typer metadata and store as metadata
+    rich_help_panel = typer_metadata.get("rich_help_panel")
+    if rich_help_panel:
+        input_def.setdefault("metadata", {})["rich_help_panel"] = rich_help_panel
+
     # Merge Stimela metadata - arbitrary fields allowed
     # Stimela metadata overrides inferred values
     for key, value in stimela_metadata.items():
@@ -583,6 +588,10 @@ def format_info_fields(yaml_str, comment_map=None):
                 formatted_lines = content.replace(". ", ".\n").strip().split("\n")
                 result.append(f"{indent}{field_name}:")
                 for j, formatted_line in enumerate(formatted_lines):
+                    # Quote lines containing colons to prevent YAML mapping interpretation
+                    if ": " in formatted_line:
+                        # Escape single quotes for YAML single-quoted strings
+                        formatted_line = "'" + formatted_line.replace("'", "''") + "'"
                     if j == len(formatted_lines) - 1 and trailing_comment:
                         # Add comment to last line as YAML comment (not string content)
                         result.append(f"{indent}  {formatted_line}  {trailing_comment}")

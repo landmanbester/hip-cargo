@@ -11,12 +11,14 @@ Directory = NewType("Directory", Path)
 @stimela_cab(
     name="init",
     info="Initialize a new hip-cargo project with scaffolding and Stimela cab support.",
+    image="ghcr.io/landmanbester/hip-cargo:execcontainer",
 )
 @stimela_output(
     dtype="Directory",
     name="project-dir",
     info="Output directory for the generated project.",
     must_exist=True,
+    metadata={"rich_help_panel": "Outputs"},
 )
 def init(
     project_name: Annotated[
@@ -24,6 +26,7 @@ def init(
         typer.Option(
             ...,
             help="Hyphenated project name (e.g. my-project).",
+            rich_help_panel="Inputs",
         ),
     ],
     github_user: Annotated[
@@ -31,54 +34,63 @@ def init(
         typer.Option(
             ...,
             help="GitHub username or organization.",
+            rich_help_panel="Inputs",
         ),
     ],
     description: Annotated[
         str,
         typer.Option(
             help="Short project description.",
+            rich_help_panel="Inputs",
         ),
     ] = "A Python project",
     author_name: Annotated[
         str | None,
         typer.Option(
             help="Author name (auto-detected from git config if omitted).",
+            rich_help_panel="Inputs",
         ),
     ] = None,
     author_email: Annotated[
         str | None,
         typer.Option(
             help="Author email (auto-detected from git config if omitted).",
+            rich_help_panel="Inputs",
         ),
     ] = None,
     cli_command: Annotated[
         str | None,
         typer.Option(
             help="CLI entry point name (derived from project-name if omitted).",
+            rich_help_panel="Inputs",
         ),
     ] = None,
     initial_version: Annotated[
         str,
         typer.Option(
             help="Starting version string.",
+            rich_help_panel="Inputs",
         ),
     ] = "0.0.0",
     license_type: Annotated[
         Literal["MIT", "Apache-2.0", "BSD-3-Clause"],
         typer.Option(
             help="License type.",
+            rich_help_panel="Inputs",
         ),
     ] = "MIT",
     cli_mode: Annotated[
         Literal["single", "multi"],
         typer.Option(
             help="CLI mode: single (one command) or multi (subcommands).",
+            rich_help_panel="Inputs",
         ),
     ] = "multi",
     default_branch: Annotated[
         str,
         typer.Option(
             help="Default git branch name.",
+            rich_help_panel="Inputs",
         ),
     ] = "main",
     project_dir: Annotated[
@@ -86,6 +98,7 @@ def init(
         typer.Option(
             parser=Path,
             help="Output directory for the generated project.",
+            rich_help_panel="Outputs",
         ),
         {
             "stimela": {
@@ -93,22 +106,66 @@ def init(
             },
         },
     ] = None,
+    backend: Annotated[
+        Literal["auto", "native", "apptainer", "singularity", "docker", "podman"],
+        typer.Option(
+            help="Execution backend.",
+        ),
+        {"stimela": {"skip": True}},
+    ] = "auto",
+    always_pull_images: Annotated[
+        bool,
+        typer.Option(
+            help="Always pull container images, even if cached locally.",
+        ),
+        {"stimela": {"skip": True}},
+    ] = False,
 ):
     """
     Initialize a new hip-cargo project with scaffolding and Stimela cab support.
     """
-    from hip_cargo.core.init import init as init_core  # noqa: E402
+    if backend == "native" or backend == "auto":
+        try:
+            # Lazy import the core implementation
+            from hip_cargo.core.init import init as init_core  # noqa: E402
 
-    init_core(
-        project_name=project_name,
-        github_user=github_user,
-        description=description,
-        author_name=author_name,
-        author_email=author_email,
-        cli_command=cli_command,
-        initial_version=initial_version,
-        license_type=license_type,
-        cli_mode=cli_mode,
-        default_branch=default_branch,
-        project_dir=project_dir,
+            # Call the core function with all parameters
+            init_core(
+                project_name,
+                github_user,
+                description=description,
+                author_name=author_name,
+                author_email=author_email,
+                cli_command=cli_command,
+                initial_version=initial_version,
+                license_type=license_type,
+                cli_mode=cli_mode,
+                default_branch=default_branch,
+                project_dir=project_dir,
+            )
+            return
+        except ImportError:
+            if backend == "native":
+                raise
+
+    # Fall back to container execution
+    from hip_cargo.utils.runner import run_in_container  # noqa: E402
+
+    run_in_container(
+        init,
+        dict(
+            project_name=project_name,
+            github_user=github_user,
+            description=description,
+            author_name=author_name,
+            author_email=author_email,
+            cli_command=cli_command,
+            initial_version=initial_version,
+            license_type=license_type,
+            cli_mode=cli_mode,
+            default_branch=default_branch,
+            project_dir=project_dir,
+        ),
+        backend=backend,
+        always_pull_images=always_pull_images,
     )

@@ -1,5 +1,5 @@
 from pathlib import Path
-from typing import Annotated, NewType
+from typing import Annotated, Literal, NewType
 
 import typer
 
@@ -11,6 +11,7 @@ File = NewType("File", Path)
 @stimela_cab(
     name="generate_function",
     info="Generate Python function from Stimela cab definition.",
+    image="ghcr.io/landmanbester/hip-cargo:execcontainer",
 )
 @stimela_output(
     dtype="File",
@@ -18,6 +19,7 @@ File = NewType("File", Path)
     info="Name of output CLI function.",
     required=True,
     policies={"positional": True},
+    metadata={"rich_help_panel": "Outputs"},
 )
 def generate_function(
     cab_file: Annotated[
@@ -26,6 +28,7 @@ def generate_function(
             ...,
             parser=Path,
             help="Path to Stimela cab YAML file.",
+            rich_help_panel="Inputs",
         ),
     ],
     output_file: Annotated[
@@ -34,6 +37,7 @@ def generate_function(
             ...,
             parser=Path,
             help="Name of output CLI function.",
+            rich_help_panel="Outputs",
         ),
     ],
     config_file: Annotated[
@@ -41,18 +45,53 @@ def generate_function(
         typer.Option(
             parser=Path,
             help="Optional path to ruff config file to use when generating function.",
+            rich_help_panel="Inputs",
         ),
     ] = None,
+    backend: Annotated[
+        Literal["auto", "native", "apptainer", "singularity", "docker", "podman"],
+        typer.Option(
+            help="Execution backend.",
+        ),
+        {"stimela": {"skip": True}},
+    ] = "auto",
+    always_pull_images: Annotated[
+        bool,
+        typer.Option(
+            help="Always pull container images, even if cached locally.",
+        ),
+        {"stimela": {"skip": True}},
+    ] = False,
 ):
     """
     Generate Python function from Stimela cab definition.
     """
-    # Lazy import the core implementation
-    from hip_cargo.core.generate_function import generate_function as generate_function_core  # noqa: E402
+    if backend == "native" or backend == "auto":
+        try:
+            # Lazy import the core implementation
+            from hip_cargo.core.generate_function import generate_function as generate_function_core  # noqa: E402
 
-    # Call the core function with all parameters
-    generate_function_core(
-        cab_file,
-        output_file,
-        config_file=config_file,
+            # Call the core function with all parameters
+            generate_function_core(
+                cab_file,
+                output_file,
+                config_file=config_file,
+            )
+            return
+        except ImportError:
+            if backend == "native":
+                raise
+
+    # Fall back to container execution
+    from hip_cargo.utils.runner import run_in_container  # noqa: E402
+
+    run_in_container(
+        generate_function,
+        dict(
+            cab_file=cab_file,
+            config_file=config_file,
+            output_file=output_file,
+        ),
+        backend=backend,
+        always_pull_images=always_pull_images,
     )
