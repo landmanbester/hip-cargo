@@ -135,8 +135,8 @@ def _resolve_mounts(func: typing.Callable, params: dict[str, typing.Any]) -> dic
         # Gather path_policies from output decorator and/or stimela metadata dict
         meta = stimela_meta.get(param_name, {})
         output_def = output_meta.get(param_name, {})
-        path_policies = output_def.get("path_policies", {})
-        path_policies.update(meta.get("path_policies", {}))
+        base_policies = output_def.get("path_policies") or {}
+        path_policies = {**base_policies, **meta.get("path_policies", {})}
         must_exist = meta.get("must_exist", output_def.get("must_exist"))
         do_mkdir = meta.get("mkdir", output_def.get("mkdir", False))
         write_parent = path_policies.get("write_parent", False)
@@ -148,8 +148,8 @@ def _resolve_mounts(func: typing.Callable, params: dict[str, typing.Any]) -> dic
             if not isinstance(p, Path):
                 continue
             abs_path = p.resolve()
-            path_str = str(abs_path).rstrip("/")
-            parent_str = str(abs_path.parent).rstrip("/")
+            path_str = str(abs_path)
+            parent_str = str(abs_path.parent)
 
             if write_parent or do_mkdir:
                 # Mount the parent directory rw instead of the path itself.
@@ -250,10 +250,13 @@ def _build_argv_with_native_backend() -> list[str]:
     # Replace entry point path with just the name
     args[0] = Path(args[0]).name
 
-    # Find and replace --backend, or append it
+    # Find and replace --backend (both '--backend VALUE' and '--backend=VALUE'), or append it
     for i, arg in enumerate(args):
         if arg == "--backend" and i + 1 < len(args):
             args[i + 1] = "native"
+            return args
+        if arg.startswith("--backend="):
+            args[i] = "--backend=native"
             return args
 
     args.extend(["--backend", "native"])

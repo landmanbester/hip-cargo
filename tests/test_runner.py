@@ -196,6 +196,13 @@ class TestBuildArgv:
             args = _build_argv_with_native_backend()
         assert args == ["pkg", "my-cmd", "--backend", "native", "--input-file", "/data/input.ms"]
 
+    @pytest.mark.unit
+    def test_replaces_equals_form_backend(self):
+        with patch("hip_cargo.utils.runner.sys") as mock_sys:
+            mock_sys.argv = ["/usr/bin/pkg", "my-cmd", "--backend=auto", "--input-file", "/data/input.ms"]
+            args = _build_argv_with_native_backend()
+        assert args == ["pkg", "my-cmd", "--backend=native", "--input-file", "/data/input.ms"]
+
 
 class TestBuildContainerCmd:
     """Test _build_container_cmd for different runtimes."""

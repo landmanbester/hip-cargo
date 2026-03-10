@@ -37,7 +37,7 @@ def stimela_output(
     dtype: str,
     info: str = "",
     required: bool = False,
-    implicit: bool = False,
+    implicit: bool | str = False,
     policies: Optional[dict[str, Any]] = None,
     must_exist: bool = False,
     mkdir: bool = False,
