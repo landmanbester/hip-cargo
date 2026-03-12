@@ -40,10 +40,14 @@ def get_image_tag():
 
 def update_cli_image_tags(cli_modules: list[Path], image_name: str) -> None:
     """Update image= values in @stimela_cab decorators to match the current tag."""
-    pattern = re.compile(r'(image=")[^"]*(")')
+    # Match image= only inside @stimela_cab(...) decorator blocks
+    pattern = re.compile(
+        r"(@stimela_cab\([^)]*)(image=\")[^\"]*(\")([^)]*\))",
+        re.DOTALL,
+    )
     for module_path in cli_modules:
         content = module_path.read_text()
-        updated = pattern.sub(rf"\g<1>{image_name}\2", content)
+        updated = pattern.sub(rf"\1\g<2>{image_name}\3\4", content)
         if updated != content:
             module_path.write_text(updated)
             print(f"✓ Updated image tag in {module_path}")
