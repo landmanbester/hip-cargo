@@ -12,7 +12,7 @@ File = NewType("File", Path)
 @stimela_cab(
     name="generate_cabs",
     info="Generate Stimela cab definition from Python CLI function.",
-    image="ghcr.io/landmanbester/hip-cargo:execcontainer",
+    image="ghcr.io/landmanbester/hip-cargo:gencabsfix",
 )
 @stimela_output(
     dtype="Directory",

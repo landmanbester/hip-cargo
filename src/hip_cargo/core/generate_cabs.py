@@ -89,8 +89,6 @@ def generate_cabs(module: list[Path], image: str | None = None, output_dir: Path
                 parts[-1] = parts[-1].replace(".py", "")
                 parts.append(node.name.value)
                 cab_def[node.name.value]["command"] = ".".join(parts)
-                if image is not None:
-                    cab_def[node.name.value]["image"] = image
                 cab_def[node.name.value]["outputs"] = {}
                 for decorator_name, decorator_content in decorators.items():
                     if decorator_name == "stimela_cab":
@@ -109,6 +107,9 @@ def generate_cabs(module: list[Path], image: str | None = None, output_dir: Path
                                 if not info_stripped or info_stripped.startswith("#"):
                                     del kwargs["info"]
                         cab_def[node.name.value]["outputs"][decorator_name] = kwargs
+                # Override image after decorator processing so CLI arg takes precedence
+                if image is not None:
+                    cab_def[node.name.value]["image"] = image
                 cab_def[node.name.value]["inputs"] = {}
                 # LibCST: use node.params.params instead of node.args.args
                 for param in node.params.params:
