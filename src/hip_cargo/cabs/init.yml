@@ -2,10 +2,10 @@ cabs:
   init:
     flavour: python
     command: hip_cargo.core.init.init
-    image: ghcr.io/landmanbester/hip-cargo:execcontainer
     name: init
     info:
       Initialize a new hip-cargo project with scaffolding and Stimela cab support.
+    image: ghcr.io/landmanbester/hip-cargo:gencabsfix
     inputs:
       project-name:
         info:
