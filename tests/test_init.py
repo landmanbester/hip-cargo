@@ -33,7 +33,6 @@ def test_init_produces_clean_project():
             ".pre-commit-config.yaml",
             "LICENSE",
             "README.md",
-            "scripts/generate_cabs.py",
             ".github/dependabot.yml",
             ".github/workflows/ci.yml",
             ".github/workflows/publish.yml",

@@ -11,7 +11,6 @@ Directory = NewType("Directory", Path)
 @stimela_cab(
     name="init",
     info="Initialize a new hip-cargo project with scaffolding and Stimela cab support.",
-    image="ghcr.io/landmanbester/hip-cargo:gencabsfix",
 )
 @stimela_output(
     dtype="Directory",

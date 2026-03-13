@@ -15,7 +15,7 @@
 ### 2. **Lightweight Dependencies**
 - Minimize external dependencies
 - Only add dependencies when absolutely necessary
-- Current dependencies: `typer`, `pyyaml`, `libcst`, `typing-extensions`
+- Current dependencies: `typer`, `pyyaml`, `libcst`, `typing-extensions`, `tomli` (Python < 3.11 only)
 - Question: "Can this be done with stdlib?" before adding a dependency
 
 ### 3. **Modern Python Best Practices**
@@ -53,7 +53,6 @@ hip-cargo/
 │   │   ├── cli_multi.py      # Multi-command CLI template
 │   │   ├── cli_single.py     # Single-command CLI template
 │   │   ├── Dockerfile
-│   │   ├── generate_cabs.py  # Template generate_cabs script
 │   │   ├── onboard_cli.py    # Onboard command CLI template
 │   │   ├── onboard_core.py   # Onboard command core template
 │   │   ├── pyproject.toml
@@ -63,13 +62,12 @@ hip-cargo/
 │   └── utils/                # Shared utilities
 │       ├── __init__.py
 │       ├── cab_to_function.py   # Generate function from cab YAML
+│       ├── config.py            # pyproject.toml [tool.hip-cargo] reader
 │       ├── decorators.py        # @stimela_cab, @stimela_output
 │       ├── introspector.py      # Extract metadata from functions
 │       ├── runner.py            # Container fallback execution
-│       └── yaml_comments.py     # YAML comment extraction/preservation
+│       ├── yaml_comments.py     # YAML comment extraction/preservation
 │       └── types.py             # ListInt, ListFloat, ListStr NewTypes + parsers
-├── scripts/                  # Automation scripts
-│   └── generate_cabs.py
 ├── tests/
 └── pyproject.toml
 ```
@@ -214,7 +212,26 @@ hip-cargo currently supports:
 - **Stimela metadata dictionary**: Optional `{"stimela": {...}}` dict in `Annotated` type hints for Stimela-specific fields (must_exist, mkdir, custom policies, etc.)
 - **Project scaffolding**: `hip-cargo init` creates a complete project with CI/CD, containerisation, pre-commit hooks, and an onboarding command
 - **Container fallback**: Generated functions automatically fall back to container execution when core module imports fail (lightweight installation mode)
+- **Runtime image resolution**: Container image base stored in `[tool.hip-cargo].image` in `pyproject.toml`, tag derived at runtime from git state — no image metadata in CLI source files
 - **Skip metadata**: Parameters marked with `{"stimela": {"skip": True}}` are excluded from cab YAML generation (used for infrastructure params like `backend`)
+
+### Image Resolution
+
+The container image is resolved at runtime, not stored in CLI source code:
+
+1. The image **base** (e.g. `ghcr.io/user/repo`) is configured in `pyproject.toml`:
+   ```toml
+   [tool.hip-cargo]
+   image = "ghcr.io/user/repo"
+   ```
+2. The image **tag** is derived by `get_image_tag()` in `core/generate_cabs.py`:
+   - During `tbump` release: reads from `.tbump_version` sentinel file
+   - On the default branch: `latest`
+   - On feature branches: branch name (with `/` → `-`)
+3. `generate_cabs()` combines base + tag when no `--image` is passed explicitly
+4. `run_in_container()` does the same lookup when the `@stimela_cab` decorator has no `image`
+
+The `[tool.hip-cargo].image` is read by `get_project_image()` in `utils/config.py`, which walks up from cwd to find `pyproject.toml`.
 
 ### Container Fallback Execution
 
@@ -223,6 +240,7 @@ When a package is installed in lightweight mode (no heavy dependencies), generat
 **How it works:**
 - `generate-function` wraps the lazy import in try/except `ImportError` when the cab has an `image` field
 - On import failure, `run_in_container()` reconstructs the CLI command from `sys.argv` and runs it inside the container with `--backend native`
+- The container image is resolved from `[tool.hip-cargo].image` in `pyproject.toml` combined with `get_image_tag()`
 - Volume mounts are resolved from function type hints (Path-like types) and `@stimela_output` decorators (input=ro, output=rw)
 - Mount resolution respects stimela path policies: `write_parent`, `access_parent`, `mkdir`, `must_exist`
 - Backend detection priority: apptainer → singularity → docker → podman
@@ -238,8 +256,9 @@ Both are marked `{"stimela": {"skip": True}}` so they don't appear in cab YAML.
 
 Scaffolds a new project with:
 - src layout with `cli/`, `core/`, `cabs/` directories
+- `pyproject.toml` with `[tool.hip-cargo]` image configuration
 - GitHub Actions workflows (CI, publish, container, update-cabs)
-- Pre-commit hooks (ruff + cab generation)
+- Pre-commit hooks (ruff + cab generation via CLI)
 - Dockerfile, tbump config, license
 - An `onboard` command that prints CI/CD setup instructions
 

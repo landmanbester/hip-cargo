@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 import typer
+import yaml
 from typer.testing import CliRunner
 
 from hip_cargo.cli import app
@@ -133,6 +134,30 @@ class TestCLI:
             # Verify no cab files were created
             cab_files = list(Path(output_dir).glob("*.yml"))
             assert len(cab_files) == 0
+
+    @pytest.mark.integration
+    def test_generate_image_override(self, runner):
+        """Test that --image overrides the pyproject.toml-resolved image."""
+        with tempfile.TemporaryDirectory() as tmpdir:
+            output_dir = Path(tmpdir)
+            custom_image = "registry.example.com/my-image:v1.2.3"
+            result = runner.invoke(
+                app,
+                [
+                    "generate-cabs",
+                    "--module",
+                    "src/hip_cargo/cli/generate_cabs.py",
+                    "--image",
+                    custom_image,
+                    "--output-dir",
+                    str(output_dir),
+                ],
+            )
+            assert result.exit_code == 0
+            output_file = output_dir / "generate_cabs.yml"
+            assert output_file.exists()
+            cab = yaml.safe_load(output_file.read_text())
+            assert cab["cabs"]["generate_cabs"]["image"] == custom_image
 
     @pytest.mark.unit
     def test_cli_app_exists(self):

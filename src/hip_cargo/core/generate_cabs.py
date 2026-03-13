@@ -1,10 +1,12 @@
 """Core logic for generating Stimela cab definitions from Python modules."""
 
+import subprocess
 from pathlib import Path
 
 import libcst as cst
 import yaml
 
+from hip_cargo.utils.config import get_project_image
 from hip_cargo.utils.introspector import extract_input_libcst, format_info_fields, parse_decorator_libcst
 
 # Large width prevents YAML line wrapping, which would break trailing comments.
@@ -12,17 +14,53 @@ from hip_cargo.utils.introspector import extract_input_libcst, format_info_field
 YAML_MAX_WIDTH = 10000
 
 
-def generate_cabs(module: list[Path], image: str | None = None, output_dir: Path | None = None) -> None:
-    """
-    Generate a Stimela cab definition from a Python module.
+def get_image_tag(default_branch: str = "main") -> str:
+    """Get the image tag for the current context.
+
+    During a tbump release, reads the version from the .tbump_version sentinel
+    file (written by tbump's before_push hook) and deletes it so that subsequent
+    commits revert to branch-based tagging. Otherwise derives the tag from the
+    current git branch: 'latest' for the default branch, branch name for feature
+    branches.
 
     Args:
-        module_paths: List of python module paths (e.g., "package/cli/command.py")
-        output_path: Directory where the YAML cab should be written
+        default_branch: Branch name that maps to the 'latest' tag.
+    """
+    sentinel = Path(".tbump_version")
+    if sentinel.exists():
+        version = sentinel.read_text().strip()
+        sentinel.unlink()
+        return version
+
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        branch = result.stdout.strip()
+        if branch == default_branch:
+            return "latest"
+        return branch.replace("/", "-")
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        return "latest"
+
+
+def generate_cabs(module: list[Path], image: str | None = None, output_dir: Path | None = None) -> None:
+    """Generate Stimela cab definitions from Python modules.
+
+    Args:
+        module: List of Python module paths (e.g., "package/cli/command.py").
+            Supports glob wildcards in filenames.
+        image: Full container image name (with tag) to set in cab definitions.
+            If None, resolved from [tool.hip-cargo].image in pyproject.toml
+            combined with the current git-derived tag.
+        output_dir: Directory where YAML cab files should be written.
+            If None, prints to stdout.
 
     Raises:
-        ImportError: If the module cannot be imported
-        AttributeError: If the module doesn't contain a decorated function
+        RuntimeError: If module paths are invalid or don't follow expected layout.
     """
     # glob if wildcard in module
     modlist = []
@@ -40,6 +78,12 @@ def generate_cabs(module: list[Path], image: str | None = None, output_dir: Path
                 raise RuntimeError(f"No module file found at {modpath}")
             modlist.append(modpath)
 
+    # Resolve image from pyproject.toml when not explicitly provided
+    if image is None:
+        image_base = get_project_image()
+        if image_base:
+            image = f"{image_base}:{get_image_tag()}"
+
     # User feedback
     for mod in modlist:
         print(f"Loading file: {mod}")
@@ -47,7 +91,6 @@ def generate_cabs(module: list[Path], image: str | None = None, output_dir: Path
     print(f"Writing cabs to: {output_dir}")
     for module_path in modlist:
         with open(module_path, "r") as f:
-            # tree = ast.parse(f.read(), filename=module_path)
             tree = cst.parse_module(f.read())
 
         for node in tree.body:

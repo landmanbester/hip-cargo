@@ -89,7 +89,6 @@ def init(
         src_pkg / "core",
         src_pkg / "cabs",
         project_dir / "tests",
-        project_dir / "scripts",
         project_dir / ".github" / "workflows",
         project_dir / ".devcontainer",
     ]:
@@ -111,9 +110,6 @@ def init(
         "workflows/publish-container.yml", project_dir / ".github" / "workflows" / "publish-container.yml", subs
     )
     _write_template("workflows/update-cabs.yml", project_dir / ".github" / "workflows" / "update-cabs.yml", subs)
-
-    # Generate cabs script
-    _write_template("generate_cabs.py", project_dir / "scripts" / "generate_cabs.py", subs)
 
     # CLI __init__.py based on cli_mode
     cli_template = "cli_single.py" if cli_mode == "single" else "cli_multi.py"

@@ -28,9 +28,17 @@ def run_in_container(
     cab_config = getattr(func, "__stimela_cab_config__", {})
     image = cab_config.get("image")
     if not image:
+        from hip_cargo.utils.config import get_project_image
+
+        image_base = get_project_image()
+        if image_base:
+            from hip_cargo.core.generate_cabs import get_image_tag
+
+            image = f"{image_base}:{get_image_tag()}"
+    if not image:
         raise RuntimeError(
             f"Cannot fall back to container for '{cab_config.get('name', '?')}': "
-            f"no container image specified in @stimela_cab decorator."
+            f"no container image configured in @stimela_cab or [tool.hip-cargo] in pyproject.toml."
         )
 
     runtime = _detect_runtime(backend)

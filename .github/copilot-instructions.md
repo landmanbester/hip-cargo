@@ -24,6 +24,7 @@ src/hip_cargo/
 ├── core/          # Core implementations (heavy dependencies here)
 ├── cabs/          # Generated YAML cab definitions (git-tracked, auto-updated)
 ├── utils/         # Shared utilities (decorators, introspection, conversion, types)
+│   ├── config.py  # pyproject.toml [tool.hip-cargo] reader
 │   └── types.py   # ListInt, ListFloat, ListStr NewTypes + parsers
 └── recipes/       # Stimela recipes for running via stimela
 ```
@@ -103,7 +104,7 @@ uv run pre-commit install
 **Pre-commit hooks auto-update**:
 1. CLI help SVGs (`scripts/update_cli_help.py`)
 2. README code snippets (`scripts/update_readme.py`)
-3. Cab definitions (`scripts/generate_cabs.py`)
+3. Cab definitions (via `hip-cargo generate-cabs` CLI)
 
 **Note**: Pre-commit "fails" when hooks modify files. This is expected - review changes, then `git add -u && git commit` again.
 
@@ -133,8 +134,9 @@ uv run ruff check . --fix
 - `src/hip_cargo/utils/introspector.py`: LibCST-based metadata extraction (comment-preserving)
 - `src/hip_cargo/utils/cab_to_function.py`: Reverse generation (YAML → Python), generates try/except fallback body
 - `src/hip_cargo/utils/runner.py`: Container fallback execution (mount resolution, backend detection, command assembly)
-- `src/hip_cargo/core/generate_cabs.py`: Core cab generation logic (skips `skip: True` params)
-- `src/hip_cargo/core/generate_function.py`: Generates Python CLI functions from cab YAML (emits `image`, `backend`, `always_pull_images`)
+- `src/hip_cargo/utils/config.py`: Reads `[tool.hip-cargo].image` from nearest `pyproject.toml`
+- `src/hip_cargo/core/generate_cabs.py`: Core cab generation logic (skips `skip: True` params, resolves image from pyproject.toml)
+- `src/hip_cargo/core/generate_function.py`: Generates Python CLI functions from cab YAML (emits `backend`, `always_pull_images` when image present)
 - `CLAUDE.md`: Extended philosophy and anti-patterns
 
 ## What NOT to Do
@@ -149,12 +151,12 @@ uv run ruff check . --fix
 
 ## Container Workflow
 
-Image tagging strategy:
-- Releases: semantic version (e.g., `0.1.2`)
+Image base stored in `pyproject.toml` under `[tool.hip-cargo].image`. Tag derived at runtime by `get_image_tag()`:
+- Releases: semantic version from `.tbump_version` sentinel (e.g., `0.1.2`)
 - Main branch: `latest`
 - Feature branches: `branch-name`
 
-Build/publish automated via `.github/workflows/publish-container.yml`.
+The `@stimela_cab` decorator does **not** contain `image=`. Image is resolved at runtime from project config. Build/publish automated via `.github/workflows/publish-container.yml`.
 
 ## Questions Before Implementing
 

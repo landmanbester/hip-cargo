@@ -28,7 +28,7 @@ PFB_IMAGING_ROOT = Path.home() / "software" / "pfb-imaging"
 PFB_IMAGING_CLI = PFB_IMAGING_ROOT / "src" / "pfb_imaging" / "cli"
 PFB_IMAGING_CABS = PFB_IMAGING_ROOT / "src" / "pfb_imaging" / "cabs"
 PFB_IMAGING_CONFIG = PFB_IMAGING_ROOT / "pyproject.toml"
-PFB_IMAGING_IMAGE_NAME = "ghcr.io/ratt-ru/pfb-imaging:typer"
+PFB_IMAGING_IMAGE_NAME = "ghcr.io/ratt-ru/pfb-imaging:dependabotprs"
 
 # List of CLI modules to test
 CLI_MODULES = [

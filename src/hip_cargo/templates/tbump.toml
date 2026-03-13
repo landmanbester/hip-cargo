@@ -16,12 +16,12 @@ tag_template = "v{new_version}"
 
 # Hooks to update generated files with new version before committing
 [[before_push]]
-name = "Write release version sentinel for pre-commit hooks"
+name = "Write release version sentinel for cab generation"
 cmd = "python -c \"from pathlib import Path; Path('.tbump_version').write_text('{new_version}')\""
 
 [[before_push]]
 name = "Regenerate cab definitions with new version"
-cmd = "python scripts/generate_cabs.py --version {new_version}"
+cmd = "<CLI_COMMAND> generate-cabs --module src/<PACKAGE_NAME>/cli/*.py --output-dir src/<PACKAGE_NAME>/cabs"
 
 # Files to update with the new version
 [[file]]
