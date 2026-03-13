@@ -2,7 +2,7 @@
 # See https://github.com/your-tools/tbump for usage
 
 [version]
-current = "0.1.5"
+current = "0.1.6"
 
 # Version format: use semantic versioning
 regex = '''
@@ -24,7 +24,7 @@ cmd = "python -c \"from pathlib import Path; Path('.tbump_version').write_text('
 
 [[before_push]]
 name = "Regenerate cab definitions with new version"
-cmd = "hip-cargo generate-cabs --module src/hip_cargo/cli/*.py --output-dir src/hip_cargo/cabs"
+cmd = "hip-cargo generate-cabs --module 'src/hip_cargo/cli/*.py' --output-dir src/hip_cargo/cabs"
 
 # Files to update with the new version
 [[file]]
