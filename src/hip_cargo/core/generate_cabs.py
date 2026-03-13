@@ -18,19 +18,17 @@ def get_image_tag(default_branch: str = "main") -> str:
     """Get the image tag for the current context.
 
     During a tbump release, reads the version from the .tbump_version sentinel
-    file (written by tbump's before_push hook) and deletes it so that subsequent
-    commits revert to branch-based tagging. Otherwise derives the tag from the
-    current git branch: 'latest' for the default branch, branch name for feature
-    branches.
+    file (written by a tbump before_commit hook). The sentinel is cleaned up by
+    a separate tbump before_push hook after the commit succeeds. Otherwise
+    derives the tag from the current git branch: 'latest' for the default
+    branch, branch name for feature branches.
 
     Args:
         default_branch: Branch name that maps to the 'latest' tag.
     """
     sentinel = Path(".tbump_version")
     if sentinel.exists():
-        version = sentinel.read_text().strip()
-        sentinel.unlink()
-        return version
+        return sentinel.read_text().strip()
 
     try:
         result = subprocess.run(
