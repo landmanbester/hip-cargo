@@ -137,7 +137,7 @@ class TestCLI:
 
     @pytest.mark.integration
     def test_generate_image_override(self, runner):
-        """Test that --image overrides the decorator's image value."""
+        """Test that --image overrides the pyproject.toml-resolved image."""
         with tempfile.TemporaryDirectory() as tmpdir:
             output_dir = Path(tmpdir)
             custom_image = "registry.example.com/my-image:v1.2.3"

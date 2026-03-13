@@ -43,7 +43,7 @@ def get_image_tag(default_branch: str = "main") -> str:
         if branch == default_branch:
             return "latest"
         return branch.replace("/", "-")
-    except subprocess.CalledProcessError:
+    except (subprocess.CalledProcessError, FileNotFoundError):
         return "latest"
 
 
