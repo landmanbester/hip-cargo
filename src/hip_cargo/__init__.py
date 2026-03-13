@@ -10,7 +10,7 @@ from hip_cargo.utils.types import (
     parse_list_str,
 )
 
-__version__ = "0.1.5"
+__version__ = "0.1.6"
 __all__ = [
     "stimela_cab",
     "stimela_output",
