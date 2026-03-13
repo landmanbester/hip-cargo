@@ -200,10 +200,6 @@ def generate_function(cab_file: Path, output_file: Path, config_file: Path | Non
     if policies:
         lines.append(f"    policies={policies},")
 
-    # Include image for container fallback
-    if cab_def.get("image"):
-        lines.append(f'    image="{cab_def["image"]}",')
-
     lines.append(")")
 
     # Output decorators

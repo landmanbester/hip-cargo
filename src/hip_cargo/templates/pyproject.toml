@@ -33,6 +33,9 @@ Repository = "<GITHUB_URL>"
 requires = ["uv_build>=0.8.3,<0.11.0"]
 build-backend = "uv_build"
 
+[tool.hip-cargo]
+image = "ghcr.io/<GITHUB_USER>/<PROJECT_NAME>"
+
 [tool.ruff]
 line-length = 120
 target-version = "py310"

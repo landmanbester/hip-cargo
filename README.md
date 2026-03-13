@@ -30,7 +30,7 @@ uv run pre-commit install
 ## Key Principles
 
 1. **Separate CLI from implementation**: Keep CLI modules lightweight with lazy imports. Keep them all in the `src/mypackage/cli` directory and define the CLI for each command in a separate file. Construct the main Typer app in `src/mypackage/cli/__init__.py` and register commands there.
-2. **Separate cabs directory at same level as `cli`**: Use `hip-cargo` to auto-generate cabs into in `src/mypackage/cabs/` directory with the `generate_cabs.py` script. There should be a separate `src/mypackage/cli/mycommand.py` file corresponding to each cab.
+2. **Separate cabs directory at same level as `cli`**: Use `hip-cargo generate-cabs` to auto-generate cabs into `src/mypackage/cabs/`. There should be a separate `src/mypackage/cli/mycommand.py` file corresponding to each cab.
 3. **Single app, multiple commands**: Use one Typer app that registers all commands. If you need a separate app you might as well create a separate repository for it.
 4. **Lazy imports**: Import heavy dependencies (NumPy, JAX, Dask) only when executing
 5. **Linked GitHub package with container image**: Maintain an up to date `Dockerfile` that installs the full package and use **Docker** (or **Podman**) to upload the image to the GitHub Container registry. Link this to your GitHub repository.
@@ -146,8 +146,6 @@ hip-cargo/
 │       ├── publish-container.yml
 │       ├── publish.yml
 │       └── update-cabs.yml
-├── scripts                      # Automation scripts
-│   └── generate_cabs.py
 ├── src
 │   └── hip_cargo
 │       ├── cabs                 # Generated cab definitions (YAML)
@@ -168,6 +166,7 @@ hip-cargo/
 │       └── utils                # Shared utilities
 │           ├── __init__.py
 │           ├── cab_to_function.py
+│           ├── config.py        # pyproject.toml [tool.hip-cargo] reader
 │           ├── decorators.py
 │           ├── introspector.py
 │           └── types.py         # ListInt, ListFloat, ListStr NewTypes + parsers
@@ -192,7 +191,7 @@ As an example, let's see what the `generate-cabs` command looks like
 <!-- CODE:generate-cabs:START -->
 ```python
 from pathlib import Path
-from typing import Annotated, NewType
+from typing import Annotated, Literal, NewType
 
 import typer
 
@@ -210,6 +209,7 @@ File = NewType("File", Path)
     dtype="Directory",
     name="output-dir",
     info="Output directory for cab definition. The cab will have the exact same name as the command.",  # noqa: E501
+    metadata={"rich_help_panel": "Outputs"},
 )
 def generate_cabs(
     module: Annotated[
@@ -220,12 +220,14 @@ def generate_cabs(
             help="CLI module path. "
             "Use wild card to generate cabs for multiple commands in module. "
             "For example, package/cli/*.",
+            rich_help_panel="Inputs",
         ),
     ],
     image: Annotated[
         str | None,
         typer.Option(
             help="Name of container image.",
+            rich_help_panel="Inputs",
         ),
     ] = None,
     output_dir: Annotated[
@@ -233,20 +235,55 @@ def generate_cabs(
         typer.Option(
             parser=Path,
             help="Output directory for cab definition. The cab will have the exact same name as the command.",  # noqa: E501
+            rich_help_panel="Outputs",
         ),
     ] = None,
+    backend: Annotated[
+        Literal["auto", "native", "apptainer", "singularity", "docker", "podman"],
+        typer.Option(
+            help="Execution backend.",
+        ),
+        {"stimela": {"skip": True}},
+    ] = "auto",
+    always_pull_images: Annotated[
+        bool,
+        typer.Option(
+            help="Always pull container images, even if cached locally.",
+        ),
+        {"stimela": {"skip": True}},
+    ] = False,
 ):
     """
     Generate Stimela cab definition from Python CLI function.
     """
-    # Lazy import the core implementation
-    from hip_cargo.core.generate_cabs import generate_cabs as generate_cabs_core  # noqa: E402
+    if backend == "native" or backend == "auto":
+        try:
+            # Lazy import the core implementation
+            from hip_cargo.core.generate_cabs import generate_cabs as generate_cabs_core  # noqa: E402
 
-    # Call the core function with all parameters
-    generate_cabs_core(
-        module,
-        image=image,
-        output_dir=output_dir,
+            # Call the core function with all parameters
+            generate_cabs_core(
+                module,
+                image=image,
+                output_dir=output_dir,
+            )
+            return
+        except ImportError:
+            if backend == "native":
+                raise
+
+    # Fall back to container execution
+    from hip_cargo.utils.runner import run_in_container  # noqa: E402
+
+    run_in_container(
+        generate_cabs,
+        dict(
+            module=module,
+            image=image,
+            output_dir=output_dir,
+        ),
+        backend=backend,
+        always_pull_images=always_pull_images,
     )
 ```
 <!-- CODE:generate-cabs:END -->
@@ -298,7 +335,7 @@ For `hip-cargo`, it looks like the following:
 ```python
 [project]
 name = "hip-cargo"
-version = "0.1.3"
+version = "0.1.5"
 description = "Tools for generating Stimela cab definitions from Python functions"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -325,6 +362,7 @@ dependencies = [
     "pyyaml>=6.0",
     "typing-extensions>=4.15.0",
     "libcst==1.8.6",
+    "tomli>=2.0; python_version < '3.11'",
 ]
 
 [project.urls]
@@ -338,6 +376,9 @@ hip-cargo = "hip_cargo.cli:app"
 [build-system]
 requires = ["uv_build>=0.8.3,<0.11.0"]
 build-backend = "uv_build"
+
+[tool.hip-cargo]
+image = "ghcr.io/landmanbester/hip-cargo"
 
 [tool.ruff]
 line-length = 120
@@ -422,19 +463,20 @@ repos:
     hooks:
       - id: generate-cabs
         name: Generate Stimela cab definitions
-        entry: python scripts/generate_cabs.py
+        entry: my-cli generate-cabs --module 'src/my_package/cli/*.py' --output-dir src/my_package/cabs
         language: system
         always_run: true
         pass_filenames: false
-        stages: [pre-commit]
 ```
-This uses [this script](./scripts/generate_cabs.py) to generate cabs for all commands defined in your CLI module.
-You should be able reuse the GitHub action for `hip-cargo` in `.github/workflows/update-cabs.yml` to automate container creation for your project.
-The basic idea is to validate your cab definitions and then to build and push the container to the GHCR.
-The workflow will tag the container with the branch name if there is an open PR to your default branch.
-Once the PR is merged, an action is triggered to update the image name in the cab definitions and push a `latest` version to GHCR.
+This calls `generate-cabs` directly to regenerate cab YAML for all commands in your CLI module.
+The container image base URL is read from `[tool.hip-cargo].image` in `pyproject.toml`, and the tag is derived automatically from git state (branch name for feature branches, `latest` for the default branch, or a semantic version during `tbump` releases).
+This means CLI source files are never modified during cab generation — only the YAML cab files are updated.
+
+You should be able to reuse the GitHub action for `hip-cargo` in `.github/workflows/update-cabs.yml` to automate cab updates for your project.
+The workflow will tag the container image with the branch name if there is an open PR to your default branch.
+Once the PR is merged, an action is triggered to regenerate cab definitions with the `latest` image tag and push them.
 Pushing semantically versioned tags will trigger the same workflow (this is where `tbump` is quite useful).
-In this case the image name is tagged with the version.
+In this case the image is tagged with the version.
 
 ### 3. Build and Push the Container Image Manually
 
@@ -528,8 +570,9 @@ Marks a function as a Stimela cab.
 - `name`: Cab name
 - `info`: Description
 - `policies`: Optional dict of cab-level policies
-- `image`: Container image for fallback execution (e.g. `ghcr.io/user/pkg:tag`)
 - `**kwargs`: Additional cab metadata stored in `func.__stimela_cab_config__`
+
+The container image is no longer specified in the decorator. Instead, it is read from `[tool.hip-cargo].image` in `pyproject.toml` and the tag is derived at runtime from git state (see [Image Resolution](#image-resolution) below).
 
 ### `@stimela_output`
 
@@ -547,11 +590,29 @@ Defines a `stimela` output supporting the following fields:
 
 Note that the order is important if you want to implement a [roundtrip test](tests/test_roundtrip.py).
 
+## Image Resolution
+
+The container image for cab definitions and container fallback is resolved at runtime, not stored in source code. The image base URL is configured once in `pyproject.toml`:
+
+```toml
+[tool.hip-cargo]
+image = "ghcr.io/myuser/myproject"
+```
+
+The tag is derived automatically by `get_image_tag()`:
+- During a `tbump` release: reads the version from the `.tbump_version` sentinel file
+- On the default branch (`main`): uses `latest`
+- On feature branches: uses the branch name (with `/` replaced by `-`)
+
+This means the full image (e.g. `ghcr.io/myuser/myproject:latest`) is assembled at runtime. CLI source files never need to be modified when the branch or version changes — only the generated cab YAML files are updated.
+
+The `--image` flag on `generate-cabs` overrides this entirely (useful for testing or custom deployments).
+
 ## Container Fallback Execution
 
 When a hip-cargo package is installed in lightweight mode (without heavy dependencies like NumPy, JAX, or Dask), CLI commands automatically fall back to running inside a container. This means users can run commands without installing the full dependency stack — they just need a container runtime.
 
-The fallback is transparent: if the core module import succeeds, the command runs natively. If it fails with `ImportError`, the same CLI command is re-executed inside the container with `--backend native` to force native execution (avoiding infinite recursion).
+The fallback is transparent: if the core module import succeeds, the command runs natively. If it fails with `ImportError`, the same CLI command is re-executed inside the container with `--backend native` to force native execution (avoiding infinite recursion). The container image is resolved from `[tool.hip-cargo].image` in `pyproject.toml` combined with the git-derived tag.
 
 Every generated CLI function gets two additional options when the cab has a container image:
 
@@ -577,6 +638,7 @@ Volume mounts are resolved automatically from the function's type hints:
 - Project scaffolding with `hip-cargo init` including CI/CD, containerisation, and onboarding
 - Container fallback execution with automatic volume mount resolution from type hints
 - Support for apptainer, singularity, docker, and podman backends
+- Runtime image resolution from `[tool.hip-cargo]` config in `pyproject.toml` — no image metadata in source code
 
 ## Quirks
 

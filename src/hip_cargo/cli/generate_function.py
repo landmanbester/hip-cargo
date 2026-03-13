@@ -11,7 +11,6 @@ File = NewType("File", Path)
 @stimela_cab(
     name="generate_function",
     info="Generate Python function from Stimela cab definition.",
-    image="ghcr.io/landmanbester/hip-cargo:gencabsfixfollowup",
 )
 @stimela_output(
     dtype="File",
