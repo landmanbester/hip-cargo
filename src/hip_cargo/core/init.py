@@ -218,7 +218,10 @@ def init(
 
     print(f"\nDone! Project '{project_name}' is ready at {project_dir}")
     print(f"\n  cd {project_dir}")
-    print(f"  uv run {cli_command} onboard")
+    if cli_mode == "single":
+        print(f"  uv run {cli_command}")
+    else:
+        print(f"  uv run {cli_command} onboard")
     print("\nto see setup instructions for CI/CD and publishing.")
 
 
