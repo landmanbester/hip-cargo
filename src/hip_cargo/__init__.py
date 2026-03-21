@@ -1,6 +1,8 @@
 """hip-cargo: Tools for generating Stimela cab definitions."""
 
 from hip_cargo.utils.decorators import stimela_cab, stimela_output
+from hip_cargo.utils.progress import EventType, ProgressEvent
+from hip_cargo.utils.progress_context import track_progress
 from hip_cargo.utils.types import (
     ListFloat,
     ListInt,
@@ -14,6 +16,9 @@ __version__ = "0.1.6"
 __all__ = [
     "stimela_cab",
     "stimela_output",
+    "EventType",
+    "ProgressEvent",
+    "track_progress",
     "ListInt",
     "ListFloat",
     "ListStr",
