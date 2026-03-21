@@ -42,3 +42,7 @@ class MonitorSettings(BaseSettings):
     # Monitoring behaviour
     max_events_per_job: int = 1000
     websocket_poll_interval: float = 0.5
+
+    # Discovery
+    recipes_dir: str | None = None  # overrides auto-discovery
+    cli_module: str | None = None  # e.g. "pfb.cli" for pfb-imaging
