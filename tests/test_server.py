@@ -1,13 +1,12 @@
 """Tests for the FastAPI monitoring server.
 
-Uses a FakeAggregator and mock httpx transport so no real Ray cluster is needed.
+Uses a FakeAggregator and FakeJobClient so no real Ray cluster is needed.
 """
 
 import concurrent.futures
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-import httpx
 import pytest
 from fastapi.testclient import TestClient
 
@@ -73,35 +72,90 @@ class FakeAggregator:
         return self._data.get("dags", {}).get(job_id)
 
 
-# --- Mock httpx transport for Ray Dashboard proxy ---
+# --- Fake JobSubmissionClient ---
 
 
-def _mock_transport(handler):
-    """Create an httpx.MockTransport from a sync handler."""
-    return httpx.MockTransport(handler)
+class _FakeJobDetails:
+    """Mimics ray.job_submission.JobDetails attributes."""
+
+    def __init__(self, **kwargs):
+        self.job_id = kwargs.get("job_id", "")
+        self.submission_id = kwargs.get("submission_id", "")
+        self.status = kwargs.get("status", "RUNNING")
+        self.entrypoint = kwargs.get("entrypoint", "")
+        self.message = kwargs.get("message", "")
+        self.error_type = kwargs.get("error_type", None)
+        self.start_time = kwargs.get("start_time", None)
+        self.end_time = kwargs.get("end_time", None)
+        self.metadata = kwargs.get("metadata", {})
+        self.runtime_env = kwargs.get("runtime_env", {})
 
 
-def _ray_dashboard_handler(request: httpx.Request) -> httpx.Response:
-    """Default mock handler for Ray Dashboard API."""
-    if request.url.path == "/api/jobs/":
-        return httpx.Response(200, json=[{"job_id": "ray-job-1", "status": "RUNNING"}])
-    if request.url.path.startswith("/api/jobs/") and request.url.path.endswith("/logs"):
-        return httpx.Response(200, json={"logs": "some log output"})
-    if "/api/jobs/" in str(request.url.path):
-        job_id = request.url.path.split("/api/jobs/")[1].rstrip("/")
-        if request.method == "POST" and job_id.endswith("stop"):
-            return httpx.Response(200, json={"stopped": True})
-        return httpx.Response(200, json={"job_id": job_id, "status": "RUNNING"})
-    return httpx.Response(404)
+class FakeJobClient:
+    """Mock JobSubmissionClient that returns canned data without Ray."""
+
+    def __init__(self, jobs=None):
+        self._jobs = jobs or {}
+
+    def list_jobs(self):
+        return [_FakeJobDetails(**j) for j in self._jobs.values()]
+
+    def get_job_info(self, job_id):
+        if job_id not in self._jobs:
+            raise RuntimeError(f"Job {job_id} not found")
+        return _FakeJobDetails(**self._jobs[job_id])
+
+    def get_job_logs(self, job_id):
+        if job_id not in self._jobs:
+            raise RuntimeError(f"Job {job_id} not found")
+        return self._jobs[job_id].get("logs", "")
+
+    def stop_job(self, job_id):
+        if job_id not in self._jobs:
+            raise RuntimeError(f"Job {job_id} not found")
+        return True
+
+    def submit_job(self, entrypoint, runtime_env=None, metadata=None):
+        return "raysubmit_test_123"
+
+
+class FailingJobClient:
+    """Mock JobSubmissionClient that always raises ConnectionError."""
+
+    def list_jobs(self):
+        raise ConnectionError("Ray cluster unreachable")
+
+    def get_job_info(self, job_id):
+        raise ConnectionError("Ray cluster unreachable")
+
+    def get_job_logs(self, job_id):
+        raise ConnectionError("Ray cluster unreachable")
+
+    def stop_job(self, job_id):
+        raise ConnectionError("Ray cluster unreachable")
+
+    def submit_job(self, entrypoint, runtime_env=None, metadata=None):
+        raise ConnectionError("Ray cluster unreachable")
 
 
 # --- Fixtures ---
+
+_DEFAULT_JOB_DATA = {
+    "ray-job-1": {
+        "job_id": "ray-job-1",
+        "submission_id": "raysubmit_1",
+        "status": "RUNNING",
+        "entrypoint": "stimela run ...",
+        "logs": "some log output",
+    },
+}
 
 
 def _create_test_app(
     aggregator_data=None,
     auth_token=None,
-    ray_handler=None,
+    job_data=None,
+    job_client=None,
 ):
     """Create a test app with mocked dependencies, bypassing the Ray lifespan."""
     settings = MonitorSettings(
@@ -111,20 +165,20 @@ def _create_test_app(
     )
     app = create_app(settings)
 
-    # Replace the lifespan with a no-op that injects our mocks
     aggregator = FakeAggregator(aggregator_data or {})
-    http_client = httpx.AsyncClient(
-        transport=_mock_transport(ray_handler or _ray_dashboard_handler),
-        base_url="http://fake-ray-dashboard:8265",
-    )
+    jc = job_client or FakeJobClient(job_data if job_data is not None else _DEFAULT_JOB_DATA)
 
     @asynccontextmanager
     async def _test_lifespan(app):
+        from hip_cargo.monitoring.dispatcher import EventDispatcher
+
         app.state.aggregator = aggregator
-        app.state.http_client = http_client
+        app.state.job_client = jc
         app.state.settings = settings
+        app.state.dispatcher = EventDispatcher(aggregator=aggregator, poll_interval=0.1)
+        app.state.dispatcher.start()
         yield
-        await http_client.aclose()
+        await app.state.dispatcher.stop()
 
     app.router.lifespan_context = _test_lifespan
     return app
@@ -140,7 +194,6 @@ def client():
             "jobs": [{"job_id": "job1", "status": "progress"}],
         }
     )
-    # Use context manager to suppress lifespan (already injected state)
     with TestClient(app, raise_server_exceptions=False) as c:
         yield c
 
@@ -199,24 +252,24 @@ def test_progress_latest(client):
 def test_progress_not_found():
     """GET /api/progress/{job_id} returns 404 for unknown job."""
     app = _create_test_app(aggregator_data={"latest": {}})
-    with TestClient(app, raise_server_exceptions=False) as client:
-        resp = client.get("/api/progress/unknown")
+    with TestClient(app, raise_server_exceptions=False) as c:
+        resp = c.get("/api/progress/unknown")
         assert resp.status_code == 404
 
 
 def test_auth_blocks_without_token():
     """With auth_token configured, /api/ routes require Bearer token."""
     app = _create_test_app(auth_token="secret")
-    with TestClient(app, raise_server_exceptions=False) as client:
-        resp = client.get("/api/recipes")
+    with TestClient(app, raise_server_exceptions=False) as c:
+        resp = c.get("/api/recipes")
         assert resp.status_code == 401
 
 
 def test_auth_allows_with_correct_token():
     """With auth_token configured, correct Bearer token grants access."""
     app = _create_test_app(auth_token="secret")
-    with TestClient(app, raise_server_exceptions=False) as client:
-        resp = client.get("/api/recipes", headers={"Authorization": "Bearer secret"})
+    with TestClient(app, raise_server_exceptions=False) as c:
+        resp = c.get("/api/recipes", headers={"Authorization": "Bearer secret"})
         assert resp.status_code == 200
 
 
@@ -229,32 +282,93 @@ def test_auth_not_required_when_unconfigured(client):
 def test_root_not_gated_by_auth():
     """Root page is not behind auth even when token is set."""
     app = _create_test_app(auth_token="secret")
-    with TestClient(app, raise_server_exceptions=False) as client:
-        resp = client.get("/")
+    with TestClient(app, raise_server_exceptions=False) as c:
+        resp = c.get("/")
         assert resp.status_code == 200
 
 
-def test_proxy_jobs(client):
-    """GET /api/jobs proxies to Ray Dashboard."""
+def test_list_jobs(client):
+    """GET /api/jobs returns list of jobs with correct fields."""
     resp = client.get("/api/jobs")
     assert resp.status_code == 200
     jobs = resp.json()
     assert isinstance(jobs, list)
+    assert len(jobs) == 1
+    assert jobs[0]["job_id"] == "ray-job-1"
+    assert jobs[0]["submission_id"] == "raysubmit_1"
+    assert jobs[0]["status"] == "RUNNING"
 
 
-def test_proxy_job_logs(client):
-    """GET /api/jobs/{job_id}/logs proxies to Ray Dashboard."""
+def test_get_job(client):
+    """GET /api/jobs/{job_id} returns job details."""
+    resp = client.get("/api/jobs/ray-job-1")
+    assert resp.status_code == 200
+    job = resp.json()
+    assert job["job_id"] == "ray-job-1"
+    assert job["status"] == "RUNNING"
+
+
+def test_get_job_not_found(client):
+    """GET /api/jobs/{job_id} returns 404 for unknown job."""
+    resp = client.get("/api/jobs/nonexistent")
+    assert resp.status_code == 404
+
+
+def test_get_job_logs(client):
+    """GET /api/jobs/{job_id}/logs returns logs dict."""
     resp = client.get("/api/jobs/ray-job-1/logs")
     assert resp.status_code == 200
+    assert resp.json() == {"logs": "some log output"}
 
 
-def test_proxy_ray_unreachable():
-    """503 is returned when Ray Dashboard is unreachable."""
+def test_stop_job(client):
+    """POST /api/jobs/{job_id}/stop returns stopped status."""
+    resp = client.post("/api/jobs/ray-job-1/stop")
+    assert resp.status_code == 200
+    assert resp.json() == {"stopped": True}
 
-    def failing_handler(request: httpx.Request) -> httpx.Response:
-        raise httpx.ConnectError("Connection refused")
 
-    app = _create_test_app(ray_handler=failing_handler)
-    with TestClient(app, raise_server_exceptions=False) as client:
-        resp = client.get("/api/jobs")
+def test_jobs_ray_unreachable():
+    """503 is returned when Ray cluster is unreachable."""
+    app = _create_test_app(job_client=FailingJobClient())
+    with TestClient(app, raise_server_exceptions=False) as c:
+        resp = c.get("/api/jobs")
         assert resp.status_code == 503
+
+
+def test_submit_pipeline(client):
+    """POST /api/pipelines/submit returns submission_id and entrypoint."""
+    resp = client.post(
+        "/api/pipelines/submit",
+        json={"recipe": "sara", "params": {"niter": 10, "overwrite": True}},
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["submission_id"] == "raysubmit_test_123"
+    assert "stimela run" in data["entrypoint"]
+    assert "gosara" in data["entrypoint"]
+    assert "niter=10" in data["entrypoint"]
+    assert "overwrite=true" in data["entrypoint"]
+
+
+def test_submit_pipeline_list_params(client):
+    """Pipeline submission handles list params with comma-separated values."""
+    resp = client.post(
+        "/api/pipelines/submit",
+        json={"recipe": "sara", "params": {"ms": ["/data/a.ms", "/data/b.ms"]}},
+    )
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "ms=/data/a.ms,/data/b.ms" in data["entrypoint"]
+
+
+def test_submit_pipeline_missing_recipe(client):
+    """Pipeline submission returns 400 when recipe field is missing."""
+    resp = client.post("/api/pipelines/submit", json={"params": {}})
+    assert resp.status_code == 400
+
+
+def test_submit_pipeline_unknown_recipe(client):
+    """Pipeline submission returns 404 for unknown recipe."""
+    resp = client.post("/api/pipelines/submit", json={"recipe": "nonexistent"})
+    assert resp.status_code == 404

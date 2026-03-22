@@ -1,15 +1,15 @@
 """FastAPI server for the hip-cargo monitoring dashboard.
 
-A thin proxy over Ray's infrastructure that adds application-level
-progress tracking, recipe parsing, and command discovery.
+Uses the Ray Jobs Python SDK (JobSubmissionClient) for job management
+and the ProgressAggregator actor for application-level progress tracking.
 """
 
 import asyncio
 import logging
 from contextlib import asynccontextmanager
+from functools import partial
 from pathlib import Path
 
-import httpx
 from fastapi import FastAPI, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -23,6 +23,28 @@ logger = logging.getLogger(__name__)
 async def _get_from_actor(ref):
     """Await a Ray object ref in an async context without blocking the event loop."""
     return await asyncio.wrap_future(ref.future())
+
+
+async def _run_sync(func, *args, **kwargs):
+    """Run a sync function in the default thread pool executor."""
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(None, partial(func, *args, **kwargs))
+
+
+def _job_details_to_dict(jd) -> dict:
+    """Convert a JobDetails object to a plain dict."""
+    return {
+        "job_id": jd.job_id,
+        "submission_id": jd.submission_id,
+        "status": jd.status.value if hasattr(jd.status, "value") else str(jd.status),
+        "entrypoint": jd.entrypoint,
+        "message": jd.message,
+        "error_type": jd.error_type,
+        "start_time": jd.start_time,
+        "end_time": jd.end_time,
+        "metadata": jd.metadata,
+        "runtime_env": jd.runtime_env,
+    }
 
 
 def create_app(settings: MonitorSettings | None = None) -> FastAPI:
@@ -40,7 +62,9 @@ def create_app(settings: MonitorSettings | None = None) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         import ray
+        from ray.job_submission import JobSubmissionClient
 
+        from hip_cargo.monitoring.dispatcher import EventDispatcher
         from hip_cargo.monitoring.ray_backend import get_or_create_aggregator
 
         ray.init(address=settings.ray_address or "auto", ignore_reinit_error=True)
@@ -48,13 +72,17 @@ def create_app(settings: MonitorSettings | None = None) -> FastAPI:
             name=settings.aggregator_name,
             max_events=settings.max_events_per_job,
         )
-        app.state.http_client = httpx.AsyncClient(
-            base_url=settings.ray_dashboard_url,
-            timeout=30.0,
+        app.state.job_client = JobSubmissionClient(
+            address=settings.ray_dashboard_url,
         )
+        app.state.dispatcher = EventDispatcher(
+            aggregator=app.state.aggregator,
+            poll_interval=settings.websocket_poll_interval,
+        )
+        app.state.dispatcher.start()
         app.state.settings = settings
         yield
-        await app.state.http_client.aclose()
+        await app.state.dispatcher.stop()
 
     app = FastAPI(
         title="hip-cargo Monitor",
@@ -95,53 +123,73 @@ def create_app(settings: MonitorSettings | None = None) -> FastAPI:
         </html>
         """
 
-    # --- Jobs (proxy to Ray Dashboard) ---
-
-    async def _proxy_ray(method: str, path: str, **kwargs) -> dict:
-        """Proxy a request to the Ray Dashboard API."""
-        try:
-            resp = await app.state.http_client.request(method, path, **kwargs)
-            resp.raise_for_status()
-            return resp.json()
-        except httpx.ConnectError:
-            raise HTTPException(status_code=503, detail="Ray Dashboard is unreachable")
-        except httpx.HTTPStatusError as exc:
-            raise HTTPException(status_code=exc.response.status_code, detail=exc.response.text)
+    # --- Jobs (via Ray Jobs SDK) ---
 
     @app.get("/api/jobs")
     async def list_jobs():
-        ray_jobs = await _proxy_ray("GET", "/api/jobs/")
-        # Enrich with progress data
+        """List all jobs, enriched with application-level progress data."""
+        try:
+            job_details_list = await _run_sync(app.state.job_client.list_jobs)
+        except Exception as exc:
+            raise HTTPException(status_code=503, detail=f"Ray cluster unreachable: {exc}")
+
+        jobs = [_job_details_to_dict(jd) for jd in job_details_list]
+
+        # Enrich with progress data from aggregator
         try:
             agg_jobs = await _get_from_actor(app.state.aggregator.get_all_jobs.remote())
             progress_by_id = {j["job_id"]: j for j in agg_jobs}
         except Exception:
             progress_by_id = {}
-        if isinstance(ray_jobs, list):
-            for job in ray_jobs:
-                job_id = job.get("job_id") or job.get("submission_id", "")
-                if job_id in progress_by_id:
-                    job["progress"] = progress_by_id[job_id]
-        return ray_jobs
+
+        for job in jobs:
+            jid = job.get("submission_id") or job.get("job_id", "")
+            if jid in progress_by_id:
+                job["progress"] = progress_by_id[jid]
+
+        return jobs
 
     @app.get("/api/jobs/{job_id}")
     async def get_job(job_id: str):
-        job = await _proxy_ray("GET", f"/api/jobs/{job_id}")
+        """Get details for a specific job."""
+        try:
+            jd = await _run_sync(app.state.job_client.get_job_info, job_id)
+        except RuntimeError:
+            raise HTTPException(status_code=404, detail=f"Job '{job_id}' not found")
+        except Exception as exc:
+            raise HTTPException(status_code=503, detail=f"Ray cluster unreachable: {exc}")
+
+        job_dict = _job_details_to_dict(jd)
+
+        # Enrich with progress data
         try:
             latest = await _get_from_actor(app.state.aggregator.get_latest.remote(job_id))
             if latest:
-                job["progress"] = latest
+                job_dict["progress"] = latest
         except Exception:
             pass
-        return job
+
+        return job_dict
 
     @app.get("/api/jobs/{job_id}/logs")
     async def get_job_logs(job_id: str):
-        return await _proxy_ray("GET", f"/api/jobs/{job_id}/logs")
+        """Get logs for a specific job."""
+        try:
+            logs = await _run_sync(app.state.job_client.get_job_logs, job_id)
+        except RuntimeError:
+            raise HTTPException(status_code=404, detail=f"Job '{job_id}' not found")
+        except Exception as exc:
+            raise HTTPException(status_code=503, detail=f"Ray cluster unreachable: {exc}")
+        return {"logs": logs}
 
     @app.post("/api/jobs/{job_id}/stop")
     async def stop_job(job_id: str):
-        return await _proxy_ray("POST", f"/api/jobs/{job_id}/stop")
+        """Stop a running job."""
+        try:
+            stopped = await _run_sync(app.state.job_client.stop_job, job_id)
+        except Exception as exc:
+            raise HTTPException(status_code=503, detail=f"Failed to stop job: {exc}")
+        return {"stopped": stopped}
 
     # --- Progress (from ProgressAggregator) ---
 
@@ -220,21 +268,41 @@ def create_app(settings: MonitorSettings | None = None) -> FastAPI:
         except FileNotFoundError:
             raise HTTPException(status_code=404, detail=f"Recipe '{recipe_name}' not found")
 
-        dag = parse_recipe(recipe_path)
+        dag = parse_recipe(recipe_path, resolve_cabs=False)
         params = body.get("params", {})
 
-        # Build stimela entrypoint command
-        param_args = " ".join(f"{k}={v}" for k, v in params.items())
+        # Build stimela entrypoint command with proper quoting
+        param_parts = []
+        for k, v in params.items():
+            if isinstance(v, list):
+                param_parts.append(f"{k}={','.join(str(item) for item in v)}")
+            elif isinstance(v, bool):
+                param_parts.append(f"{k}={'true' if v else 'false'}")
+            else:
+                str_val = str(v)
+                if " " in str_val:
+                    str_val = f"'{str_val}'"
+                param_parts.append(f"{k}={str_val}")
+
+        param_args = " ".join(param_parts)
         entrypoint = f"stimela run {recipe_path} {dag.recipe_key} {param_args}".strip()
 
         runtime_env = body.get("ray_runtime_env", {})
-        submission = {
-            "entrypoint": entrypoint,
-            "runtime_env": runtime_env,
-        }
+        metadata = body.get("metadata", {})
+        metadata.setdefault("recipe", recipe_name)
+        metadata.setdefault("project", "hip-cargo")
 
-        result = await _proxy_ray("POST", "/api/jobs/", json=submission)
-        return result
+        try:
+            submission_id = await _run_sync(
+                app.state.job_client.submit_job,
+                entrypoint=entrypoint,
+                runtime_env=runtime_env or None,
+                metadata=metadata,
+            )
+        except Exception as exc:
+            raise HTTPException(status_code=503, detail=f"Failed to submit job: {exc}")
+
+        return {"submission_id": submission_id, "entrypoint": entrypoint}
 
     # --- WebSocket ---
 
@@ -246,27 +314,33 @@ def create_app(settings: MonitorSettings | None = None) -> FastAPI:
             return
 
         await websocket.accept()
-        agg = websocket.app.state.aggregator
-        last_index = 0
+        dispatcher = websocket.app.state.dispatcher
+        queue, sub_id = dispatcher.subscribe(job_id)
 
         try:
             while True:
-                events = await _get_from_actor(agg.get_events.remote(job_id, last_index))
-                for event in events:
-                    await websocket.send_json(event)
-                last_index += len(events)
+                try:
+                    event = await asyncio.wait_for(queue.get(), timeout=30.0)
+                except asyncio.TimeoutError:
+                    # Send a heartbeat to keep the connection alive
+                    await websocket.send_json({"type": "heartbeat"})
+                    continue
+
+                await websocket.send_json(event)
 
                 # Check for terminal state
-                if events:
-                    last_type = events[-1].get("event_type", "")
-                    if last_type in ("completed", "failed", "step_failed"):
-                        await websocket.send_json({"type": "close", "reason": last_type})
-                        break
-
-                await asyncio.sleep(ws_settings.websocket_poll_interval)
+                event_type = event.get("event_type", "")
+                if event_type in ("completed", "failed", "step_failed"):
+                    await websocket.send_json({"type": "close", "reason": event_type})
+                    break
         except WebSocketDisconnect:
             pass
         except Exception:
-            await websocket.close(code=1011, reason="Internal error")
+            try:
+                await websocket.close(code=1011, reason="Internal error")
+            except Exception:
+                pass
+        finally:
+            dispatcher.unsubscribe(job_id, sub_id)
 
     return app
