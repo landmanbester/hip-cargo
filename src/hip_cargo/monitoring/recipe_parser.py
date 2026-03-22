@@ -75,6 +75,7 @@ class RecipeStep:
     info: str = ""
     params: list[StepParam] = field(default_factory=list)
     order: int = 0
+    cab_schema: dict | None = None  # full cab parameter schema, if resolved
 
 
 @dataclass
@@ -98,6 +99,7 @@ class RecipeDAG:
     steps: list[RecipeStep] = field(default_factory=list)
     edges: list[tuple[str, str]] = field(default_factory=list)
     includes: list[str] = field(default_factory=list)
+    cab_schemas: dict[str, dict] = field(default_factory=dict)  # cab_name -> schema dict
 
     def to_dict(self) -> dict[str, Any]:
         """Serialise to a plain dict suitable for JSON API responses."""
@@ -152,11 +154,13 @@ def find_recipe_block(parsed_yaml: dict[str, Any]) -> tuple[str, dict[str, Any]]
     raise ValueError("No recipe block found in YAML (expected a key other than _include and opts)")
 
 
-def parse_recipe(recipe_path: str | Path) -> RecipeDAG:
+def parse_recipe(recipe_path: str | Path, resolve_cabs: bool = True) -> RecipeDAG:
     """Parse a stimela recipe YAML and extract the DAG structure.
 
     Args:
         recipe_path: Path to the recipe YAML file.
+        resolve_cabs: If True, resolve _include entries to cab schemas.
+            Set to False when cab packages aren't installed or for faster parsing.
 
     Returns:
         A RecipeDAG with parsed inputs, steps, edges, and includes.
@@ -214,6 +218,17 @@ def parse_recipe(recipe_path: str | Path) -> RecipeDAG:
     for i in range(len(steps) - 1):
         edges.append((steps[i].name, steps[i + 1].name))
 
+    # Resolve cab schemas if requested
+    cab_schemas: dict[str, dict] = {}
+    if resolve_cabs and includes:
+        from hip_cargo.monitoring.cab_resolver import resolve_recipe_cabs
+
+        resolved = resolve_recipe_cabs(includes)
+        cab_schemas = {name: schema.to_dict() for name, schema in resolved.items()}
+        for step in steps:
+            if step.cab in cab_schemas:
+                step.cab_schema = cab_schemas[step.cab]
+
     return RecipeDAG(
         name=name,
         recipe_key=recipe_key,
@@ -222,4 +237,5 @@ def parse_recipe(recipe_path: str | Path) -> RecipeDAG:
         steps=steps,
         edges=edges,
         includes=includes,
+        cab_schemas=cab_schemas,
     )

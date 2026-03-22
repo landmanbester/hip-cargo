@@ -199,9 +199,10 @@ def create_app(settings: MonitorSettings | None = None) -> FastAPI:
 
     @app.get("/api/commands")
     async def list_commands():
-        from hip_cargo.monitoring.discovery import discover_commands
+        """List available commands and their parameter schemas from cab YAML files."""
+        from hip_cargo.monitoring.cab_resolver import discover_project_cabs
 
-        return discover_commands(settings.cli_module)
+        return discover_project_cabs(settings.cli_module)
 
     # --- Pipeline submission ---
 
