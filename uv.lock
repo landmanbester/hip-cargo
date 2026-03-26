@@ -964,7 +964,6 @@ dependencies = [
 [package.optional-dependencies]
 monitoring = [
     { name = "fastapi" },
-    { name = "httpx" },
     { name = "pydantic-settings" },
     { name = "ray", extra = ["default"] },
     { name = "uvicorn", extra = ["standard"] },
@@ -983,6 +982,7 @@ monitoring-dev = [
     { name = "hip-cargo", extra = ["monitoring"] },
 ]
 test = [
+    { name = "httpx" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "pytest-cov" },
@@ -991,7 +991,6 @@ test = [
 [package.metadata]
 requires-dist = [
     { name = "fastapi", marker = "extra == 'monitoring'", specifier = ">=0.115.0" },
-    { name = "httpx", marker = "extra == 'monitoring'", specifier = ">=0.27.0" },
     { name = "libcst", specifier = "==1.8.6" },
     { name = "pydantic-settings", marker = "extra == 'monitoring'", specifier = ">=2.0.0" },
     { name = "pyyaml", specifier = ">=6.0" },
@@ -1014,6 +1013,7 @@ dev = [
 ]
 monitoring-dev = [{ name = "hip-cargo", extras = ["monitoring"] }]
 test = [
+    { name = "httpx", specifier = ">=0.27.0" },
     { name = "pytest", specifier = ">=8.0.0" },
     { name = "pytest-asyncio", specifier = ">=0.24.0" },
     { name = "pytest-cov", specifier = ">=5.0.0" },

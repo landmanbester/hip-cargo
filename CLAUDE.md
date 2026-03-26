@@ -15,7 +15,8 @@
 ### 2. **Lightweight Dependencies**
 - Minimize external dependencies
 - Only add dependencies when absolutely necessary
-- Current dependencies: `typer`, `pyyaml`, `libcst`, `typing-extensions`, `tomli` (Python < 3.11 only)
+- Core dependencies: `typer`, `pyyaml`, `libcst`, `typing-extensions`, `tomli` (Python < 3.11 only)
+- Optional monitoring dependencies (separate install): `fastapi`, `uvicorn`, `websockets`, `pydantic-settings`, `ray`
 - Question: "Can this be done with stdlib?" before adding a dependency
 
 ### 3. **Modern Python Best Practices**
@@ -29,7 +30,7 @@
 ```
 hip-cargo/
 ├── src/hip_cargo/
-│   ├── __init__.py           # Exports decorators, list types, and parsers
+│   ├── __init__.py           # Exports decorators, list types, parsers, and progress API
 │   ├── cabs/                 # Generated cab definitions (YAML)
 │   │   ├── __init__.py
 │   │   ├── generate_cabs.yml
@@ -39,7 +40,8 @@ hip-cargo/
 │   │   ├── __init__.py       # Main Typer app, registers commands
 │   │   ├── generate_cabs.py
 │   │   ├── generate_function.py
-│   │   └── init.py           # hip-cargo init command
+│   │   ├── init.py           # hip-cargo init command
+│   │   └── monitor.py        # hip-cargo monitor command (needs monitoring extra)
 │   ├── core/                 # Core implementations (lazy-loaded)
 │   │   ├── __init__.py
 │   │   ├── generate_cabs.py
@@ -59,16 +61,30 @@ hip-cargo/
 │   │   ├── tbump.toml
 │   │   ├── licenses/         # MIT, Apache-2.0, BSD-3-Clause
 │   │   └── workflows/        # GitHub Actions workflow templates
+│   ├── monitoring/           # Pipeline monitoring (optional, needs hip-cargo[monitoring])
+│   │   ├── __init__.py
+│   │   ├── cab_resolver.py      # Resolve _include to cab schemas
+│   │   ├── config.py            # MonitorSettings (pydantic-settings, HIPCARGO_ prefix)
+│   │   ├── dispatcher.py        # Centralised WebSocket event fan-out
+│   │   ├── ray_backend.py       # ProgressAggregator actor + RayProgressBackend
+│   │   ├── recipe_discovery.py  # Find recipe YAML files in project
+│   │   ├── recipe_parser.py     # Parse stimela recipe DAG structure
+│   │   └── server.py            # FastAPI app (REST + WebSocket)
 │   └── utils/                # Shared utilities
 │       ├── __init__.py
 │       ├── cab_to_function.py   # Generate function from cab YAML
 │       ├── config.py            # pyproject.toml [tool.hip-cargo] reader
 │       ├── decorators.py        # @stimela_cab, @stimela_output
 │       ├── introspector.py      # Extract metadata from functions
+│       ├── progress.py          # ProgressEvent, EventType, ProgressBackend protocol
+│       ├── progress_context.py  # track_progress() context manager
 │       ├── runner.py            # Container fallback execution
 │       ├── yaml_comments.py     # YAML comment extraction/preservation
 │       └── types.py             # ListInt, ListFloat, ListStr NewTypes + parsers
 ├── tests/
+│   ├── mocks.py              # Shared test mocks (FakeJobClient, etc.)
+│   └── fixtures/
+│       └── sara.yml           # pfb-imaging SARA recipe fixture
 └── pyproject.toml
 ```
 
@@ -87,8 +103,14 @@ uv run ruff format .
 # Check and auto-fix issues
 uv run ruff check . --fix
 
-# Run tests
-python -m pytest tests/ -v
+# Run tests (fast — excludes Ray tests)
+uv run pytest tests/ -v -m "not slow"
+
+# Run all tests including Ray integration
+uv run pytest tests/ -v
+
+# Install monitoring dependencies for development
+uv sync --group monitoring-dev --group dev --group test
 
 # Run the CLI
 hip-cargo --help
@@ -100,6 +122,10 @@ hip-cargo --help
 - No test artifacts written to the repository directory
 - Tests automatically clean up after themselves
 - Comment preservation tested through multiple roundtrip scenarios
+- `@pytest.mark.slow` marks tests that require a Ray cluster (skipped with `-m "not slow"`)
+- Monitoring tests use `FakeAggregator`/`FakeJobClient` from `tests/mocks.py` to avoid needing Ray
+- Integration tests (`tests/test_integration.py`) use a real local Ray cluster with anonymous actors
+- `pytest-asyncio` is available for testing async dispatcher code
 
 ## Coding Standards
 
@@ -143,7 +169,7 @@ def extract_name(func: Any) -> str:
 - Configuration systems beyond what exists
 - Extensive plugin architectures
 - Over-engineered validation frameworks
-- Async/await unless performance demands it
+- Async/await in core/utils modules (monitoring layer uses async where required by FastAPI/Ray)
 - ORM-style patterns
 - Custom metaclasses or descriptors
 - Clever magic methods
@@ -214,6 +240,10 @@ hip-cargo currently supports:
 - **Container fallback**: Generated functions automatically fall back to container execution when core module imports fail (lightweight installation mode)
 - **Runtime image resolution**: Container image base stored in `[tool.hip-cargo].image` in `pyproject.toml`, tag derived at runtime from git state — no image metadata in CLI source files
 - **Skip metadata**: Parameters marked with `{"stimela": {"skip": True}}` are excluded from cab YAML generation (used for infrastructure params like `backend`)
+- **Pipeline monitoring**: Real-time progress tracking via `ProgressEvent` protocol, Ray aggregator actor, FastAPI server with REST + WebSocket
+- **Recipe parsing**: Extract DAG structure (steps, edges, parameter bindings) from stimela recipe YAML files
+- **Cab resolution**: Resolve `_include` entries to full parameter schemas from cab YAML files (replaces inspect-based discovery)
+- **Event dispatcher**: Centralised WebSocket fan-out that polls the aggregator once per interval instead of N times for N clients
 
 ### Image Resolution
 
@@ -381,6 +411,60 @@ def process_data(
 - Parsed by `extract_stimela_metadata_libcst()` in `introspector.py`
 - Merged with inferred metadata in `extract_input_libcst()`
 - Generated in roundtrip by `generate_parameter_signature()` in `cab_to_function.py`
+
+### Pipeline Monitoring
+
+The monitoring layer is an optional feature (`pip install hip-cargo[monitoring]`) with three tiers:
+
+**Progress Protocol** (`utils/progress.py`, `utils/progress_context.py`):
+- `ProgressEvent` dataclass and `EventType` StrEnum — stdlib only, zero dependencies
+- `ProgressBackend` runtime-checkable Protocol with `NullBackend` default (zero overhead when disabled)
+- Module-level `set_backend()` / `get_backend()` / `emit()` — thread-safe because Ray workers have separate interpreters
+- `track_progress()` context manager emits STARTED/COMPLETED/FAILED lifecycle events
+- Exports: `EventType`, `ProgressEvent`, `track_progress` are in `hip_cargo.__init__`
+
+**Ray Aggregator** (`monitoring/ray_backend.py`):
+- `ProgressAggregator` is a detached Ray actor (survives worker restarts)
+- Workers call `push_event.remote()` fire-and-forget — no blocking
+- Ring buffer trims to most recent half when `max_events` exceeded (trim can cascade across multiple pushes)
+- `get_or_create_aggregator()` uses `ray.get_actor()` / `ProgressAggregator.options(lifetime="detached")`
+
+**FastAPI Server** (`monitoring/server.py`):
+- Uses Ray Jobs Python SDK (`JobSubmissionClient`) not httpx proxy — sync methods wrapped with `asyncio.get_running_loop().run_in_executor()`
+- Auth middleware returns `JSONResponse(401)` not `raise HTTPException` (BaseHTTPMiddleware doesn't handle FastAPI exceptions)
+- Lifespan creates aggregator, job client, and `EventDispatcher`
+- Recipe and cab discovery are lazy-imported inside endpoint handlers
+
+**EventDispatcher** (`monitoring/dispatcher.py`):
+- Single background `asyncio.Task` polls aggregator for all subscribed jobs
+- `subscribe()` returns an `asyncio.Queue` per WebSocket connection
+- Fan-out: one aggregator call per job per poll, events dispatched to all subscriber queues
+- Dead subscribers (full queues) are cleaned up automatically
+- Cursors are per-job (not per-subscriber) — new subscribers see only future events
+
+**Cab Resolver** (`monitoring/cab_resolver.py`):
+- `resolve_include("(module.path)file.yml")` imports the Python package and resolves to a file path
+- `parse_cab_yaml()` extracts `CabSchema` (inputs, outputs) from cab YAML
+- `discover_project_cabs()` finds cabs via sibling module pattern or `pyproject.toml` package name
+- This replaces the deleted `monitoring/discovery.py` (which used inspect-based Typer introspection)
+
+**Recipe Parser** (`monitoring/recipe_parser.py`):
+- Parses stimela recipe YAML into `RecipeDAG` with inputs, steps, edges, includes
+- `parse_param_binding()` classifies `=`-prefixed bindings and extracts `recipe.xxx` refs via `recipe\.[\w-]+` regex
+- Edges are linear (step[i] → step[i+1]) — suitable for current sequential recipes
+- `resolve_cabs=True` resolves `_include` entries and attaches `CabSchema` to each step
+
+**Configuration** (`monitoring/config.py`):
+- `MonitorSettings` uses pydantic-settings with `HIPCARGO_` env prefix and `.env` file support
+- Settings: `auth_token`, `host`, `port`, `ray_address`, `ray_dashboard_url`, `aggregator_name`, `max_events_per_job`, `websocket_poll_interval`, `recipes_dir`, `cli_module`
+
+**Testing patterns for monitoring code:**
+- `FakeAggregator` mimics Ray actor handle interface with `_RemoteMethod` / `_FakeRef` wrappers (in `tests/mocks.py` and `tests/test_server.py`)
+- `FakeJobClient` / `FailingJobClient` in `tests/mocks.py` replace `JobSubmissionClient`
+- Test apps replace the lifespan via `app.router.lifespan_context = _test_lifespan` to avoid `ray.init()`
+- Ray tests use `runtime_env={"working_dir": None}` to prevent Ray from packaging the project directory
+- Integration tests use anonymous (not named) aggregator actors for test isolation
+- All tests that set the global backend must restore `NullBackend` in a `try/finally`
 
 ## Critical Implementation Details
 

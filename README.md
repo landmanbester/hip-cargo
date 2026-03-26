@@ -639,6 +639,131 @@ Volume mounts are resolved automatically from the function's type hints:
 - Container fallback execution with automatic volume mount resolution from type hints
 - Support for apptainer, singularity, docker, and podman backends
 - Runtime image resolution from `[tool.hip-cargo]` config in `pyproject.toml` — no image metadata in source code
+- **Pipeline monitoring**: Real-time progress tracking for distributed pipelines running on Ray clusters
+- **Recipe parsing**: Extract DAG structure from stimela recipe YAML files for visualization
+- **Cab resolution**: Resolve `_include` entries in recipes to full parameter schemas
+
+## Pipeline Monitoring
+
+hip-cargo includes a monitoring layer for tracking distributed pipeline execution on Ray clusters. This is useful for radio astronomy imaging pipelines (e.g. SARA deconvolution) where long-running distributed workers need real-time progress visibility.
+
+### Installation
+
+The monitoring dependencies are optional:
+
+```bash
+pip install hip-cargo[monitoring]
+```
+
+This installs FastAPI, uvicorn, Ray, pydantic-settings, and websockets.
+
+### Architecture
+
+The monitoring system has three layers:
+
+1. **Progress Protocol** (`hip_cargo.utils.progress`) — stdlib-only dataclasses and protocols. Workers emit `ProgressEvent` objects through a pluggable backend. Zero overhead when monitoring is disabled (uses `NullBackend`).
+
+2. **Ray Aggregator** (`hip_cargo.monitoring.ray_backend`) — A detached Ray actor (`ProgressAggregator`) collects events from all workers via fire-and-forget calls. The actor survives worker restarts.
+
+3. **FastAPI Server** (`hip_cargo.monitoring.server`) — Queries the aggregator and the Ray Jobs SDK. Serves REST endpoints and WebSocket streams. A centralised `EventDispatcher` polls the aggregator once per interval and fans out to all connected WebSocket clients.
+
+### Quick Start
+
+```python
+from hip_cargo import track_progress, EventType, ProgressEvent
+from hip_cargo.utils.progress import set_backend, emit
+
+# 1. In your pipeline driver, set up the Ray backend
+from hip_cargo.monitoring.ray_backend import RayProgressBackend, get_or_create_aggregator
+import ray
+
+ray.init()
+aggregator = get_or_create_aggregator()
+set_backend(RayProgressBackend(aggregator))
+
+# 2. In your workers, emit progress events
+with track_progress("sara", total_steps=15, job_id="run-001") as tracker:
+    for cycle in range(15):
+        # ... do work ...
+        tracker.step(f"Major cycle {cycle + 1}")
+        tracker.metric("peak_residual", compute_residual())
+        tracker.artifact("/data/model.fits", artifact_type="fits")
+
+# 3. Launch the monitoring dashboard
+# From the CLI:
+#   hip-cargo monitor --port 8321
+```
+
+### REST API
+
+Launch the server with `hip-cargo monitor` or programmatically:
+
+```python
+from hip_cargo.monitoring.server import create_app
+from hip_cargo.monitoring.config import MonitorSettings
+
+app = create_app(MonitorSettings(port=8321))
+```
+
+Key endpoints:
+
+| Endpoint | Description |
+|----------|-------------|
+| `GET /api/jobs` | List all Ray jobs, enriched with progress data |
+| `GET /api/jobs/{job_id}` | Job details with latest progress |
+| `GET /api/jobs/{job_id}/logs` | Job logs |
+| `POST /api/jobs/{job_id}/stop` | Stop a running job |
+| `GET /api/progress/{job_id}` | Latest progress event |
+| `GET /api/progress/{job_id}/events?since=0` | Incremental event polling |
+| `GET /api/progress/{job_id}/metrics/{name}` | Metric time series |
+| `GET /api/progress/{job_id}/dag` | Pipeline DAG structure |
+| `GET /api/recipes` | Discover recipe files |
+| `GET /api/recipes/{name}` | Parse recipe DAG |
+| `GET /api/commands` | Discover project cabs |
+| `POST /api/pipelines/submit` | Submit a pipeline via Ray Jobs |
+| `WS /ws/progress/{job_id}` | Real-time event stream |
+
+### Configuration
+
+All settings can be provided via environment variables with the `HIPCARGO_` prefix or a `.env` file:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `HIPCARGO_AUTH_TOKEN` | `None` | Bearer token for API authentication |
+| `HIPCARGO_PORT` | `8321` | Server port |
+| `HIPCARGO_HOST` | `0.0.0.0` | Server host |
+| `HIPCARGO_RAY_ADDRESS` | `None` | Ray cluster address (auto-detect) |
+| `HIPCARGO_RAY_DASHBOARD_URL` | `http://localhost:8265` | Ray Dashboard URL |
+| `HIPCARGO_RECIPES_DIR` | `None` | Override recipe discovery directory |
+| `HIPCARGO_CLI_MODULE` | `None` | Dotted path to CLI module for cab discovery |
+
+### Recipe Parsing
+
+The recipe parser extracts DAG structure from stimela recipe YAML files:
+
+```python
+from hip_cargo.monitoring.recipe_parser import parse_recipe
+
+dag = parse_recipe("recipes/sara.yml")
+print(dag.step_names())     # ['initialize', 'gridimage', 'saradeconv', ...]
+print(dag.edges)            # [('initialize', 'gridimage'), ...]
+print(len(dag.inputs))      # 36 recipe-level parameters
+```
+
+When cab packages are installed, `parse_recipe(path, resolve_cabs=True)` also resolves `_include` entries to full parameter schemas, attaching them to each step.
+
+### Cab Resolution
+
+The cab resolver parses cab YAML files to extract parameter schemas — replacing the need to inspect live Python code:
+
+```python
+from hip_cargo.monitoring.cab_resolver import resolve_include, parse_cab_yaml
+
+path = resolve_include("(pfb_imaging.cabs)sara.yml")
+schema = parse_cab_yaml(path)
+print(schema.inputs.keys())   # parameter names
+print(schema.outputs.keys())  # output parameter names
+```
 
 ## Quirks
 

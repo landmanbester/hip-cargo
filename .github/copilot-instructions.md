@@ -21,10 +21,21 @@
 ```
 src/hip_cargo/
 ├── cli/           # Lightweight CLI wrappers (lazy imports only)
+│   └── monitor.py # hip-cargo monitor command (needs monitoring extra)
 ├── core/          # Core implementations (heavy dependencies here)
 ├── cabs/          # Generated YAML cab definitions (git-tracked, auto-updated)
+├── monitoring/    # Pipeline monitoring (optional, needs hip-cargo[monitoring])
+│   ├── cab_resolver.py    # Resolve _include to cab schemas
+│   ├── config.py          # MonitorSettings (pydantic-settings, HIPCARGO_ prefix)
+│   ├── dispatcher.py      # Centralised WebSocket event fan-out
+│   ├── ray_backend.py     # ProgressAggregator actor + RayProgressBackend
+│   ├── recipe_discovery.py # Find recipe YAML files in project
+│   ├── recipe_parser.py   # Parse stimela recipe DAG structure
+│   └── server.py          # FastAPI app (REST + WebSocket, uses Ray Jobs SDK)
 ├── utils/         # Shared utilities (decorators, introspection, conversion, types)
 │   ├── config.py  # pyproject.toml [tool.hip-cargo] reader
+│   ├── progress.py        # ProgressEvent, EventType, ProgressBackend protocol (stdlib only)
+│   ├── progress_context.py # track_progress() context manager
 │   └── types.py   # ListInt, ListFloat, ListStr NewTypes + parsers
 └── recipes/       # Stimela recipes for running via stimela
 ```
@@ -99,6 +110,9 @@ def mycommand(...):
 ```bash
 uv sync --group dev --group test
 uv run pre-commit install
+
+# For monitoring development:
+uv sync --group monitoring-dev --group dev --group test
 ```
 
 **Pre-commit hooks auto-update**:
@@ -110,9 +124,12 @@ uv run pre-commit install
 
 **Run tests**:
 ```bash
-python -m pytest tests/ -v
+# Fast — excludes Ray tests
+uv run pytest tests/ -v -m "not slow"
+# All tests including Ray integration
+uv run pytest tests/ -v
 # With coverage:
-python -m pytest tests/ --cov=hip_cargo --cov-report=html
+uv run pytest tests/ --cov=hip_cargo --cov-report=html
 ```
 
 **Format/lint**:
@@ -135,9 +152,29 @@ uv run ruff check . --fix
 - `src/hip_cargo/utils/cab_to_function.py`: Reverse generation (YAML → Python), generates try/except fallback body
 - `src/hip_cargo/utils/runner.py`: Container fallback execution (mount resolution, backend detection, command assembly)
 - `src/hip_cargo/utils/config.py`: Reads `[tool.hip-cargo].image` from nearest `pyproject.toml`
+- `src/hip_cargo/utils/progress.py`: ProgressEvent protocol (stdlib only, no monitoring deps needed)
+- `src/hip_cargo/utils/progress_context.py`: `track_progress()` context manager
 - `src/hip_cargo/core/generate_cabs.py`: Core cab generation logic (skips `skip: True` params, resolves image from pyproject.toml)
 - `src/hip_cargo/core/generate_function.py`: Generates Python CLI functions from cab YAML (emits `backend`, `always_pull_images` when image present)
-- `CLAUDE.md`: Extended philosophy and anti-patterns
+- `src/hip_cargo/monitoring/server.py`: FastAPI server (uses Ray Jobs SDK, not httpx proxy)
+- `src/hip_cargo/monitoring/ray_backend.py`: ProgressAggregator Ray actor
+- `src/hip_cargo/monitoring/dispatcher.py`: Centralised WebSocket fan-out
+- `src/hip_cargo/monitoring/cab_resolver.py`: Resolve _include entries to cab parameter schemas
+- `src/hip_cargo/monitoring/recipe_parser.py`: Parse stimela recipe YAML into DAG structure
+- `tests/mocks.py`: Shared FakeJobClient, FakeAggregator for testing without Ray
+- `CLAUDE.md`: Extended philosophy, anti-patterns, and monitoring implementation details
+
+### Monitoring-specific Patterns
+
+**Server uses Ray Jobs SDK** (`JobSubmissionClient`), not httpx proxy. Sync SDK methods are wrapped with `run_in_executor()` to avoid blocking the event loop.
+
+**Auth middleware returns JSONResponse(401)**, not `raise HTTPException`. `BaseHTTPMiddleware` doesn't properly handle FastAPI's `HTTPException`.
+
+**Test apps bypass the lifespan** by replacing `app.router.lifespan_context` with a no-op that injects fake aggregator/job client/dispatcher.
+
+**Ray tests need `runtime_env={"working_dir": None}`** in `ray.init()` to prevent Ray from packaging the project directory into a separate venv for workers.
+
+**Integration tests use anonymous actors** (not named/detached) for isolation. Named actors persist across tests and cause contamination.
 
 ## What NOT to Do
 
