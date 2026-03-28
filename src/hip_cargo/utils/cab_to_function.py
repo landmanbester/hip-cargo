@@ -433,11 +433,13 @@ def generate_parameter_signature(
     # Skip for ListType NewTypes — their dtype is inferred from the type name
     if dtype not in ["str", "int", "float", "bool"] and not list_type_name:
         # Normalize comparison: strip Optional/None wrappers and lowercase generics
-        normalized_py_type = py_type.replace(" | None", "").replace("list[", "List[").replace("tuple[", "Tuple[").replace("dict[", "Dict[")
+        normalized_py_type = py_type.replace(" | None", "").replace("list[", "List[").replace("tuple[", "Tuple[")
+        normalized_py_type = normalized_py_type.replace("dict[", "Dict[")
         normalized_dtype = dtype
         if normalized_dtype.startswith("Optional[") and normalized_dtype.endswith("]"):
             normalized_dtype = normalized_dtype[9:-1]
-        normalized_dtype = normalized_dtype.replace("list[", "List[").replace("tuple[", "Tuple[").replace("dict[", "Dict[")
+        normalized_dtype = normalized_dtype.replace("list[", "List[").replace("tuple[", "Tuple[")
+        normalized_dtype = normalized_dtype.replace("dict[", "Dict[")
 
         # Check if the actual dtype differs from what we'd infer from py_type
         if normalized_py_type != normalized_dtype and not uses_literal:
