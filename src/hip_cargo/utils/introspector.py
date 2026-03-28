@@ -316,11 +316,12 @@ def _dtype_to_str_from_string(dtype_str: str) -> str:
     # Strip whitespace
     dtype_str = dtype_str.strip()
 
-    # Check if type is optional (X | None) before stripping
-    is_optional = " | None" in dtype_str or "| None" in dtype_str
+    # Check if type is optional (X | None or None | X) before stripping
+    is_optional = " | None" in dtype_str or "| None" in dtype_str or "None |" in dtype_str or "None|" in dtype_str
 
-    # Remove " | None" or "| None" from Union types
+    # Remove None from union types (handles both X | None and None | X)
     dtype_str = dtype_str.replace(" | None", "").replace("| None", "")
+    dtype_str = dtype_str.replace("None | ", "").replace("None|", "")
 
     # If it's just "None", return "NoneType"
     if dtype_str == "None":

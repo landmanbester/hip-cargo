@@ -158,6 +158,10 @@ Image base stored in `pyproject.toml` under `[tool.hip-cargo].image`. Tag derive
 
 The `@stimela_cab` decorator does **not** contain `image=`. Image is resolved at runtime from project config. Build/publish automated via `.github/workflows/publish-container.yml`.
 
+**IMPORTANT — Generated cab files in `src/*/cabs/*.yml` will contain branch-specific image tags (e.g., `:feature-branch`) on feature branches. This is expected and correct. Do NOT flag these as issues or suggest changing them to `:latest`. After a PR is merged, the `update-cabs` GitHub Actions workflow automatically regenerates the cab files with the correct `:latest` tag and pushes the update. The branch-specific tags are necessary during development for testing with stimela.**
+
+**`[skip ci]` convention**: The `update-cabs` workflow commits with `[skip ci]` in the message. The CI workflow jobs check for this tag and skip, so only `update-cabs` and `publish-container` run after a cab update push. This pattern must be preserved in both `.github/workflows/ci.yml` and the template at `src/hip_cargo/templates/workflows/ci.yml`.
+
 ## Questions Before Implementing
 
 1. Can this be done with stdlib?
