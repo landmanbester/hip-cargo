@@ -83,7 +83,16 @@ channels: Annotated[
 
 `generate_function()` runs ruff with `cwd=config_file.parent` so first-party package detection matches the target project, not wherever hip-cargo is invoked from. This is critical for roundtrip correctness against external projects.
 
-### 6. Lazy Import Pattern
+### 6. Single vs Multi CLI Mode (`hip-cargo init`)
+
+The `--cli-mode` flag controls how the generated CLI is structured:
+
+- **`multi`** (default): Uses `cli_multi.py` template — creates a Typer app with a callback and named subcommands (e.g., `mycli onboard`). Additional commands are registered with `app.command(name="command-name")`.
+- **`single`**: Uses `cli_single.py` template — creates a Typer app with a single `app.command()`. Typer automatically promotes the sole command to the root, so `mycli` directly invokes the function. Running `mycli onboard` would give "unexpected extra argument".
+
+This affects the post-init message in `core/init.py`: single mode prints `uv run <cli_command>`, multi mode prints `uv run <cli_command> onboard`. Do NOT unify these — they must differ because of Typer's command promotion behaviour.
+
+### 7. Lazy Import Pattern
 
 ```python
 # In cli/mycommand.py

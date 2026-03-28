@@ -274,6 +274,8 @@ Scaffolds a new project with:
 
 Templates live in `src/hip_cargo/templates/` and use `<PLACEHOLDER>` substitution (e.g. `<PROJECT_NAME>`, `<PACKAGE_NAME>`, `<GITHUB_USER>`).
 
+**CLI mode matters**: `--cli-mode single` uses `cli_single.py` (Typer promotes the sole command to root — `mycli` runs onboard directly, no subcommand). `--cli-mode multi` uses `cli_multi.py` (subcommands — `mycli onboard`). The post-init message in `core/init.py` branches on this: do not unify the two print paths.
+
 Post-generation steps in `core/init.py`: `uv sync` → `pytest` → `hip-cargo generate-cabs` → `ruff format/check` → `git init/add/commit` → `pre-commit install`.
 
 ## Implementation Details
