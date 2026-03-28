@@ -281,7 +281,7 @@ def foo(
     param_name2, input_def2 = extract_input_libcst(cst_param2)
 
     assert param_name2 == "output"
-    assert "dtype" not in input_def2  # str is default, not added
+    assert input_def2["dtype"] == "Optional[str]"  # str | None produces Optional[str]
     # When default is None, it's not required but also doesn't have a default field
     # (None defaults are handled by the function signature itself)
     assert "required" not in input_def2 or input_def2.get("required") is False

@@ -98,6 +98,12 @@ def stimela_dtype_to_python_type(dtype: str, preserve_custom: bool = True) -> st
     Returns:
         Python type hint as string
     """
+    # Handle Optional types - unwrap and add | None
+    if dtype.startswith("Optional[") and dtype.endswith("]"):
+        inner = dtype[9:-1]
+        inner_py = stimela_dtype_to_python_type(inner, preserve_custom)
+        return f"{inner_py} | None"
+
     # Handle List types - use lowercase 'list'
     if dtype.startswith("List["):
         inner_type = dtype[5:-1]  # Extract inner type
@@ -282,9 +288,12 @@ def generate_parameter_signature(
 
     # Check if this is a comma-separated list type (List[int], List[float], List[str])
     # These use dedicated ListType NewTypes with parser functions
-    list_type_name = STIMELA_DTYPE_TO_LIST_TYPE.get(dtype)
+    # Unwrap Optional[...] for the lookup since Optional[List[int]] should use ListInt too
+    is_optional = dtype.startswith("Optional[") and dtype.endswith("]")
+    lookup_dtype = dtype[9:-1] if is_optional else dtype
+    list_type_name = STIMELA_DTYPE_TO_LIST_TYPE.get(lookup_dtype)
     if list_type_name:
-        py_type = list_type_name
+        py_type = f"{list_type_name} | None" if is_optional else list_type_name
         # Convert list defaults to comma-separated strings (ListType takes a string at CLI level)
         if isinstance(default, list):
             default = ",".join(str(v) for v in default)
@@ -423,10 +432,12 @@ def generate_parameter_signature(
     # This happens when the type hint is generic (like str or Path) but dtype is specific (like File)
     # Skip for ListType NewTypes — their dtype is inferred from the type name
     if dtype not in ["str", "int", "float", "bool"] and not list_type_name:
-        # Normalize comparison: lowercase generics (list, tuple, dict) are equivalent
-        # to their capitalized forms (List, Tuple, Dict) since Python 3.9+
-        normalized_py_type = py_type.replace("list[", "List[").replace("tuple[", "Tuple[").replace("dict[", "Dict[")
-        normalized_dtype = dtype.replace("list[", "List[").replace("tuple[", "Tuple[").replace("dict[", "Dict[")
+        # Normalize comparison: strip Optional/None wrappers and lowercase generics
+        normalized_py_type = py_type.replace(" | None", "").replace("list[", "List[").replace("tuple[", "Tuple[").replace("dict[", "Dict[")
+        normalized_dtype = dtype
+        if normalized_dtype.startswith("Optional[") and normalized_dtype.endswith("]"):
+            normalized_dtype = normalized_dtype[9:-1]
+        normalized_dtype = normalized_dtype.replace("list[", "List[").replace("tuple[", "Tuple[").replace("dict[", "Dict[")
 
         # Check if the actual dtype differs from what we'd infer from py_type
         if normalized_py_type != normalized_dtype and not uses_literal:
