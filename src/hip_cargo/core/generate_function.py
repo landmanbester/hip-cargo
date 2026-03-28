@@ -128,8 +128,10 @@ def generate_function(cab_file: Path, output_file: Path, config_file: Path | Non
     list_types_used = set()
     for param_def in all_params.values():
         dtype = param_def.get("dtype", "str")
-        if dtype in STIMELA_DTYPE_TO_LIST_TYPE:
-            list_types_used.add(STIMELA_DTYPE_TO_LIST_TYPE[dtype])
+        # Unwrap Optional[...] for list type detection
+        lookup_dtype = dtype[9:-1] if dtype.startswith("Optional[") and dtype.endswith("]") else dtype
+        if lookup_dtype in STIMELA_DTYPE_TO_LIST_TYPE:
+            list_types_used.add(STIMELA_DTYPE_TO_LIST_TYPE[lookup_dtype])
 
     # Start building the function
     lines = []
