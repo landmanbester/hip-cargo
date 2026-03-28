@@ -316,8 +316,12 @@ def _dtype_to_str_from_string(dtype_str: str) -> str:
     # Strip whitespace
     dtype_str = dtype_str.strip()
 
-    # Remove " | None" or "| None" from Union types
+    # Check if type is optional (X | None or None | X) before stripping
+    is_optional = " | None" in dtype_str or "| None" in dtype_str or "None |" in dtype_str or "None|" in dtype_str
+
+    # Remove None from union types (handles both X | None and None | X)
     dtype_str = dtype_str.replace(" | None", "").replace("| None", "")
+    dtype_str = dtype_str.replace("None | ", "").replace("None|", "")
 
     # If it's just "None", return "NoneType"
     if dtype_str == "None":
@@ -334,7 +338,8 @@ def _dtype_to_str_from_string(dtype_str: str) -> str:
         "ListStr": "List[str]",
     }
     if dtype_str in list_type_mapping:
-        return list_type_mapping[dtype_str]
+        resolved = list_type_mapping[dtype_str]
+        return f"Optional[{resolved}]" if is_optional else resolved
 
     # Map lowercase built-in types to stimela-compatible names
     # Handle both simple types (list) and generic types (list[File])
@@ -349,14 +354,14 @@ def _dtype_to_str_from_string(dtype_str: str) -> str:
     for old, new in type_mapping.items():
         # Replace "list[" with "List[" (preserve brackets and contents)
         if dtype_str.startswith(f"{old}["):
-            dtype_str = f"{new}{dtype_str[len(old) :]}"
-            return dtype_str
+            resolved = f"{new}{dtype_str[len(old) :]}"
+            return f"Optional[{resolved}]" if is_optional else resolved
         # Simple type without brackets
         elif dtype_str == old:
-            return new
+            return f"Optional[{new}]" if is_optional else new
 
     # Return as-is for custom types like File, Directory, etc.
-    return dtype_str
+    return f"Optional[{dtype_str}]" if is_optional else dtype_str
 
 
 def get_cst_value(node: cst.CSTNode) -> Any:

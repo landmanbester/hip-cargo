@@ -101,6 +101,16 @@ hip-cargo --help
 - Tests automatically clean up after themselves
 - Comment preservation tested through multiple roundtrip scenarios
 
+### CI Workflow and `[skip ci]`
+
+The `update-cabs` workflow commits with `[skip ci]` in the message after the GitHub App regenerates cab definitions on merge to main. The CI workflow (`ci.yml`) respects this tag — both `quality` and `test` jobs have:
+
+```yaml
+if: github.event_name != 'push' || !contains(github.event.head_commit.message, '[skip ci]')
+```
+
+This ensures only `update-cabs` and `publish-container` run after a cab update push, avoiding unnecessary test runs. The template in `src/hip_cargo/templates/workflows/ci.yml` mirrors this pattern for projects scaffolded with `hip-cargo init`.
+
 ## Coding Standards
 
 ### Type Hints
