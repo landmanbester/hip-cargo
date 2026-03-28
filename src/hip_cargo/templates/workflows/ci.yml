@@ -12,6 +12,8 @@ jobs:
   quality:
     name: Code Quality
     runs-on: ubuntu-latest
+    # Skip when the GitHub App pushes cab updates with [skip ci]
+    if: github.event_name != 'push' || !contains(github.event.head_commit.message, '[skip ci]')
     steps:
       - name: Check out code
         uses: actions/checkout@v4
@@ -44,6 +46,7 @@ jobs:
   test:
     name: Tests
     runs-on: ubuntu-latest
+    if: github.event_name != 'push' || !contains(github.event.head_commit.message, '[skip ci]')
     strategy:
       fail-fast: false
       matrix:
