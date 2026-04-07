@@ -14,33 +14,19 @@ CONTAINER_RUNTIMES = ["apptainer", "singularity", "docker", "podman"]
 def run_in_container(
     func: typing.Callable,
     params: dict[str, typing.Any],
+    image: str,
     backend: str = "auto",
     always_pull_images: bool = False,
 ) -> None:
     """Run a CLI command inside a container, mounting required volumes.
 
     Args:
-        func: The decorated CLI function (has __stimela_cab_config__ and __stimela_outputs__).
+        func: The decorated CLI function.
         params: Parameter name → value dict (excludes backend).
         backend: Container runtime to use, or "auto" to detect.
+        image: Full container image reference (e.g. "ghcr.io/user/repo:tag").
         always_pull_images: Force re-pull of the container image even if cached locally.
     """
-    cab_config = getattr(func, "__stimela_cab_config__", {})
-    image = cab_config.get("image")
-    if not image:
-        from hip_cargo.utils.config import get_project_image
-
-        image_base = get_project_image()
-        if image_base:
-            from hip_cargo.core.generate_cabs import get_image_tag
-
-            image = f"{image_base}:{get_image_tag()}"
-    if not image:
-        raise RuntimeError(
-            f"Cannot fall back to container for '{cab_config.get('name', '?')}': "
-            f"no container image configured in @stimela_cab or [tool.hip-cargo] in pyproject.toml."
-        )
-
     runtime = _detect_runtime(backend)
     mounts = _resolve_mounts(func, params)
     cwd = os.getcwd()
