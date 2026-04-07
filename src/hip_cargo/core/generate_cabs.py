@@ -58,10 +58,6 @@ def generate_cabs(module: list[Path], image: str | None = None, output_dir: Path
         except (ValueError, IndexError, PackageNotFoundError):
             pass
 
-        # Debugging: inspect the module paths and metadata lookup
-        print(f"Module paths: {modlist}")
-        print(f"Resolved image: {image}")
-
     # User feedback
     for mod in modlist:
         print(f"Loading file: {mod}")
