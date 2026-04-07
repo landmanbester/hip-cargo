@@ -1,5 +1,6 @@
 """hip-cargo: Tools for generating Stimela cab definitions."""
 
+from hip_cargo.utils.config import get_container_image
 from hip_cargo.utils.decorators import stimela_cab, stimela_output
 from hip_cargo.utils.types import (
     ListFloat,
@@ -12,6 +13,7 @@ from hip_cargo.utils.types import (
 
 __version__ = "0.1.7"
 __all__ = [
+    "get_container_image",
     "stimela_cab",
     "stimela_output",
     "ListInt",

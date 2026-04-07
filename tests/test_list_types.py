@@ -323,3 +323,23 @@ def test_listfloat(
         python_code = gen_file.read_text()
         assert "ListFloat" in python_code
         assert "parse_list_float" in python_code
+
+
+def test_generate_function_body_container_fallback_image():
+    """Generated body should resolve image via get_container_image and pass to run_in_container."""
+    cab_def = {
+        "_name": "my-cmd",
+        "command": "my_pkg.core.my_cmd.my_cmd",
+        "image": "ghcr.io/user/my-pkg:latest",
+        "inputs": {},
+        "outputs": {},
+    }
+    body_lines = generate_function_body(cab_def, {}, {})
+    body = "\n".join(body_lines)
+
+    # Should derive distribution name from command
+    assert '"my-pkg"' in body
+    # Should call get_container_image
+    assert "get_container_image" in body
+    # Should pass image= to run_in_container
+    assert "image=" in body

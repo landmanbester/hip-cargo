@@ -150,8 +150,10 @@ def generate_function(cab_file: Path, output_file: Path, config_file: Path | Non
 
     # Build a single import line from hip_cargo with decorators + list types
     hip_cargo_imports = sorted(list_types_used) + sorted(LIST_TYPE_PARSERS[t] for t in list_types_used)
+    if cab_def.get("image"):
+        hip_cargo_imports.append("get_container_image")
     hip_cargo_imports.extend(["stimela_cab", "stimela_output"])
-    lines.append(f"from hip_cargo import {', '.join(hip_cargo_imports)}")
+    lines.append(f"from hip_cargo import {', '.join(sorted(hip_cargo_imports))}")
 
     lines.append("")
 

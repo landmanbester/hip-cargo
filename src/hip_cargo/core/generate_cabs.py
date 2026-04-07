@@ -1,5 +1,6 @@
 """Core logic for generating Stimela cab definitions from Python modules."""
 
+from importlib.metadata import PackageNotFoundError
 from pathlib import Path
 
 import libcst as cst
@@ -55,7 +56,7 @@ def generate_cabs(module: list[Path], image: str | None = None, output_dir: Path
             import_name = parts[src_idx + 1]
             dist_name = import_name.replace("_", "-")
             image = get_container_image(dist_name)
-        except (ValueError, IndexError):
+        except (ValueError, IndexError, PackageNotFoundError):
             pass
 
     # User feedback

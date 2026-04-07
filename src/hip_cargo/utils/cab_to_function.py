@@ -559,8 +559,23 @@ def generate_function_body(cab_def: dict[str, Any], inputs: dict[str, Any], outp
         lines.append("            if backend == 'native':")
         lines.append("                raise")
         lines.append("")
-        lines.append("    # Fall back to container execution")
+        lines.append("    # Resolve container image from installed package metadata")
+        lines.append("    from hip_cargo.utils.config import get_container_image  # noqa: E402")
         lines.append("    from hip_cargo.utils.runner import run_in_container  # noqa: E402")
+        lines.append("")
+
+        # Derive distribution name from command: "pfb_imaging.core.grid.grid" → "pfb-imaging"
+        command = cab_def.get("command", "")
+        import_name = command.split(".")[0] if command else ""
+        dist_name = import_name.replace("_", "-")
+
+        lines.append(f'    image = get_container_image("{dist_name}")')
+        lines.append("    if image is None:")
+        err_msg = (
+            f"No container image configured for {dist_name}. "
+            f"Set Container in [project.urls] in {dist_name}\\'s pyproject.toml."
+        )
+        lines.append(f'        raise RuntimeError("{err_msg}")')
         lines.append("")
 
         # Build the params dict for run_in_container (excludes backend)
@@ -574,6 +589,7 @@ def generate_function_body(cab_def: dict[str, Any], inputs: dict[str, Any], outp
             py_name = output_name.replace("-", "_")
             lines.append(f"            {py_name}={py_name},")
         lines.append("        ),")
+        lines.append("        image=image,")
         lines.append("        backend=backend,")
         lines.append("        always_pull_images=always_pull_images,")
         lines.append("    )")
