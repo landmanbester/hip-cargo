@@ -41,7 +41,7 @@ Container = "ghcr.io/landmanbester/hip-cargo:fixfallback"
 hip-cargo = "hip_cargo.cli:app"
 
 [build-system]
-requires = ["uv_build>=0.8.3,<0.11.0"]
+requires = ["uv_build>=0.8.3,<0.12.0"]
 build-backend = "uv_build"
 
 [tool.ruff]
