@@ -28,12 +28,14 @@ dependencies = [
     "typing-extensions>=4.15.0",
     "libcst==1.8.6",
     "tomli>=2.0; python_version < '3.11'",
+    "importlib_metadata >= 9.0.0; python_version < '3.11'",
 ]
 
 [project.urls]
 Homepage = "https://github.com/landmanbester/hip-cargo"
 Repository = "https://github.com/landmanbester/hip-cargo"
 "Bug Tracker" = "https://github.com/landmanbester/hip-cargo/issues"
+Container = "ghcr.io/landmanbester/hip-cargo:latest"
 
 [project.scripts]
 hip-cargo = "hip_cargo.cli:app"
@@ -41,9 +43,6 @@ hip-cargo = "hip_cargo.cli:app"
 [build-system]
 requires = ["uv_build>=0.8.3,<0.11.0"]
 build-backend = "uv_build"
-
-[tool.hip-cargo]
-image = "ghcr.io/landmanbester/hip-cargo"
 
 [tool.ruff]
 line-length = 120
