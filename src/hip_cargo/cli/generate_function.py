@@ -87,9 +87,7 @@ def generate_function(
 
     image = get_container_image("hip-cargo")
     if image is None:
-        raise RuntimeError(
-            "No container image configured for hip-cargo. Set Container in [project.urls] in hip-cargo's pyproject.toml."
-        )  # noqa: E501
+        raise RuntimeError("No Container URL in hip-cargo metadata.")
 
     run_in_container(
         generate_function,

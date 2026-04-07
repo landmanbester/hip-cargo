@@ -571,11 +571,7 @@ def generate_function_body(cab_def: dict[str, Any], inputs: dict[str, Any], outp
 
         lines.append(f'    image = get_container_image("{dist_name}")')
         lines.append("    if image is None:")
-        err_msg = (
-            f"No container image configured for {dist_name}. "
-            f"Set Container in [project.urls] in {dist_name}\\'s pyproject.toml."
-        )
-        lines.append(f'        raise RuntimeError("{err_msg}")  # noqa: E501')
+        lines.append(f'        raise RuntimeError("No Container URL in {dist_name} metadata.")')
         lines.append("")
 
         # Build the params dict for run_in_container (excludes backend)
