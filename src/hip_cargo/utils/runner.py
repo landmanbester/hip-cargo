@@ -23,8 +23,8 @@ def run_in_container(
     Args:
         func: The decorated CLI function.
         params: Parameter name → value dict (excludes backend).
-        backend: Container runtime to use, or "auto" to detect.
         image: Full container image reference (e.g. "ghcr.io/user/repo:tag").
+        backend: Container runtime to use, or "auto" to detect.
         always_pull_images: Force re-pull of the container image even if cached locally.
     """
     runtime = _detect_runtime(backend)

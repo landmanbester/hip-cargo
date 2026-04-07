@@ -26,7 +26,7 @@ def get_container_image(package_name: str) -> str | None:
     """
     meta = metadata(package_name)
     for entry in meta.get_all("Project-URL") or []:
-        label, _, url = entry.partition(", ")
+        label, _, url = entry.partition(",")
         if label.strip().lower() == "container":
             return url.strip()
     return None
