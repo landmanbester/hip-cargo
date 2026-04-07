@@ -1,48 +1,16 @@
 """Core logic for generating Stimela cab definitions from Python modules."""
 
-import subprocess
 from pathlib import Path
 
 import libcst as cst
 import yaml
 
-from hip_cargo.utils.config import get_project_image
+from hip_cargo.utils.config import get_container_image
 from hip_cargo.utils.introspector import extract_input_libcst, format_info_fields, parse_decorator_libcst
 
 # Large width prevents YAML line wrapping, which would break trailing comments.
 # YAML dumper would split long lines and lose the comment.
 YAML_MAX_WIDTH = 10000
-
-
-def get_image_tag(default_branch: str = "main") -> str:
-    """Get the image tag for the current context.
-
-    During a tbump release, reads the version from the .tbump_version sentinel
-    file (written by a tbump before_commit hook). The sentinel is cleaned up by
-    a separate tbump before_push hook after the commit succeeds. Otherwise
-    derives the tag from the current git branch: 'latest' for the default
-    branch, branch name for feature branches.
-
-    Args:
-        default_branch: Branch name that maps to the 'latest' tag.
-    """
-    sentinel = Path(".tbump_version")
-    if sentinel.exists():
-        return sentinel.read_text().strip()
-
-    try:
-        result = subprocess.run(
-            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-        branch = result.stdout.strip()
-        if branch == default_branch:
-            return "latest"
-        return branch.replace("/", "-")
-    except (subprocess.CalledProcessError, FileNotFoundError):
-        return "latest"
 
 
 def generate_cabs(module: list[Path], image: str | None = None, output_dir: Path | None = None) -> None:
@@ -76,11 +44,19 @@ def generate_cabs(module: list[Path], image: str | None = None, output_dir: Path
                 raise RuntimeError(f"No module file found at {modpath}")
             modlist.append(modpath)
 
-    # Resolve image from pyproject.toml when not explicitly provided
+    # Resolve image from installed package metadata when not explicitly provided.
+    # Derive distribution name from module path: src/<package>/cli/module.py
+    # The first component after src/ is the Python import name.
     if image is None:
-        image_base = get_project_image()
-        if image_base:
-            image = f"{image_base}:{get_image_tag()}"
+        first_mod = modlist[0]
+        parts = first_mod.parts
+        try:
+            src_idx = parts.index("src")
+            import_name = parts[src_idx + 1]
+            dist_name = import_name.replace("_", "-")
+            image = get_container_image(dist_name)
+        except (ValueError, IndexError):
+            pass
 
     # User feedback
     for mod in modlist:
