@@ -575,7 +575,7 @@ def generate_function_body(cab_def: dict[str, Any], inputs: dict[str, Any], outp
             f"No container image configured for {dist_name}. "
             f"Set Container in [project.urls] in {dist_name}\\'s pyproject.toml."
         )
-        lines.append(f'        raise RuntimeError("{err_msg}")')
+        lines.append(f'        raise RuntimeError("{err_msg}")  # noqa: E501')
         lines.append("")
 
         # Build the params dict for run_in_container (excludes backend)

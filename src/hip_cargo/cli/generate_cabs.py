@@ -80,8 +80,15 @@ def generate_cabs(
             if backend == "native":
                 raise
 
-    # Fall back to container execution
+    # Resolve container image from installed package metadata
+    from hip_cargo.utils.config import get_container_image  # noqa: E402
     from hip_cargo.utils.runner import run_in_container  # noqa: E402
+
+    image = get_container_image("hip-cargo")
+    if image is None:
+        raise RuntimeError(
+            "No container image configured for hip-cargo. Set Container in [project.urls] in hip-cargo's pyproject.toml."
+        )  # noqa: E501
 
     run_in_container(
         generate_cabs,
@@ -90,6 +97,7 @@ def generate_cabs(
             image=image,
             output_dir=output_dir,
         ),
+        image=image,
         backend=backend,
         always_pull_images=always_pull_images,
     )
