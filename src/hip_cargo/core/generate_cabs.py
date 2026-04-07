@@ -1,7 +1,12 @@
 """Core logic for generating Stimela cab definitions from Python modules."""
 
-from importlib.metadata import PackageNotFoundError
+import sys
 from pathlib import Path
+
+if sys.version_info >= (3, 11):
+    from importlib.metadata import PackageNotFoundError
+else:
+    from importlib_metadata import PackageNotFoundError
 
 import libcst as cst
 import yaml

@@ -1,5 +1,7 @@
 """Tests for container image resolution from package metadata."""
 
+import sys
+
 import pytest
 
 from hip_cargo.utils.config import get_container_image
@@ -24,7 +26,9 @@ class TestGetContainerImage:
     @pytest.mark.unit
     def test_raises_for_nonexistent_package(self):
         """Non-existent package should raise PackageNotFoundError."""
-        from importlib.metadata import PackageNotFoundError
-
+        if sys.version_info >= (3, 11):
+            from importlib.metadata import PackageNotFoundError
+        else:
+            from importlib_metadata import PackageNotFoundError
         with pytest.raises(PackageNotFoundError):
             get_container_image("nonexistent-package-xyz-12345")
