@@ -479,26 +479,26 @@ class TestResolveMountsAccessParent:
 
     @pytest.mark.unit
     def test_access_parent_adds_parent_ro(self, tmp_path):
-        """access_parent should add parent directory as read-only mount."""
+        """access_parent should add the input directory's parent as read-only."""
         from hip_cargo.utils.decorators import stimela_cab
 
         @stimela_cab(name="test", info="test")
         def func(
-            input_file: Annotated[
-                File,
+            input_dir: Annotated[
+                Directory,
                 typer.Option(..., parser=Path, help="input"),
                 {"stimela": {"path_policies": {"access_parent": True}}},
             ],
         ):
             pass
 
-        input_file = tmp_path / "subdir" / "data.ms"
-        input_file.parent.mkdir()
-        input_file.touch()
-        mounts = _resolve_mounts(func, {"input_file": input_file})
-        # Parent of input_file's parent should be mounted ro
-        assert str(tmp_path / "subdir") in mounts
-        assert mounts[str(tmp_path / "subdir")] is False
+        input_dir = tmp_path / "parent" / "subdir"
+        input_dir.mkdir(parents=True)
+        mounts = _resolve_mounts(func, {"input_dir": input_dir})
+        # access_parent should add the parent of the input directory as ro
+        # (the subdir mount itself is pruned since its parent is mounted with equal privilege)
+        assert str(tmp_path / "parent") in mounts
+        assert mounts[str(tmp_path / "parent")] is False
 
     @pytest.mark.unit
     def test_must_exist_raises_for_missing_path(self, tmp_path):
