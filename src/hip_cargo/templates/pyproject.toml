@@ -24,7 +24,9 @@ dependencies = [
 Homepage = "<GITHUB_URL>"
 Repository = "<GITHUB_URL>"
 "Bug Tracker" = "<GITHUB_URL>/issues"
-Container = "ghcr.io/<GITHUB_USER>/<PROJECT_NAME>:latest"
+
+[project.entry-points."hip.cargo"]
+container-image = "ghcr.io/<GITHUB_USER>/<PROJECT_NAME>:latest"
 
 [project.scripts]
 <CLI_COMMAND> = "<PACKAGE_NAME>.cli:app"

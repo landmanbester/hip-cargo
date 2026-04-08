@@ -47,13 +47,13 @@ jobs:
       - name: Install package
         run: uv pip install -e .
 
-      - name: Reset Container image tag to latest
+      - name: Reset container image tag to latest
         run: |
           python -c "
           import re
           p = 'pyproject.toml'
           t = open(p).read()
-          t = re.sub(r'(Container\s*=\s*\".*:)[^\"]+', r'\g<1>latest', t)
+          t = re.sub(r'(container-image\s*=\s*\".*:)[^\"]+', r'\g<1>latest', t)
           open(p, 'w').write(t)
           "
 

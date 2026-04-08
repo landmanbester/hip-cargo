@@ -3,17 +3,17 @@
 import sys
 
 if sys.version_info >= (3, 11):
-    from importlib.metadata import metadata
+    from importlib.metadata import distribution
 else:
-    from importlib_metadata import metadata
+    from importlib_metadata import distribution
 
 
 def get_container_image(package_name: str) -> str | None:
-    """Return the container image URL registered in a package's project metadata.
+    """Return the container image registered in a package's entry points.
 
-    Looks up the 'Container' entry under [project.urls] in the package metadata.
-    This reads from the installed package metadata via importlib.metadata, so it
-    works from any directory — no CWD dependency.
+    Looks up the 'container-image' entry in the package's 'hip.cargo' entry
+    point group. This reads from the installed package metadata via
+    importlib.metadata, so it works from any directory — no CWD dependency.
 
     Args:
         package_name: The distribution name of the package (e.g. 'pfb-imaging').
@@ -24,9 +24,8 @@ def get_container_image(package_name: str) -> str | None:
     Raises:
         PackageNotFoundError: If the package is not installed.
     """
-    meta = metadata(package_name)
-    for entry in meta.get_all("Project-URL") or []:
-        label, _, url = entry.partition(",")
-        if label.strip().lower() == "container":
-            return url.strip()
+    dist = distribution(package_name)
+    for ep in dist.entry_points:
+        if ep.group == "hip.cargo" and ep.name == "container-image":
+            return ep.value
     return None

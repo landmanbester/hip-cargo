@@ -125,11 +125,18 @@ Each step then checks `if: env.SKIP_CHECKS != 'true'`. The template in `src/hip_
 
 ### Image Tag Lifecycle
 
-The `Container` URL in `[project.urls]` of `pyproject.toml` tracks the current image tag. Three mechanisms keep it in sync:
+The container image is stored as an entry point in `[project.entry-points."hip.cargo"]` of `pyproject.toml`:
 
-1. **Feature branches (manual)**: The developer must update the `Container` tag in `pyproject.toml` to match the branch name and run `uv sync` to refresh the package metadata. This ensures pre-commit hooks generate cab definitions with the correct branch-specific image tag.
-2. **Merge to main (`update-cabs` workflow)**: Resets the `Container` tag to `latest`, runs `uv sync`, regenerates cabs, and commits all changes (`pyproject.toml`, `uv.lock`, cab YAML files).
-3. **Releases (`tbump`)**: Updates the `Container` tag to the semantic version (e.g. `0.1.8`) via before-commit hooks in `tbump.toml`.
+```toml
+[project.entry-points."hip.cargo"]
+container-image = "ghcr.io/user/repo:latest"
+```
+
+This avoids PyPI's URL validation (which rejects container image references in `[project.urls]`). Three mechanisms keep the tag in sync:
+
+1. **Feature branches (manual)**: The developer must update the `container-image` tag in `pyproject.toml` to match the branch name and run `uv sync` to refresh the package metadata. This ensures pre-commit hooks generate cab definitions with the correct branch-specific image tag.
+2. **Merge to main (`update-cabs` workflow)**: Resets the `container-image` tag to `latest`, runs `uv sync`, regenerates cabs, and commits all changes (`pyproject.toml`, `uv.lock`, cab YAML files).
+3. **Releases (`tbump`)**: Updates the `container-image` tag to the semantic version (e.g. `0.1.8`) via before-commit hooks in `tbump.toml`.
 
 ## Coding Standards
 
@@ -242,21 +249,23 @@ hip-cargo currently supports:
 - **Stimela metadata dictionary**: Optional `{"stimela": {...}}` dict in `Annotated` type hints for Stimela-specific fields (must_exist, mkdir, custom policies, etc.)
 - **Project scaffolding**: `hip-cargo init` creates a complete project with CI/CD, containerisation, pre-commit hooks, and an onboarding command
 - **Container fallback**: Generated functions automatically fall back to container execution when core module imports fail (lightweight installation mode)
-- **Runtime image resolution**: Container image URL (including tag) read from `[project.urls].Container` in `pyproject.toml` via installed package metadata — no image metadata in CLI source files
+- **Runtime image resolution**: Container image (including tag) read from `[project.entry-points."hip.cargo"]` in `pyproject.toml` via installed package metadata — no image metadata in CLI source files
 - **Skip metadata**: Parameters marked with `{"stimela": {"skip": True}}` are excluded from cab YAML generation (used for infrastructure params like `backend`)
 
 ### Image Resolution
 
-The container image URL (including tag) is stored in `[project.urls].Container` in `pyproject.toml`:
+The container image (including tag) is stored as an entry point in `pyproject.toml`:
 
 ```toml
-[project.urls]
-Container = "ghcr.io/user/repo:latest"
+[project.entry-points."hip.cargo"]
+container-image = "ghcr.io/user/repo:latest"
 ```
 
-At runtime, `get_container_image()` in `utils/config.py` reads this from the installed package's metadata via `importlib.metadata` (no CWD dependency). The full URL is used as-is by both `generate_cabs()` (when no `--image` override is passed) and `run_in_container()` for container fallback.
+This uses entry points instead of `[project.urls]` because PyPI validates URL fields and rejects container image references (which aren't valid URLs). Entry point values are not validated by PyPI or build backends, and are preserved in installed package metadata.
 
-The tag portion of this URL is managed by three mechanisms (see [Image Tag Lifecycle](#image-tag-lifecycle) above):
+At runtime, `get_container_image()` in `utils/config.py` reads this from the installed package's entry points via `importlib.metadata` (no CWD dependency). The value is used as-is by both `generate_cabs()` (when no `--image` override is passed) and `run_in_container()` for container fallback.
+
+The tag portion is managed by three mechanisms (see [Image Tag Lifecycle](#image-tag-lifecycle) above):
 - Developer manually sets it to the branch name on feature branches
 - `update-cabs` workflow resets it to `latest` on merge to main
 - `tbump` sets it to the semantic version during releases
@@ -268,7 +277,7 @@ When a package is installed in lightweight mode (no heavy dependencies), generat
 **How it works:**
 - `generate-function` wraps the lazy import in try/except `ImportError` when the cab has an `image` field
 - On import failure, `run_in_container()` reconstructs the CLI command from `sys.argv` and runs it inside the container with `--backend native`
-- The container image is resolved from `[project.urls].Container` in `pyproject.toml` via installed package metadata
+- The container image is resolved from `[project.entry-points."hip.cargo"]` in `pyproject.toml` via installed package metadata
 - Volume mounts are resolved from function type hints (Path-like types) and `@stimela_output` decorators (input=ro, output=rw)
 - Mount resolution respects stimela path policies: `write_parent`, `access_parent`, `mkdir`, `must_exist`
 - Backend detection priority: apptainer → singularity → docker → podman
@@ -284,7 +293,7 @@ Both are marked `{"stimela": {"skip": True}}` so they don't appear in cab YAML.
 
 Scaffolds a new project with:
 - src layout with `cli/`, `core/`, `cabs/` directories
-- `pyproject.toml` with `[project.urls].Container` image configuration
+- `pyproject.toml` with `[project.entry-points."hip.cargo"]` image configuration
 - GitHub Actions workflows (CI, publish, container, update-cabs)
 - Pre-commit hooks (ruff + cab generation via CLI)
 - Dockerfile, tbump config, license

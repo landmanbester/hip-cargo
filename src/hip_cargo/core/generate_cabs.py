@@ -26,7 +26,7 @@ def generate_cabs(module: list[Path], image: str | None = None, output_dir: Path
         module: List of Python module paths (e.g., "package/cli/command.py").
             Supports glob wildcards in filenames.
         image: Full container image name (with tag) to set in cab definitions.
-            If None, resolved from [project.urls] Container in installed package metadata.
+            If None, resolved from [project.entry-points."hip.cargo"] in installed package metadata.
         output_dir: Directory where YAML cab files should be written.
             If None, prints to stdout.
 

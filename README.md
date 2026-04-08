@@ -209,24 +209,24 @@ Add a `Dockerfile` at the root of your repository. For example, see [`Dockerfile
 
 You can automate cab generation using pre-commit hooks.
 See [`.pre-commit-config.yaml`](./pre-commit-config.yaml) for an example. This calls `generate-cabs` directly to regenerate cab YAML for all commands in your CLI module.
-The container image base URL is read from `[project.urls].Container` in `pyproject.toml` which serves as the single source of truth. The convention is to use the branch name for feature branches, `latest` for the default branch, or a semantic version during `tbump` releases. The CLI source files are never modified during cab generation — only the YAML cab files are updated.
+The container image is read from `[project.entry-points."hip.cargo"]` in `pyproject.toml` which serves as the single source of truth. The convention is to use the branch name for feature branches, `latest` for the default branch, or a semantic version during `tbump` releases. The CLI source files are never modified during cab generation — only the YAML cab files are updated.
 
 You should be able to reuse the GitHub action for `hip-cargo` in `.github/workflows/update-cabs.yml` to automate cab updates for your project.
 The workflow will tag the container image with the branch name if there is an open PR to your default branch.
 Once the PR is merged, an action is triggered to regenerate cab definitions with the `latest` image tag and push them.
-It also resets the `Container` URL tag in `pyproject.toml` to `latest` and runs `uv sync` so that the package's dist-info stays consistent.
+It also resets the `container-image` tag in `pyproject.toml` to `latest` and runs `uv sync` so that the package's dist-info stays consistent.
 Pushing semantically versioned tags will trigger the same workflow (this is where `tbump` is quite useful).
 In this case the image is tagged with the version.
 
 #### Developer workflow for image tags
 
-When you create a feature branch, you should manually update the `Container` image tag in `pyproject.toml` to match your branch name and then run `uv sync` to refresh the package metadata:
+When you create a feature branch, you should manually update the `container-image` tag in `pyproject.toml` to match your branch name and then run `uv sync` to refresh the package metadata:
 
 ```bash
-# In pyproject.toml, change:
-#   Container = "ghcr.io/user/repo:latest"
+# In pyproject.toml under [project.entry-points."hip.cargo"], change:
+#   container-image = "ghcr.io/user/repo:latest"
 # to:
-#   Container = "ghcr.io/user/repo:my-feature-branch"
+#   container-image = "ghcr.io/user/repo:my-feature-branch"
 
 uv sync
 ```
@@ -349,7 +349,7 @@ Note that the order is important if you want to implement a [roundtrip test](tes
 
 When a hip-cargo package is installed in lightweight mode (without heavy dependencies like NumPy, JAX, or Dask), CLI commands automatically fall back to running inside a container. This means users can run commands without installing the full dependency stack — they just need a container runtime.
 
-The fallback is transparent: if the core module import succeeds, the command runs natively. If it fails with `ImportError`, the same CLI command is re-executed inside the container with `--backend native` to force native execution (avoiding infinite recursion). The container image is resolved from `[project.urls].Container` in `pyproject.toml`.
+The fallback is transparent: if the core module import succeeds, the command runs natively. If it fails with `ImportError`, the same CLI command is re-executed inside the container with `--backend native` to force native execution (avoiding infinite recursion). The container image is resolved from `[project.entry-points."hip.cargo"]` in `pyproject.toml`.
 
 Every generated CLI function gets two additional options when the cab has a container image:
 
@@ -375,7 +375,7 @@ Volume mounts are resolved automatically from the function's type hints:
 - Project scaffolding with `hip-cargo init` including CI/CD, containerisation, and onboarding
 - Container fallback execution with automatic volume mount resolution from type hints
 - Support for apptainer, singularity, docker, and podman backends
-- Runtime image resolution from `[project.urls].Container` in `pyproject.toml` — no image metadata in source code
+- Runtime image resolution from `[project.entry-points."hip.cargo"]` in `pyproject.toml` — no image metadata in source code
 
 ## Quirks
 
