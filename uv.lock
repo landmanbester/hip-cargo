@@ -227,6 +227,7 @@ dependencies = [
     { name = "importlib-metadata", marker = "python_full_version < '3.11'" },
     { name = "libcst" },
     { name = "pyyaml" },
+    { name = "ruff" },
     { name = "tomli", marker = "python_full_version < '3.11'" },
     { name = "typer" },
     { name = "typing-extensions" },
@@ -236,8 +237,6 @@ dependencies = [
 dev = [
     { name = "ipdb" },
     { name = "pre-commit" },
-    { name = "pytest" },
-    { name = "ruff" },
     { name = "tbump" },
 ]
 test = [
@@ -250,6 +249,7 @@ requires-dist = [
     { name = "importlib-metadata", marker = "python_full_version < '3.11'", specifier = ">=9.0.0" },
     { name = "libcst", specifier = "==1.8.6" },
     { name = "pyyaml", specifier = ">=6.0" },
+    { name = "ruff", specifier = ">=0.13.2" },
     { name = "tomli", marker = "python_full_version < '3.11'", specifier = ">=2.0" },
     { name = "typer", specifier = ">=0.12.0" },
     { name = "typing-extensions", specifier = ">=4.15.0" },
@@ -259,12 +259,10 @@ requires-dist = [
 dev = [
     { name = "ipdb" },
     { name = "pre-commit", specifier = ">=4.0.0" },
-    { name = "pytest", specifier = ">=8.4.2" },
-    { name = "ruff", specifier = ">=0.13.2" },
     { name = "tbump", specifier = ">=6.11.0" },
 ]
 test = [
-    { name = "pytest", specifier = ">=8.0.0" },
+    { name = "pytest", specifier = ">=8.4.2" },
     { name = "pytest-cov", specifier = ">=5.0.0" },
 ]
 
