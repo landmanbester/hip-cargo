@@ -11,21 +11,31 @@ jobs:
   quality:
     name: Code Quality
     runs-on: ubuntu-latest
-    # Skip when the GitHub App pushes cab updates with [skip ci]
-    if: github.event_name != 'push' || !contains(github.event.head_commit.message, '[skip ci]')
     steps:
+      - name: Check for skip CI
+        id: check_skip
+        run: |
+          if [[ "${{ github.event_name }}" == "push" && "${{ github.event.head_commit.message }}" == *"[skip ci]"* ]]; then
+            echo "SKIP_CI=true" >> $GITHUB_ENV
+            echo "Skipping CI because [skip ci] was found in the commit message."
+          fi
+
       - name: Check out code
+        if: env.SKIP_CI != 'true'
         uses: actions/checkout@v6
 
       - name: Set up Python
+        if: env.SKIP_CI != 'true'
         uses: actions/setup-python@v6
         with:
           python-version: "3.10"
 
       - name: Set up uv
+        if: env.SKIP_CI != 'true'
         uses: astral-sh/setup-uv@v7
 
       - name: Cache uv dependencies
+        if: env.SKIP_CI != 'true'
         uses: actions/cache@v5
         with:
           path: ~/.cache/uv
@@ -34,36 +44,50 @@ jobs:
             ${{ runner.os }}-uv-
 
       - name: Install dependencies
+        if: env.SKIP_CI != 'true'
         run: uv sync --group dev
 
       - name: Check code formatting
+        if: env.SKIP_CI != 'true'
         run: uv run ruff format --check .
 
       - name: Lint code
+        if: env.SKIP_CI != 'true'
         run: uv run ruff check .
 
   test:
     name: Tests
     runs-on: ubuntu-latest
-    if: github.event_name != 'push' || !contains(github.event.head_commit.message, '[skip ci]')
     strategy:
       fail-fast: false
       matrix:
         python-version: ["3.10", "3.11", "3.12", "3.13"]
 
     steps:
+      - name: Check for skip CI
+        id: check_skip
+        run: |
+          if [[ "${{ github.event_name }}" == "push" && "${{ github.event.head_commit.message }}" == *"[skip ci]"* ]]; then
+            echo "SKIP_CI=true" >> $GITHUB_ENV
+            echo "Skipping CI because [skip ci] was found in the commit message."
+          fi
+
       - name: Check out code
+        if: env.SKIP_CI != 'true'
         uses: actions/checkout@v6
 
       - name: Set up Python ${{ matrix.python-version }}
+        if: env.SKIP_CI != 'true'
         uses: actions/setup-python@v6
         with:
           python-version: ${{ matrix.python-version }}
 
       - name: Set up uv
+        if: env.SKIP_CI != 'true'
         uses: astral-sh/setup-uv@v7
 
       - name: Cache uv dependencies
+        if: env.SKIP_CI != 'true'
         uses: actions/cache@v5
         with:
           path: ~/.cache/uv
@@ -73,7 +97,9 @@ jobs:
             ${{ runner.os }}-uv-
 
       - name: Install dependencies
+        if: env.SKIP_CI != 'true'
         run: uv sync --group test
 
       - name: Run tests
+        if: env.SKIP_CI != 'true'
         run: uv run pytest -v
