@@ -112,15 +112,16 @@ This is mandatory — do not consider a feature complete until linting passes cl
 - Tests automatically clean up after themselves
 - Comment preservation tested through multiple roundtrip scenarios
 
-### CI Workflow and `[skip ci]`
+### CI Workflow and `[skip checks]`
 
-The `update-cabs` workflow commits with `[skip ci]` in the message after the GitHub App regenerates cab definitions on merge to main. The CI workflow (`ci.yml`) respects this tag — both `quality` and `test` jobs have:
+The `update-cabs` workflow commits with `[skip checks]` in the message after the GitHub App regenerates cab definitions on merge to main. Unlike GitHub's native `[skip ci]` tag (which prevents workflows from triggering entirely), `[skip checks]` is a custom tag that allows the workflow to run but skip the heavy steps. This ensures required status checks always report a success status, satisfying branch protection rules. The CI workflow (`ci.yml`) evaluates the tag once at workflow level:
 
 ```yaml
-if: github.event_name != 'push' || !contains(github.event.head_commit.message, '[skip ci]')
+env:
+  SKIP_CHECKS: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[skip checks]') }}
 ```
 
-This ensures only `update-cabs` and `publish-container` run after a cab update push, avoiding unnecessary test runs. The template in `src/hip_cargo/templates/workflows/ci.yml` mirrors this pattern for projects scaffolded with `hip-cargo init`.
+Each step then checks `if: env.SKIP_CHECKS != 'true'`. The template in `src/hip_cargo/templates/workflows/ci.yml` mirrors this pattern for projects scaffolded with `hip-cargo init`.
 
 ### Image Tag Lifecycle
 
