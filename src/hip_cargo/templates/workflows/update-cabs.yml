@@ -10,7 +10,7 @@ jobs:
     name: Update cab image tags to latest
     runs-on: ubuntu-latest
     # Prevents loops if the App or the bot pushes
-    if: github.actor != 'github-actions[bot]' && !contains(github.event.head_commit.message, '[skip ci]')
+    if: github.actor != 'github-actions[bot]' && !contains(github.event.head_commit.message, '[skip checks]')
 
     steps:
       - name: Generate Token
@@ -78,5 +78,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add src/<PACKAGE_NAME>/cabs/*.yml pyproject.toml uv.lock
-          git commit -m "chore: update cab definitions [skip ci]"
+          git commit -m "chore: update cab definitions [skip checks]"
           git push
