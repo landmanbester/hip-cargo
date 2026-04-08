@@ -1,46 +1,32 @@
-"""Read project configuration from pyproject.toml."""
+"""Read container image from installed package metadata."""
 
 import sys
-from pathlib import Path
 
 if sys.version_info >= (3, 11):
-    import tomllib
+    from importlib.metadata import metadata
 else:
-    try:
-        import tomllib  # type: ignore[import-not-found]
-    except ModuleNotFoundError:
-        import tomli as tomllib  # type: ignore[no-redef]
+    from importlib_metadata import metadata
 
 
-def find_pyproject_toml(start: Path | None = None) -> Path | None:
-    """Walk up from *start* (default: cwd) to find pyproject.toml.
+def get_container_image(package_name: str) -> str | None:
+    """Return the container image URL registered in a package's project metadata.
 
-    Returns:
-        Path to pyproject.toml, or None if not found.
-    """
-    current = (start or Path.cwd()).resolve()
-    for parent in [current, *current.parents]:
-        candidate = parent / "pyproject.toml"
-        if candidate.is_file():
-            return candidate
-    return None
-
-
-def get_project_image(start: Path | None = None) -> str | None:
-    """Read ``[tool.hip-cargo].image`` from the nearest pyproject.toml.
-
-    This works for any project that stores its container image base
-    under the ``[tool.hip-cargo]`` section in pyproject.toml.
+    Looks up the 'Container' entry under [project.urls] in the package metadata.
+    This reads from the installed package metadata via importlib.metadata, so it
+    works from any directory — no CWD dependency.
 
     Args:
-        start: Directory to start searching from (default: cwd).
+        package_name: The distribution name of the package (e.g. 'pfb-imaging').
 
     Returns:
-        The image base string (without tag), or None if not configured.
+        The full container image string (including tag), or None if not configured.
+
+    Raises:
+        PackageNotFoundError: If the package is not installed.
     """
-    pyproject = find_pyproject_toml(start)
-    if pyproject is None:
-        return None
-    with open(pyproject, "rb") as f:
-        data = tomllib.load(f)
-    return data.get("tool", {}).get("hip-cargo", {}).get("image")
+    meta = metadata(package_name)
+    for entry in meta.get_all("Project-URL") or []:
+        label, _, url = entry.partition(",")
+        if label.strip().lower() == "container":
+            return url.strip()
+    return None

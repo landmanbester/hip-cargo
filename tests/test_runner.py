@@ -244,3 +244,39 @@ class TestBuildContainerCmd:
         cmd = _build_container_cmd("apptainer", "/path/to/image.sif", {}, "/work", ["pkg"])
         assert "/path/to/image.sif" in cmd
         assert "docker:///path/to/image.sif" not in cmd
+
+
+class TestRunInContainer:
+    """Test run_in_container dispatches correctly with explicit image."""
+
+    @pytest.mark.unit
+    def test_run_in_container_uses_provided_image(self, tmp_path):
+        """run_in_container should use the image passed directly."""
+        from hip_cargo.utils.decorators import stimela_cab
+
+        @stimela_cab(name="test-cmd", info="test")
+        def func(input_file: Annotated[File, typer.Option(..., parser=Path, help="input")]):
+            pass
+
+        input_file = tmp_path / "data.ms"
+        input_file.touch()
+
+        with (
+            patch("hip_cargo.utils.runner._detect_runtime", return_value="docker"),
+            patch("hip_cargo.utils.runner.subprocess.run") as mock_run,
+            patch("hip_cargo.utils.runner.sys") as mock_sys,
+        ):
+            mock_sys.argv = ["/usr/bin/test-cmd", "--input-file", str(input_file)]
+
+            from hip_cargo.utils.runner import run_in_container
+
+            run_in_container(
+                func,
+                {"input_file": input_file},
+                image="ghcr.io/test/pkg:v1.0",
+                backend="docker",
+            )
+
+        # Verify the image was used in the container command
+        call_args = mock_run.call_args[0][0]
+        assert "ghcr.io/test/pkg:v1.0" in call_args
