@@ -24,7 +24,7 @@ src/hip_cargo/
 ├── core/          # Core implementations (heavy dependencies here)
 ├── cabs/          # Generated YAML cab definitions (git-tracked, auto-updated)
 ├── utils/         # Shared utilities (decorators, introspection, conversion, types)
-│   ├── config.py  # pyproject.toml [tool.hip-cargo] reader
+│   ├── config.py  # Container image URL from package metadata
 │   └── types.py   # ListInt, ListFloat, ListStr NewTypes + parsers
 └── recipes/       # Stimela recipes for running via stimela
 ```
@@ -81,7 +81,7 @@ channels: Annotated[
 
 ### 5. Ruff Working Directory
 
-`generate_function()` runs ruff with `cwd=config_file.parent` so first-party package detection matches the target project, not wherever hip-cargo is invoked from. This is critical for roundtrip correctness against external projects.
+`ruff` is a core dependency (not just dev) because `generate_function()` runs `ruff format` and `ruff check --fix` on generated code. It runs with `cwd=config_file.parent` so first-party package detection matches the target project, not wherever hip-cargo is invoked from. This is critical for roundtrip correctness against external projects.
 
 ### 6. Single vs Multi CLI Mode (`hip-cargo init`)
 
@@ -143,7 +143,7 @@ uv run ruff check . --fix
 - `src/hip_cargo/utils/introspector.py`: LibCST-based metadata extraction (comment-preserving)
 - `src/hip_cargo/utils/cab_to_function.py`: Reverse generation (YAML → Python), generates try/except fallback body
 - `src/hip_cargo/utils/runner.py`: Container fallback execution (mount resolution, backend detection, command assembly)
-- `src/hip_cargo/utils/config.py`: Reads `[tool.hip-cargo].image` from nearest `pyproject.toml`
+- `src/hip_cargo/utils/config.py`: Reads `[project.urls].Container` from installed package metadata
 - `src/hip_cargo/core/generate_cabs.py`: Core cab generation logic (skips `skip: True` params, resolves image from pyproject.toml)
 - `src/hip_cargo/core/generate_function.py`: Generates Python CLI functions from cab YAML (emits `backend`, `always_pull_images` when image present)
 - `CLAUDE.md`: Extended philosophy and anti-patterns
@@ -160,16 +160,15 @@ uv run ruff check . --fix
 
 ## Container Workflow
 
-Image base stored in `pyproject.toml` under `[tool.hip-cargo].image`. Tag derived at runtime by `get_image_tag()`:
-- Releases: semantic version from `.tbump_version` sentinel (e.g., `0.1.2`)
-- Main branch: `latest`
-- Feature branches: `branch-name`
+The full container image URL (including tag) is stored in `[project.urls].Container` in `pyproject.toml`. At runtime, `get_container_image()` in `utils/config.py` reads this from installed package metadata via `importlib.metadata`.
 
-The `@stimela_cab` decorator does **not** contain `image=`. Image is resolved at runtime from project config. Build/publish automated via `.github/workflows/publish-container.yml`.
+The `@stimela_cab` decorator does **not** contain `image=`. Image is resolved at runtime from project metadata. Build/publish automated via `.github/workflows/publish-container.yml`.
 
 **IMPORTANT — Generated cab files in `src/*/cabs/*.yml` will contain branch-specific image tags (e.g., `:feature-branch`) on feature branches. This is expected and correct. Do NOT flag these as issues or suggest changing them to `:latest`. After a PR is merged, the `update-cabs` GitHub Actions workflow automatically regenerates the cab files with the correct `:latest` tag and pushes the update. The branch-specific tags are necessary during development for testing with stimela.**
 
 **`[skip ci]` convention**: The `update-cabs` workflow commits with `[skip ci]` in the message. The CI workflow jobs check for this tag and skip, so only `update-cabs` and `publish-container` run after a cab update push. This pattern must be preserved in both `.github/workflows/ci.yml` and the template at `src/hip_cargo/templates/workflows/ci.yml`.
+
+**Image tag lifecycle**: The `Container` URL in `[project.urls]` of `pyproject.toml` tracks the current image tag. On feature branches, the developer must manually update the `Container` tag to match the branch name and run `uv sync` to refresh the package metadata. On merge to main, the `update-cabs` workflow resets the tag to `latest`, runs `uv sync`, and commits `pyproject.toml`, `uv.lock`, and cab YAML files. During releases, `tbump` updates the tag to the semantic version via its before-commit hooks.
 
 ## Questions Before Implementing
 
