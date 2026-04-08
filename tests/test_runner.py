@@ -10,8 +10,12 @@ import typer
 from hip_cargo.utils.runner import (
     _build_argv_with_native_backend,
     _build_container_cmd,
+    _detect_runtime,
     _is_path_type,
+    _prune_child_mounts,
+    _pull_image,
     _resolve_mounts,
+    run_in_container,
 )
 
 File = NewType("File", Path)
@@ -280,3 +284,257 @@ class TestRunInContainer:
         # Verify the image was used in the container command
         call_args = mock_run.call_args[0][0]
         assert "ghcr.io/test/pkg:v1.0" in call_args
+
+    @pytest.mark.unit
+    def test_always_pull_images_triggers_pull(self, tmp_path):
+        """When always_pull_images=True, _pull_image should be called before run."""
+        from hip_cargo.utils.decorators import stimela_cab
+
+        @stimela_cab(name="test-cmd", info="test")
+        def func(input_file: Annotated[File, typer.Option(..., parser=Path, help="input")]):
+            pass
+
+        input_file = tmp_path / "data.ms"
+        input_file.touch()
+
+        with (
+            patch("hip_cargo.utils.runner._detect_runtime", return_value="docker"),
+            patch("hip_cargo.utils.runner._pull_image") as mock_pull,
+            patch("hip_cargo.utils.runner.subprocess.run"),
+            patch("hip_cargo.utils.runner.sys") as mock_sys,
+        ):
+            mock_sys.argv = ["/usr/bin/test-cmd", "--input-file", str(input_file)]
+            run_in_container(
+                func,
+                {"input_file": input_file},
+                image="ghcr.io/test/pkg:v1.0",
+                backend="docker",
+                always_pull_images=True,
+            )
+            mock_pull.assert_called_once_with("docker", "ghcr.io/test/pkg:v1.0")
+
+    @pytest.mark.unit
+    def test_no_pull_by_default(self, tmp_path):
+        """When always_pull_images is False (default), _pull_image should not be called."""
+        from hip_cargo.utils.decorators import stimela_cab
+
+        @stimela_cab(name="test-cmd", info="test")
+        def func(input_file: Annotated[File, typer.Option(..., parser=Path, help="input")]):
+            pass
+
+        input_file = tmp_path / "data.ms"
+        input_file.touch()
+
+        with (
+            patch("hip_cargo.utils.runner._detect_runtime", return_value="docker"),
+            patch("hip_cargo.utils.runner._pull_image") as mock_pull,
+            patch("hip_cargo.utils.runner.subprocess.run"),
+            patch("hip_cargo.utils.runner.sys") as mock_sys,
+        ):
+            mock_sys.argv = ["/usr/bin/test-cmd", "--input-file", str(input_file)]
+            run_in_container(
+                func,
+                {"input_file": input_file},
+                image="ghcr.io/test/pkg:v1.0",
+                backend="docker",
+            )
+            mock_pull.assert_not_called()
+
+
+class TestDetectRuntime:
+    """Test _detect_runtime for auto-detection and explicit backends."""
+
+    @pytest.mark.unit
+    def test_explicit_backend_found(self):
+        with patch("hip_cargo.utils.runner.shutil.which", return_value="/usr/bin/docker"):
+            assert _detect_runtime("docker") == "docker"
+
+    @pytest.mark.unit
+    def test_explicit_backend_not_found(self):
+        with patch("hip_cargo.utils.runner.shutil.which", return_value=None):
+            with pytest.raises(RuntimeError, match="not found on PATH"):
+                _detect_runtime("docker")
+
+    @pytest.mark.unit
+    def test_auto_finds_first_available(self):
+        """Auto mode should return the first runtime found in priority order."""
+
+        def which_side_effect(name):
+            # Simulate only docker being available
+            return "/usr/bin/docker" if name == "docker" else None
+
+        with patch("hip_cargo.utils.runner.shutil.which", side_effect=which_side_effect):
+            assert _detect_runtime("auto") == "docker"
+
+    @pytest.mark.unit
+    def test_auto_prefers_apptainer(self):
+        """Apptainer should be preferred over docker when both are available."""
+
+        def which_side_effect(name):
+            return f"/usr/bin/{name}" if name in ("apptainer", "docker") else None
+
+        with patch("hip_cargo.utils.runner.shutil.which", side_effect=which_side_effect):
+            assert _detect_runtime("auto") == "apptainer"
+
+    @pytest.mark.unit
+    def test_auto_no_runtime_found(self):
+        with patch("hip_cargo.utils.runner.shutil.which", return_value=None):
+            with pytest.raises(RuntimeError, match="No container runtime found"):
+                _detect_runtime("auto")
+
+
+class TestPullImage:
+    """Test _pull_image for different runtimes."""
+
+    @pytest.mark.unit
+    def test_docker_pull(self):
+        with patch("hip_cargo.utils.runner.subprocess.run") as mock_run:
+            _pull_image("docker", "ghcr.io/user/repo:latest")
+        mock_run.assert_called_once_with(["docker", "pull", "ghcr.io/user/repo:latest"], check=True)
+
+    @pytest.mark.unit
+    def test_podman_pull(self):
+        with patch("hip_cargo.utils.runner.subprocess.run") as mock_run:
+            _pull_image("podman", "ghcr.io/user/repo:latest")
+        mock_run.assert_called_once_with(["podman", "pull", "ghcr.io/user/repo:latest"], check=True)
+
+    @pytest.mark.unit
+    def test_apptainer_pull_adds_docker_prefix(self):
+        with patch("hip_cargo.utils.runner.subprocess.run") as mock_run:
+            _pull_image("apptainer", "ghcr.io/user/repo:latest")
+        mock_run.assert_called_once_with(
+            ["apptainer", "pull", "--force", "docker://ghcr.io/user/repo:latest"], check=True
+        )
+
+    @pytest.mark.unit
+    def test_apptainer_pull_sif_no_prefix(self):
+        with patch("hip_cargo.utils.runner.subprocess.run") as mock_run:
+            _pull_image("apptainer", "/path/to/image.sif")
+        mock_run.assert_called_once_with(["apptainer", "pull", "--force", "/path/to/image.sif"], check=True)
+
+    @pytest.mark.unit
+    def test_singularity_pull_adds_docker_prefix(self):
+        with patch("hip_cargo.utils.runner.subprocess.run") as mock_run:
+            _pull_image("singularity", "ghcr.io/user/repo:v1")
+        mock_run.assert_called_once_with(
+            ["singularity", "pull", "--force", "docker://ghcr.io/user/repo:v1"], check=True
+        )
+
+    @pytest.mark.unit
+    def test_apptainer_pull_with_protocol_no_extra_prefix(self):
+        """If image already has a protocol prefix, don't add docker://."""
+        with patch("hip_cargo.utils.runner.subprocess.run") as mock_run:
+            _pull_image("apptainer", "oras://ghcr.io/user/repo:v1")
+        mock_run.assert_called_once_with(["apptainer", "pull", "--force", "oras://ghcr.io/user/repo:v1"], check=True)
+
+
+class TestPruneChildMounts:
+    """Test _prune_child_mounts removes redundant child mounts."""
+
+    @pytest.mark.unit
+    def test_child_removed_when_parent_has_same_privilege(self):
+        mounts = {"/data": False, "/data/subdir": False}
+        _prune_child_mounts(mounts)
+        assert "/data" in mounts
+        assert "/data/subdir" not in mounts
+
+    @pytest.mark.unit
+    def test_child_removed_when_parent_has_higher_privilege(self):
+        mounts = {"/data": True, "/data/subdir": False}
+        _prune_child_mounts(mounts)
+        assert "/data" in mounts
+        assert "/data/subdir" not in mounts
+
+    @pytest.mark.unit
+    def test_child_kept_when_it_has_higher_privilege(self):
+        """rw child under ro parent should be kept."""
+        mounts = {"/data": False, "/data/subdir": True}
+        _prune_child_mounts(mounts)
+        assert "/data" in mounts
+        assert "/data/subdir" in mounts
+
+    @pytest.mark.unit
+    def test_deeply_nested_child_removed(self):
+        mounts = {"/data": True, "/data/a/b/c": False}
+        _prune_child_mounts(mounts)
+        assert "/data" in mounts
+        assert "/data/a/b/c" not in mounts
+
+    @pytest.mark.unit
+    def test_unrelated_paths_unaffected(self):
+        mounts = {"/data": False, "/output": True}
+        _prune_child_mounts(mounts)
+        assert "/data" in mounts
+        assert "/output" in mounts
+
+    @pytest.mark.unit
+    def test_empty_mounts(self):
+        mounts = {}
+        _prune_child_mounts(mounts)
+        assert mounts == {}
+
+
+class TestResolveMountsAccessParent:
+    """Test _resolve_mounts with access_parent policy."""
+
+    @pytest.mark.unit
+    def test_access_parent_adds_parent_ro(self, tmp_path):
+        """access_parent should add parent directory as read-only mount."""
+        from hip_cargo.utils.decorators import stimela_cab
+
+        @stimela_cab(name="test", info="test")
+        def func(
+            input_file: Annotated[
+                File,
+                typer.Option(..., parser=Path, help="input"),
+                {"stimela": {"path_policies": {"access_parent": True}}},
+            ],
+        ):
+            pass
+
+        input_file = tmp_path / "subdir" / "data.ms"
+        input_file.parent.mkdir()
+        input_file.touch()
+        mounts = _resolve_mounts(func, {"input_file": input_file})
+        # Parent of input_file's parent should be mounted ro
+        assert str(tmp_path / "subdir") in mounts
+        assert mounts[str(tmp_path / "subdir")] is False
+
+    @pytest.mark.unit
+    def test_must_exist_raises_for_missing_path(self, tmp_path):
+        """must_exist should raise RuntimeError when path doesn't exist."""
+        from hip_cargo.utils.decorators import stimela_cab
+
+        @stimela_cab(name="test", info="test")
+        def func(
+            input_file: Annotated[
+                File,
+                typer.Option(..., parser=Path, help="input"),
+                {"stimela": {"must_exist": True}},
+            ],
+        ):
+            pass
+
+        missing = tmp_path / "nonexistent.ms"
+        with pytest.raises(RuntimeError, match="does not exist"):
+            _resolve_mounts(func, {"input_file": missing})
+
+    @pytest.mark.unit
+    def test_mkdir_mounts_parent_rw(self, tmp_path):
+        """mkdir policy should mount parent directory read-write."""
+        from hip_cargo.utils.decorators import stimela_cab
+
+        @stimela_cab(name="test", info="test")
+        def func(
+            output_dir: Annotated[
+                Directory | None,
+                typer.Option(parser=Path, help="output"),
+                {"stimela": {"mkdir": True}},
+            ] = None,
+        ):
+            pass
+
+        output_dir = tmp_path / "new_output"
+        mounts = _resolve_mounts(func, {"output_dir": output_dir})
+        assert str(tmp_path) in mounts
+        assert mounts[str(tmp_path)] is True
