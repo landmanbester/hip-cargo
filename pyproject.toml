@@ -38,7 +38,7 @@ Repository = "https://github.com/landmanbester/hip-cargo"
 "Bug Tracker" = "https://github.com/landmanbester/hip-cargo/issues"
 
 [project.entry-points."hip.cargo"]
-container-image = "ghcr.io/landmanbester/hip-cargo:0.1.8"
+container-image = "ghcr.io/landmanbester/hip-cargo:latest"
 
 [project.scripts]
 hip-cargo = "hip_cargo.cli:app"
