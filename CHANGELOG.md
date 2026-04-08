@@ -5,6 +5,13 @@ All notable changes to hip-cargo are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Add git-cliff configuration for automated changelog generation
+
+
 ## [0.1.8] - 2026-04-08
 
 ### Added
@@ -59,6 +66,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Test pre-commit overwrite in pyproject.toml
 - Test pre-commit overwrite in pyproject.toml
 - Testing pre-commits
+
+
 ## [0.1.7] - 2026-03-28
 
 ### CI
@@ -79,6 +88,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fix formatting
 - Fix Optional[...] for ... | None type parameters
 - Fix end message for init pp when cli-mode==single
+
+
 ## [0.1.6] - 2026-03-13
 
 ### Fixed
@@ -98,6 +109,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Remove scripts/generate_cabs.py and move functionality into core app
 - Address copilot comments
 - Also update image name in decorators when running generate-cabs script during pre-commit
+
+
 ## [0.1.5] - 2026-03-10
 
 ### CI
@@ -127,6 +140,8 @@ This reverts commit 25e9d432ef5b5a2678a8057eeca2647103d746f0.
 - Update github actions on clause
 - Address copilot comments
 - Add backend fallback logic and keep track of rich_help_panel in stimela parameter metadata
+
+
 ## [0.1.4] - 2026-02-27
 
 ### CI
@@ -149,6 +164,8 @@ This reverts commit 25e9d432ef5b5a2678a8057eeca2647103d746f0.
 - Pin uv version in actions
 - Set up credentials in the init commit
 - Add init command to initialise blank project structure
+
+
 ## [0.1.3] - 2026-02-10
 
 ### CI
@@ -242,6 +259,8 @@ Co-authored-by: Copilot <175728472+Copilot@users.noreply.github.com>
 - Test pre-commit generate-cabs branch name again
 - Test branch renaming in pre-commit hooks
 - Tests to readme
+
+
 ## [0.1.2] - 2025-11-17
 
 ### Other
@@ -250,6 +269,8 @@ Co-authored-by: Copilot <175728472+Copilot@users.noreply.github.com>
 - Roll back version
 - Use pypi enviroment in publish workflow
 - Update lock file
+
+
 ## [0.1.1] - 2025-11-16
 
 ### Fixed
@@ -259,6 +280,8 @@ Co-authored-by: Copilot <175728472+Copilot@users.noreply.github.com>
 ### Other
 
 - Dfr
+
+
 ## [0.1.0] - 2025-11-14
 
 ### CI
@@ -296,6 +319,8 @@ Co-authored-by: Copilot <175728472+Copilot@users.noreply.github.com>
 - Updates generate-function command
 - Handle Optional
 - Rewrite tests for new functionality
+
+
 ## [0.0.2] - 2025-10-13
 
 ### CI
@@ -335,6 +360,9 @@ Co-authored-by: Copilot <175728472+Copilot@users.noreply.github.com>
 - Add functionality for annotated type hints
 - Initial implementation of hip-cargo cab generator
 - Initial commit
+
+
+[Unreleased]: https://github.com/landmanbester/hip-cargo/compare/v0.1.8...HEAD
 [0.1.8]: https://github.com/landmanbester/hip-cargo/compare/v0.1.7...v0.1.8
 [0.1.7]: https://github.com/landmanbester/hip-cargo/compare/v0.1.6...v0.1.7
 [0.1.6]: https://github.com/landmanbester/hip-cargo/compare/v0.1.5...v0.1.6
