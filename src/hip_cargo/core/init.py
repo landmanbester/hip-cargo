@@ -97,6 +97,7 @@ def init(
     # Write template files
     _write_template("pyproject.toml", project_dir / "pyproject.toml", subs)
     _write_template("tbump.toml", project_dir / "tbump.toml", subs)
+    _write_template("cliff.toml", project_dir / "cliff.toml", subs)
     _write_template("Dockerfile", project_dir / "Dockerfile", subs)
     _write_template("pre-commit-config.yaml", project_dir / ".pre-commit-config.yaml", subs)
     _write_template("gitignore", project_dir / ".gitignore", subs)
