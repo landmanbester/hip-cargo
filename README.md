@@ -488,6 +488,49 @@ uv run pytest -v
 
 ```
 
+### Commit Message Convention
+
+This project uses [Conventional Commits](https://www.conventionalcommits.org/) to enable automated changelog generation via [git-cliff](https://git-cliff.org/).
+
+Every commit message should follow this format:
+
+```
+<type>: <description>
+
+[optional body]
+```
+
+**Types:**
+
+| Type | When to use | Changelog section |
+|------|------------|-------------------|
+| `feat` | New feature or capability | Added |
+| `fix` | Bug fix | Fixed |
+| `refactor` | Code change that neither fixes a bug nor adds a feature | Changed |
+| `perf` | Performance improvement | Changed |
+| `docs` | Documentation only | Documentation |
+| `test` | Adding or updating tests | Testing |
+| `ci` | CI/CD changes | CI |
+| `deps` | Dependency updates | Dependencies |
+| `chore` | Maintenance tasks (cab regeneration, formatting) | Miscellaneous |
+
+**Examples:**
+
+```bash
+git commit -m "feat: add support for MS dtype in type inference"
+git commit -m "fix: handle empty docstrings in introspector"
+git commit -m "refactor: simplify generate_cabs output formatting"
+git commit -m "docs: add container fallback section to README"
+git commit -m "test: add roundtrip test for List types"
+```
+
+**Scoped commits** (optional): Use parentheses to specify the affected component:
+
+```bash
+git commit -m "feat(init): add --license-type option for BSD-3-Clause"
+git commit -m "fix(runner): resolve volume mount for symlinked paths"
+```
+
 ### Contributing Workflow
 
 1. **Create a feature branch**:
@@ -511,7 +554,7 @@ uv run pytest -v
    uv run pytest -v
    ```
 
-4. **Format and lint** (automatically done by pre-commit):
+4. **Commit using [conventional commit messages](#commit-message-convention)**:
    ```bash
    git add .
    git commit -m "feat: your feature description"
