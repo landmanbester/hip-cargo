@@ -57,7 +57,3 @@ search = 'version = "{current_version}"'
 [[file]]
 src = "src/hip_cargo/__init__.py"
 search = '__version__ = "{current_version}"'
-
-[[file]]
-src = "pyproject.toml"
-search = 'Container = "ghcr.io/landmanbester/hip-cargo:{current_version}"'
