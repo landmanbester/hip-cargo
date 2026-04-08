@@ -2,7 +2,7 @@
 # See https://github.com/your-tools/tbump for usage
 
 [version]
-current = "0.1.8"
+current = "0.1.7"
 
 # Version format: use semantic versioning
 regex = '''
