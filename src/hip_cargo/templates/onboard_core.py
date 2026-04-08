@@ -143,15 +143,17 @@ Follow these steps to complete the CI/CD and publishing setup for your project.
   Day-to-Day Development: Image Tag Workflow
 ────────────────────────────────────────────────────────────────────────────────
 
-  The container image URL in [project.urls].Container in pyproject.toml is
-  the single source of truth for cab generation and container fallback
-  execution. The tag portion must stay in sync with your current context.
+  The container image is stored in [project.entry-points."hip.cargo"] in
+  pyproject.toml as the single source of truth for cab generation and
+  container fallback execution. The tag portion must stay in sync with
+  your current context.
 
   When you create a feature branch:
 
-    1. Edit pyproject.toml and change the Container tag to your branch name:
+    1. Edit pyproject.toml and change the container-image tag to your
+       branch name:
 
-         Container = "ghcr.io/<GITHUB_USER>/<PROJECT_NAME>:my-feature"
+         container-image = "ghcr.io/<GITHUB_USER>/<PROJECT_NAME>:my-feature"
 
     2. Run `uv sync` to refresh the installed package metadata.
 
@@ -161,7 +163,7 @@ Follow these steps to complete the CI/CD and publishing setup for your project.
   You do NOT need to reset the tag before merging. On merge to <DEFAULT_BRANCH>,
   the update-cabs workflow automatically:
 
-    - Resets the Container tag to "latest"
+    - Resets the container-image tag to "latest"
     - Runs uv sync
     - Regenerates cab definitions
     - Commits pyproject.toml, uv.lock, and cab YAML files

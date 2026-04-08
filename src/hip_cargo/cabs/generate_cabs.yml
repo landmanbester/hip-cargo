@@ -5,7 +5,7 @@ cabs:
     name: generate_cabs
     info:
       Generate Stimela cab definition from Python CLI function.
-    image: ghcr.io/landmanbester/hip-cargo:0.1.8
+    image: ghcr.io/landmanbester/hip-cargo:fixpublish
     inputs:
       module:
         info:

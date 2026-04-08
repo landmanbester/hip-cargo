@@ -48,13 +48,13 @@ jobs:
       - name: Install hip-cargo
         run: uv pip install -e .
 
-      - name: Update Container image tag to latest in pyproject.toml
+      - name: Update container image tag to latest in pyproject.toml
         run: |
           python -c "
           import re
           p = 'pyproject.toml'
           t = open(p).read()
-          t = re.sub(r'(Container\s*=\s*\".*:)[^\"]+', r'\g<1>latest', t)
+          t = re.sub(r'(container-image\s*=\s*\".*:)[^\"]+', r'\g<1>latest', t)
           open(p, 'w').write(t)
           "
 

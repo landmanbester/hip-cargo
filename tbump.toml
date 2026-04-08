@@ -20,8 +20,8 @@ tag_template = "v{new_version}"
 # before_commit hooks run before tbump's version-bump commit.
 # Update the Container image tag and regenerate cabs with the release version.
 [[before_commit]]
-name = "Update Container image tag to release version"
-cmd = "python -c \"import re; p = 'pyproject.toml'; t = open(p).read(); t = re.sub(r'(Container\\s*=\\s*\\\".*:)[^\\\"]+', r'\\g<1>{new_version}', t); open(p, 'w').write(t)\""
+name = "Update container image tag to release version"
+cmd = "python -c \"import re; p = 'pyproject.toml'; t = open(p).read(); t = re.sub(r'(container-image\\s*=\\s*\\\".*:)[^\\\"]+', r'\\g<1>{new_version}', t); open(p, 'w').write(t)\""
 
 [[before_commit]]
 name = "Sync environment to refresh package metadata"
@@ -36,7 +36,7 @@ name = "Stage updated cab definitions"
 cmd = "git add src/hip_cargo/cabs/*.yml"
 
 [[before_commit]]
-name = "Stage pyproject.toml with updated Container tag"
+name = "Stage pyproject.toml with updated container image tag"
 cmd = "git add pyproject.toml"
 
 [[before_commit]]
