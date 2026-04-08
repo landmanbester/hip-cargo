@@ -58,7 +58,7 @@ class TestContainerTagRegex:
     def test_preserves_surrounding_content(self):
         """Regex should only affect the container-image line, not surrounding text."""
         toml = (
-            '[project.entry-points."hip-cargo"]\n'
+            '[project.entry-points."hip.cargo"]\n'
             'container-image = "ghcr.io/user/repo:dev"\n'
             "\n"
             "[project.urls]\n"

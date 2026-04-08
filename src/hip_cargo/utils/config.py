@@ -11,7 +11,7 @@ else:
 def get_container_image(package_name: str) -> str | None:
     """Return the container image registered in a package's entry points.
 
-    Looks up the 'container-image' entry in the package's 'hip-cargo' entry
+    Looks up the 'container-image' entry in the package's 'hip.cargo' entry
     point group. This reads from the installed package metadata via
     importlib.metadata, so it works from any directory — no CWD dependency.
 
