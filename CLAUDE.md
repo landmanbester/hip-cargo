@@ -15,7 +15,8 @@
 ### 2. **Lightweight Dependencies**
 - Minimize external dependencies
 - Only add dependencies when absolutely necessary
-- Current dependencies: `typer`, `pyyaml`, `libcst`, `typing-extensions`, `tomli` (Python < 3.11 only)
+- Current dependencies: `typer`, `pyyaml`, `libcst`, `ruff`, `typing-extensions`, `tomli` (Python < 3.11 only), `importlib_metadata` (Python < 3.11 only)
+- `ruff` is a core dependency (not just dev) because `generate-function` runs `ruff format` and `ruff check --fix` on generated code
 - Question: "Can this be done with stdlib?" before adding a dependency
 
 ### 3. **Modern Python Best Practices**
@@ -62,7 +63,7 @@ hip-cargo/
 │   └── utils/                # Shared utilities
 │       ├── __init__.py
 │       ├── cab_to_function.py   # Generate function from cab YAML
-│       ├── config.py            # pyproject.toml [tool.hip-cargo] reader
+│       ├── config.py            # Container image URL from package metadata
 │       ├── decorators.py        # @stimela_cab, @stimela_output
 │       ├── introspector.py      # Extract metadata from functions
 │       ├── runner.py            # Container fallback execution
@@ -110,6 +111,14 @@ if: github.event_name != 'push' || !contains(github.event.head_commit.message, '
 ```
 
 This ensures only `update-cabs` and `publish-container` run after a cab update push, avoiding unnecessary test runs. The template in `src/hip_cargo/templates/workflows/ci.yml` mirrors this pattern for projects scaffolded with `hip-cargo init`.
+
+### Image Tag Lifecycle
+
+The `Container` URL in `[project.urls]` of `pyproject.toml` tracks the current image tag. Three mechanisms keep it in sync:
+
+1. **Feature branches (manual)**: The developer must update the `Container` tag in `pyproject.toml` to match the branch name and run `uv sync` to refresh the package metadata. This ensures pre-commit hooks generate cab definitions with the correct branch-specific image tag.
+2. **Merge to main (`update-cabs` workflow)**: Resets the `Container` tag to `latest`, runs `uv sync`, regenerates cabs, and commits all changes (`pyproject.toml`, `uv.lock`, cab YAML files).
+3. **Releases (`tbump`)**: Updates the `Container` tag to the semantic version (e.g. `0.1.8`) via before-commit hooks in `tbump.toml`.
 
 ## Coding Standards
 
@@ -222,26 +231,24 @@ hip-cargo currently supports:
 - **Stimela metadata dictionary**: Optional `{"stimela": {...}}` dict in `Annotated` type hints for Stimela-specific fields (must_exist, mkdir, custom policies, etc.)
 - **Project scaffolding**: `hip-cargo init` creates a complete project with CI/CD, containerisation, pre-commit hooks, and an onboarding command
 - **Container fallback**: Generated functions automatically fall back to container execution when core module imports fail (lightweight installation mode)
-- **Runtime image resolution**: Container image base stored in `[tool.hip-cargo].image` in `pyproject.toml`, tag derived at runtime from git state — no image metadata in CLI source files
+- **Runtime image resolution**: Container image URL (including tag) read from `[project.urls].Container` in `pyproject.toml` via installed package metadata — no image metadata in CLI source files
 - **Skip metadata**: Parameters marked with `{"stimela": {"skip": True}}` are excluded from cab YAML generation (used for infrastructure params like `backend`)
 
 ### Image Resolution
 
-The container image is resolved at runtime, not stored in CLI source code:
+The container image URL (including tag) is stored in `[project.urls].Container` in `pyproject.toml`:
 
-1. The image **base** (e.g. `ghcr.io/user/repo`) is configured in `pyproject.toml`:
-   ```toml
-   [tool.hip-cargo]
-   image = "ghcr.io/user/repo"
-   ```
-2. The image **tag** is derived by `get_image_tag()` in `core/generate_cabs.py`:
-   - During `tbump` release: reads from `.tbump_version` sentinel file
-   - On the default branch: `latest`
-   - On feature branches: branch name (with `/` → `-`)
-3. `generate_cabs()` combines base + tag when no `--image` is passed explicitly
-4. `run_in_container()` does the same lookup when the `@stimela_cab` decorator has no `image`
+```toml
+[project.urls]
+Container = "ghcr.io/user/repo:latest"
+```
 
-The `[tool.hip-cargo].image` is read by `get_project_image()` in `utils/config.py`, which walks up from cwd to find `pyproject.toml`.
+At runtime, `get_container_image()` in `utils/config.py` reads this from the installed package's metadata via `importlib.metadata` (no CWD dependency). The full URL is used as-is by both `generate_cabs()` (when no `--image` override is passed) and `run_in_container()` for container fallback.
+
+The tag portion of this URL is managed by three mechanisms (see [Image Tag Lifecycle](#image-tag-lifecycle) above):
+- Developer manually sets it to the branch name on feature branches
+- `update-cabs` workflow resets it to `latest` on merge to main
+- `tbump` sets it to the semantic version during releases
 
 ### Container Fallback Execution
 
@@ -250,7 +257,7 @@ When a package is installed in lightweight mode (no heavy dependencies), generat
 **How it works:**
 - `generate-function` wraps the lazy import in try/except `ImportError` when the cab has an `image` field
 - On import failure, `run_in_container()` reconstructs the CLI command from `sys.argv` and runs it inside the container with `--backend native`
-- The container image is resolved from `[tool.hip-cargo].image` in `pyproject.toml` combined with `get_image_tag()`
+- The container image is resolved from `[project.urls].Container` in `pyproject.toml` via installed package metadata
 - Volume mounts are resolved from function type hints (Path-like types) and `@stimela_output` decorators (input=ro, output=rw)
 - Mount resolution respects stimela path policies: `write_parent`, `access_parent`, `mkdir`, `must_exist`
 - Backend detection priority: apptainer → singularity → docker → podman
@@ -266,7 +273,7 @@ Both are marked `{"stimela": {"skip": True}}` so they don't appear in cab YAML.
 
 Scaffolds a new project with:
 - src layout with `cli/`, `core/`, `cabs/` directories
-- `pyproject.toml` with `[tool.hip-cargo]` image configuration
+- `pyproject.toml` with `[project.urls].Container` image configuration
 - GitHub Actions workflows (CI, publish, container, update-cabs)
 - Pre-commit hooks (ruff + cab generation via CLI)
 - Dockerfile, tbump config, license

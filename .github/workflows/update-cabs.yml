@@ -48,6 +48,19 @@ jobs:
       - name: Install hip-cargo
         run: uv pip install -e .
 
+      - name: Update Container image tag to latest in pyproject.toml
+        run: |
+          python -c "
+          import re
+          p = 'pyproject.toml'
+          t = open(p).read()
+          t = re.sub(r'(Container\s*=\s*\"[^:]+:)[^\"]+', r'\g<1>latest', t)
+          open(p, 'w').write(t)
+          "
+
+      - name: Sync environment to refresh package metadata
+        run: uv sync
+
       - name: Regenerate cab definitions with latest tag
         run: |
           uv run hip-cargo generate-cabs --module 'src/hip_cargo/cli/*.py' \
@@ -57,7 +70,7 @@ jobs:
       - name: Check for changes
         id: check_changes
         run: |
-          if git diff --quiet src/hip_cargo/cabs/*.yml; then
+          if git diff --quiet src/hip_cargo/cabs/*.yml pyproject.toml uv.lock; then
             echo "changed=false" >> $GITHUB_OUTPUT
           else
             echo "changed=true" >> $GITHUB_OUTPUT
@@ -68,6 +81,6 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/hip_cargo/cabs/*.yml
+          git add src/hip_cargo/cabs/*.yml pyproject.toml uv.lock
           git commit -m "chore: update cab definitions [skip ci]"
           git push
