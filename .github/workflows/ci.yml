@@ -7,14 +7,22 @@ on:
     branches: [ main ]
   workflow_dispatch:
 
-env:
-  SKIP_CHECKS: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[skip checks]') }}
-
 jobs:
   quality:
     name: Code Quality
     runs-on: ubuntu-latest
     steps:
+      - name: Check for skip checks
+        env:
+          GH_TOKEN: ${{ github.token }}
+          COMMIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          MSG=$(gh api repos/${{ github.repository }}/commits/$COMMIT_SHA --jq '.commit.message')
+          if echo "$MSG" | grep -qF '[skip checks]'; then
+            echo "SKIP_CHECKS=true" >> "$GITHUB_ENV"
+            echo "Skipping checks because [skip checks] was found in the commit message."
+          fi
+
       - name: Check out code
         if: env.SKIP_CHECKS != 'true'
         uses: actions/checkout@v6
@@ -59,6 +67,17 @@ jobs:
         python-version: ["3.10", "3.11", "3.12", "3.13"]
 
     steps:
+      - name: Check for skip checks
+        env:
+          GH_TOKEN: ${{ github.token }}
+          COMMIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: |
+          MSG=$(gh api repos/${{ github.repository }}/commits/$COMMIT_SHA --jq '.commit.message')
+          if echo "$MSG" | grep -qF '[skip checks]'; then
+            echo "SKIP_CHECKS=true" >> "$GITHUB_ENV"
+            echo "Skipping checks because [skip checks] was found in the commit message."
+          fi
+
       - name: Check out code
         if: env.SKIP_CHECKS != 'true'
         uses: actions/checkout@v6
