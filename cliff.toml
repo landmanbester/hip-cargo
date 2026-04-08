@@ -27,6 +27,7 @@ body = """
           {% if commit.remote.pr_number %} ([#{{ commit.remote.pr_number }}]({{ self::remote_url() }}/pull/{{ commit.remote.pr_number }})){% endif %}\
     {% endfor %}
 {% endfor %}
+\n
 """
 footer = """
 {%- macro remote_url() -%}
@@ -60,6 +61,7 @@ commit_parsers = [
     { message = "^perf", group = "Changed" },
     { message = "^docs", group = "Documentation" },
     { message = "^deps", group = "Dependencies" },
+    { message = "^chore\\(deps\\)", group = "Dependencies" },
     { message = "^chore: update cab definitions", skip = true },
     { message = "^chore", group = "Miscellaneous" },
     { message = "^ci", group = "CI" },
