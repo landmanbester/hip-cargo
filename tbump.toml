@@ -21,7 +21,7 @@ tag_template = "v{new_version}"
 # Update the Container image tag and regenerate cabs with the release version.
 [[before_commit]]
 name = "Update Container image tag to release version"
-cmd = "python -c \"import re; p = 'pyproject.toml'; t = open(p).read(); t = re.sub(r'(Container\\s*=\\s*\\\"[^:]+:)[^\\\"]+', r'\\g<1>{new_version}', t); open(p, 'w').write(t)\""
+cmd = "python -c \"import re; p = 'pyproject.toml'; t = open(p).read(); t = re.sub(r'(Container\\s*=\\s*\\\".*:)[^\\\"]+', r'\\g<1>{new_version}', t); open(p, 'w').write(t)\""
 
 [[before_commit]]
 name = "Sync environment to refresh package metadata"

@@ -95,6 +95,16 @@ python -m pytest tests/ -v
 hip-cargo --help
 ```
 
+### Linting After Every Change
+
+**Always run linting after adding or modifying any code:**
+
+```bash
+uv run ruff format . && uv run ruff check . --fix
+```
+
+This is mandatory — do not consider a feature complete until linting passes cleanly. If `ruff check` reports errors that `--fix` cannot auto-correct, fix them manually before proceeding.
+
 ### Test Infrastructure
 
 - All tests use `tempfile.TemporaryDirectory()` for isolated temporary file handling

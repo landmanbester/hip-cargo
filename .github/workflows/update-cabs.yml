@@ -54,7 +54,7 @@ jobs:
           import re
           p = 'pyproject.toml'
           t = open(p).read()
-          t = re.sub(r'(Container\s*=\s*\"[^:]+:)[^\"]+', r'\g<1>latest', t)
+          t = re.sub(r'(Container\s*=\s*\".*:)[^\"]+', r'\g<1>latest', t)
           open(p, 'w').write(t)
           "
 
