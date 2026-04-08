@@ -18,7 +18,15 @@ message_template = "Bump version to {new_version}"
 tag_template = "v{new_version}"
 
 # before_commit hooks run before tbump's version-bump commit.
-# Update the `container-image` entry in pyproject.toml and regenerate cabs with the release version.
+# Generate changelog, update container image tag, and regenerate cabs with the release version.
+[[before_commit]]
+name = "Generate changelog"
+cmd = "git-cliff --tag v{new_version} -o CHANGELOG.md"
+
+[[before_commit]]
+name = "Stage changelog"
+cmd = "git add CHANGELOG.md"
+
 [[before_commit]]
 name = "Update container image tag to release version"
 cmd = "python -c \"import re; p = 'pyproject.toml'; t = open(p).read(); t = re.sub(r'(container-image\\s*=\\s*\\\".*:)[^\\\"]+', r'\\g<1>{new_version}', t); open(p, 'w').write(t)\""
