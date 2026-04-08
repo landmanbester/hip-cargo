@@ -36,7 +36,7 @@ dependencies = [
 Homepage = "https://github.com/landmanbester/hip-cargo"
 Repository = "https://github.com/landmanbester/hip-cargo"
 "Bug Tracker" = "https://github.com/landmanbester/hip-cargo/issues"
-Container = "ghcr.io/landmanbester/hip-cargo:fixfallback"
+Container = "ghcr.io/landmanbester/hip-cargo:fixupdatecabs"
 
 [project.scripts]
 hip-cargo = "hip_cargo.cli:app"
