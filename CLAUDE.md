@@ -159,6 +159,14 @@ This avoids PyPI's URL validation (which rejects container image references in `
 - Let exceptions propagate unless there's a good reason to catch them
 - Use `typer.Exit(code=1)` for CLI errors
 
+### Commit Messages
+- Use [Conventional Commits](https://www.conventionalcommits.org/) format: `<type>: <description>`
+- Types: `feat`, `fix`, `refactor`, `perf`, `docs`, `test`, `ci`, `deps`, `chore`
+- Keep the first line under 72 characters
+- Use imperative mood: "add support for X" not "added support for X"
+- Optional scope in parentheses: `feat(init): add BSD-3-Clause license option`
+- The changelog is auto-generated from these prefixes via git-cliff
+
 ### Documentation
 - Use Google-style docstrings
 - Document Args, Returns, and Raises
