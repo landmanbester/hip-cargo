@@ -5,7 +5,7 @@ cabs:
     name: init
     info:
       Initialize a new hip-cargo project with scaffolding and Stimela cab support.
-    image: ghcr.io/landmanbester/hip-cargo:gitcliff
+    image: ghcr.io/landmanbester/hip-cargo:fix/replace-entry-points-with-container-image-module
     inputs:
       project-name:
         info:
