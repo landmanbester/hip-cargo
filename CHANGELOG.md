@@ -5,11 +5,59 @@ All notable changes to hip-cargo are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.2.0rc1] - 2026-04-09
 
 ### Added
 
+- **init**: Update scaffolding templates for _container_image.py
+- Replace entry-point lookup with _container_image module import
+- **init**: Add git-cliff template and tbump integration for scaffolded projects
 - Add git-cliff configuration for automated changelog generation
+- **init**: Add git-cliff template and tbump integration for scaffolded projects
+- Add git-cliff configuration for automated changelog generation
+
+### CI
+
+- Retarget update-cabs workflow to _container_image.py
+- Retarget tbump container tag hooks to _container_image.py
+- Integrate git-cliff into tbump release workflow
+- Integrate git-cliff into tbump release workflow
+
+### Documentation
+
+- Update CLAUDE.md for _container_image.py, remove entry-point doc
+- Add conventional commit guidance to CLAUDE.md for AI agents
+- Add conventional commit guidelines and update contributing workflow
+- Add conventional commit guidance to CLAUDE.md for AI agents
+- Add conventional commit guidelines and update contributing workflow
+
+### Fixed
+
+- Fix failing test
+- Address code review findings
+- Remove spec-violating entry point and importlib_metadata dependency
+- Improve cliff.toml template spacing and add deps(chore) parser
+- Improve cliff.toml template spacing and add deps(chore) parser
+
+### Miscellaneous
+
+- Exlcude changelog from linting checks during pre-commit
+
+### Other
+
+- Update container name
+- Modify tbump config to allow pre-releases and patches
+- Use uvx to run git-cliff in tbump
+- Address copilot comments
+- Merge in gitcliff changes
+- Streamline copilot instructions for reviews
+- Simplify monolithic CLAUDE.md file and include rules
+- Merge main
+- Add git-cliff integration
+
+### Testing
+
+- Update container tag regex tests for _container_image.py syntax
 
 
 ## [0.1.8] - 2026-04-08
@@ -362,7 +410,7 @@ Co-authored-by: Copilot <175728472+Copilot@users.noreply.github.com>
 - Initial commit
 
 
-[Unreleased]: https://github.com/landmanbester/hip-cargo/compare/v0.1.8...HEAD
+[0.2.0rc1]: https://github.com/landmanbester/hip-cargo/compare/v0.1.8...v0.2.0rc1
 [0.1.8]: https://github.com/landmanbester/hip-cargo/compare/v0.1.7...v0.1.8
 [0.1.7]: https://github.com/landmanbester/hip-cargo/compare/v0.1.6...v0.1.7
 [0.1.6]: https://github.com/landmanbester/hip-cargo/compare/v0.1.5...v0.1.6
@@ -373,3 +421,4 @@ Co-authored-by: Copilot <175728472+Copilot@users.noreply.github.com>
 [0.1.1]: https://github.com/landmanbester/hip-cargo/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/landmanbester/hip-cargo/compare/v0.0.2...v0.1.0
 [0.0.2]: https://github.com/landmanbester/hip-cargo/releases/tag/v0.0.2
+

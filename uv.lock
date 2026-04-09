@@ -221,7 +221,7 @@ wheels = [
 
 [[package]]
 name = "hip-cargo"
-version = "0.1.8"
+version = "0.2.0rc1"
 source = { editable = "." }
 dependencies = [
     { name = "libcst" },
