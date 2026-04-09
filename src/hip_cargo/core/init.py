@@ -166,6 +166,10 @@ def init(
         "    return cab_path\n\n\n"
         '__all__ = ["CAB_DIR", "AVAILABLE_CABS", "get_cab_path"]\n',
     )
+    _write_file(
+        src_pkg / "_container_image.py",
+        f'CONTAINER_IMAGE = "ghcr.io/{github_user}/{project_name}:latest"\n',
+    )
     _write_file(project_dir / "tests" / "__init__.py", "")
     _write_file(
         project_dir / "tests" / "test_install.py",

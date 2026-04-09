@@ -143,30 +143,25 @@ Follow these steps to complete the CI/CD and publishing setup for your project.
   Day-to-Day Development: Image Tag Workflow
 ────────────────────────────────────────────────────────────────────────────────
 
-  The container image is stored in [project.entry-points."hip.cargo"] in
-  pyproject.toml as the single source of truth for cab generation and
-  container fallback execution. The tag portion must stay in sync with
-  your current context.
+  The container image is stored in src/<PACKAGE_NAME>/_container_image.py
+  as the single source of truth for cab generation and container fallback
+  execution. The tag portion must stay in sync with your current context.
 
   When you create a feature branch:
 
-    1. Edit pyproject.toml and change the container-image tag to your
-       branch name:
+    1. Edit src/<PACKAGE_NAME>/_container_image.py and change the tag:
 
-         container-image = "ghcr.io/<GITHUB_USER>/<PROJECT_NAME>:my-feature"
+         CONTAINER_IMAGE = "ghcr.io/<GITHUB_USER>/<PROJECT_NAME>:my-feature"
 
-    2. Run `uv sync` to refresh the installed package metadata.
-
-    3. Commit and develop as normal — pre-commit hooks will generate cab
+    2. Commit and develop as normal — pre-commit hooks will generate cab
        definitions with the correct branch-specific image tag.
 
   You do NOT need to reset the tag before merging. On merge to <DEFAULT_BRANCH>,
   the update-cabs workflow automatically:
 
-    - Resets the container-image tag to "latest"
-    - Runs uv sync
+    - Resets the CONTAINER_IMAGE tag to "latest"
     - Regenerates cab definitions
-    - Commits pyproject.toml, uv.lock, and cab YAML files
+    - Commits _container_image.py and cab YAML files
 
   During releases, tbump updates the tag to the semantic version
   (e.g. 0.1.0) via its before-commit hooks.
