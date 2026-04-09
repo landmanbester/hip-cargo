@@ -30,7 +30,7 @@ def get_container_image(package_name: str, package_import_name: str | None = Non
         mod = importlib.import_module(module_name)
         return getattr(mod, "CONTAINER_IMAGE", None)
     except ModuleNotFoundError as exc:
-        if exc.name == module_name:
-            # The package is installed but has no _container_image module
+        if exc.name and module_name.startswith(exc.name):
+            # The package or its _container_image module is not installed
             return None
         raise
