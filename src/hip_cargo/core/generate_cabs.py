@@ -1,12 +1,6 @@
 """Core logic for generating Stimela cab definitions from Python modules."""
 
-import sys
 from pathlib import Path
-
-if sys.version_info >= (3, 11):
-    from importlib.metadata import PackageNotFoundError
-else:
-    from importlib_metadata import PackageNotFoundError
 
 import libcst as cst
 import yaml
@@ -26,7 +20,7 @@ def generate_cabs(module: list[Path], image: str | None = None, output_dir: Path
         module: List of Python module paths (e.g., "package/cli/command.py").
             Supports glob wildcards in filenames.
         image: Full container image name (with tag) to set in cab definitions.
-            If None, resolved from [project.entry-points."hip.cargo"] in installed package metadata.
+            If None, resolved from the package's _container_image module.
         output_dir: Directory where YAML cab files should be written.
             If None, prints to stdout.
 
@@ -60,7 +54,7 @@ def generate_cabs(module: list[Path], image: str | None = None, output_dir: Path
             import_name = parts[src_idx + 1]
             dist_name = import_name.replace("_", "-")
             image = get_container_image(dist_name)
-        except (ValueError, IndexError, PackageNotFoundError):
+        except (ValueError, IndexError):
             pass
 
     # User feedback
