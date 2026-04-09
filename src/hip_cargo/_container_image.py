@@ -1,1 +1,1 @@
-CONTAINER_IMAGE = "ghcr.io/landmanbester/hip-cargo:excludechangelogfromprecommits"
+CONTAINER_IMAGE = "ghcr.io/landmanbester/hip-cargo:latest"
