@@ -5,7 +5,7 @@ cabs:
     name: generate_function
     info:
       Generate Python function from Stimela cab definition.
-    image: ghcr.io/landmanbester/hip-cargo:fix/replace-entry-points-with-container-image-module
+    image: ghcr.io/landmanbester/hip-cargo:latest
     inputs:
       cab-file:
         info:
