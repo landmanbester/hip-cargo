@@ -21,7 +21,7 @@ tag_template = "v{new_version}"
 # Generate changelog, update container image tag, and regenerate cabs with the release version.
 [[before_commit]]
 name = "Generate changelog"
-cmd = "git-cliff --tag v{new_version} -o CHANGELOG.md"
+cmd = "uvx git-cliff --tag v{new_version} -o CHANGELOG.md"
 
 [[before_commit]]
 name = "Stage changelog"
