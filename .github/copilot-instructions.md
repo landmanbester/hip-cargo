@@ -143,8 +143,8 @@ uv run ruff check . --fix
 - `src/hip_cargo/utils/introspector.py`: LibCST-based metadata extraction (comment-preserving)
 - `src/hip_cargo/utils/cab_to_function.py`: Reverse generation (YAML → Python), generates try/except fallback body
 - `src/hip_cargo/utils/runner.py`: Container fallback execution (mount resolution, backend detection, command assembly)
-- `src/hip_cargo/utils/config.py`: Reads container image from `[project.entry-points."hip.cargo"]` via installed package metadata
-- `src/hip_cargo/core/generate_cabs.py`: Core cab generation logic (skips `skip: True` params, resolves image from pyproject.toml)
+- `src/hip_cargo/utils/config.py`: Reads container image from `_container_image.py` via dynamic module import
+- `src/hip_cargo/core/generate_cabs.py`: Core cab generation logic (skips `skip: True` params, resolves image from package metadata)
 - `src/hip_cargo/core/generate_function.py`: Generates Python CLI functions from cab YAML (emits `backend`, `always_pull_images` when image present)
 - `CLAUDE.md`: Extended philosophy and anti-patterns
 
@@ -160,15 +160,15 @@ uv run ruff check . --fix
 
 ## Container Workflow
 
-The container image (including tag) is stored in `[project.entry-points."hip.cargo"]` in `pyproject.toml` as `container-image = "ghcr.io/user/repo:tag"`. This uses entry points instead of `[project.urls]` because PyPI validates URL fields and rejects container image references. At runtime, `get_container_image()` in `utils/config.py` reads this from installed package entry points via `importlib.metadata`.
+The container image (including tag) is stored as a `CONTAINER_IMAGE` constant in `src/<package>/_container_image.py`. At runtime, `get_container_image()` in `utils/config.py` dynamically imports this module via `importlib.import_module()` (no CWD dependency).
 
-The `@stimela_cab` decorator does **not** contain `image=`. Image is resolved at runtime from project metadata. Build/publish automated via `.github/workflows/publish-container.yml`.
+The `@stimela_cab` decorator does **not** contain `image=`. Image is resolved at runtime from package metadata. Build/publish automated via `.github/workflows/publish-container.yml`.
 
 **IMPORTANT — Generated cab files in `src/*/cabs/*.yml` will contain branch-specific image tags (e.g., `:feature-branch`) on feature branches. This is expected and correct. Do NOT flag these as issues or suggest changing them to `:latest`. After a PR is merged, the `update-cabs` GitHub Actions workflow automatically regenerates the cab files with the correct `:latest` tag and pushes the update. The branch-specific tags are necessary during development for testing with stimela.**
 
 **`[skip checks]` convention**: The `update-cabs` workflow commits with `[skip checks]` (not `[skip ci]`) in the message. This custom tag avoids GitHub's native `[skip ci]` interception, allowing workflows to trigger and report success to satisfy branch protection rules. The CI workflow evaluates this tag via a workflow-level `env` and each step checks `if: env.SKIP_CHECKS != 'true'`. This pattern must be preserved in both `.github/workflows/ci.yml` and the template at `src/hip_cargo/templates/workflows/ci.yml`.
 
-**Image tag lifecycle**: The `container-image` entry point in `[project.entry-points."hip.cargo"]` of `pyproject.toml` tracks the current image tag. On feature branches, the developer must manually update the `container-image` tag to match the branch name and run `uv sync` to refresh the package metadata. On merge to main, the `update-cabs` workflow resets the tag to `latest`, runs `uv sync`, and commits `pyproject.toml`, `uv.lock`, and cab YAML files. During releases, `tbump` updates the tag to the semantic version via its before-commit hooks.
+**Image tag lifecycle**: The `CONTAINER_IMAGE` constant in `_container_image.py` tracks the current image tag. On feature branches, the developer edits `_container_image.py` to change the tag to the branch name (no `uv sync` needed). On merge to main, the `update-cabs` workflow resets the tag to `latest` and commits `_container_image.py` and cab YAML files. During releases, `tbump` updates the tag to the semantic version via its before-commit hooks.
 
 ## Questions Before Implementing
 

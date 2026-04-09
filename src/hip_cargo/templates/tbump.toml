@@ -29,10 +29,6 @@ name = "Update container image tag to release version"
 cmd = "python -c \"import re; p = 'src/<PACKAGE_NAME>/_container_image.py'; t = open(p).read(); t = re.sub(r'(CONTAINER_IMAGE\\s*=\\s*\\\".*:)[^\\\"]+', r'\\g<1>{new_version}', t); open(p, 'w').write(t)\""
 
 [[before_commit]]
-name = "Sync environment to refresh package metadata"
-cmd = "uv sync"
-
-[[before_commit]]
 name = "Regenerate cab definitions with release version"
 cmd = "<CLI_COMMAND> generate-cabs --module 'src/<PACKAGE_NAME>/cli/*.py' --output-dir src/<PACKAGE_NAME>/cabs"
 

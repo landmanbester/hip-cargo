@@ -22,5 +22,5 @@ def get_container_image(package_name: str) -> str | None:
     try:
         mod = importlib.import_module(f"{pkg}._container_image")
         return getattr(mod, "CONTAINER_IMAGE", None)
-    except (ImportError, ModuleNotFoundError):
+    except ImportError:
         return None
