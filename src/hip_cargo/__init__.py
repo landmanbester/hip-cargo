@@ -11,7 +11,7 @@ from hip_cargo.utils.types import (
     parse_list_str,
 )
 
-__version__ = "0.2.0rc1"
+__version__ = "0.2.0rc2"
 __all__ = [
     "get_container_image",
     "stimela_cab",
