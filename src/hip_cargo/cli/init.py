@@ -92,6 +92,13 @@ def init(
             rich_help_panel="Inputs",
         ),
     ] = "main",
+    auto_changelog: Annotated[
+        bool,
+        typer.Option(
+            help="Enable git-cliff changelog generation and conventional commit enforcement via pre-commit.",
+            rich_help_panel="Inputs",
+        ),
+    ] = False,
     project_dir: Annotated[
         Directory | None,
         typer.Option(
@@ -140,6 +147,7 @@ def init(
                 license_type=license_type,
                 cli_mode=cli_mode,
                 default_branch=default_branch,
+                auto_changelog=auto_changelog,
                 project_dir=project_dir,
             )
             return
@@ -168,6 +176,7 @@ def init(
             license_type=license_type,
             cli_mode=cli_mode,
             default_branch=default_branch,
+            auto_changelog=auto_changelog,
             project_dir=project_dir,
         ),
         image=image,

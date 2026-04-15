@@ -5,12 +5,10 @@ on:
     tags:
       - 'v*.*.*'
     branches:
-      - main
-      - master
+      - <DEFAULT_BRANCH>
   pull_request:
     branches:
-      - main
-      - master
+      - <DEFAULT_BRANCH>
   workflow_dispatch:
 
 # Cab generation is handled by pre-commit hooks locally.
@@ -32,7 +30,7 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Log in to Container Registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
@@ -40,20 +38,20 @@ jobs:
 
       - name: Extract metadata for container
         id: meta
-        uses: docker/metadata-action@v5
+        uses: docker/metadata-action@v6
         with:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
-            # For version tags: v1.2.3 -> 1.2.3, 1.2
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
+            # For version tags: v0.2.0 -> 0.2.0, v0.2.0rc1 -> 0.2.0rc1
+            type=pep440,pattern={{version}}
+            type=pep440,pattern={{major}}.{{minor}}
             # For PRs: use branch name (e.g., ghcr.io/user/repo:feature-branch)
             type=raw,value=${{ github.head_ref }},enable=${{ github.event_name == 'pull_request' }}
             # For main branch: use 'latest'
             type=raw,value=latest,enable={{is_default_branch}}
 
       - name: Build and push Docker image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           push: true

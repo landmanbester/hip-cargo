@@ -18,16 +18,7 @@ It provides utilities to convert function signatures into `stimela` cabs (and vi
 pip install hip-cargo
 ```
 
-Or for development:
-
-```bash
-git clone https://github.com/landmanbester/hip-cargo.git
-cd hip-cargo
-uv sync --group dev --group test
-uv run pre-commit install
-```
-
-To add a new feature follow the [contributing workflow](#contributing-workflow).
+See the [Devepment](#development) section for instructions on how to set up the development environment and make contributions.
 
 ## Key Principles
 
@@ -429,6 +420,7 @@ This project uses:
 - [uv](https://github.com/astral-sh/uv) for dependency management
 - [ruff](https://github.com/astral-sh/ruff) for linting and formatting (core dependency — `generate-function` runs `ruff format` and `ruff check --fix` on generated code)
 - [typer](https://typer.tiangolo.com/) for the CLI
+- [git-cliff](https://git-cliff.org/) for `CHANGELOG` automation
 
 
 ### Setting Up Development Environment
@@ -442,7 +434,7 @@ cd hip-cargo
 uv sync --group dev --group test
 
 # Install pre-commit hooks (recommended)
-uv run pre-commit install
+uv run pre-commit install --hook-type commit-msg
 ```
 
 This will automatically run the hooks before each commit.
@@ -529,6 +521,7 @@ git commit -m "fix(runner): resolve volume mount for symlinked paths"
 
 ### Contributing Workflow
 
+
 1. **Create a feature branch**:
    ```bash
    git checkout -b your-feature-name
@@ -550,10 +543,14 @@ git commit -m "fix(runner): resolve volume mount for symlinked paths"
    # Pre-commit hooks run automatically
    ```
 
+   The pre-commit hooks keep the CLI and corresponding cab definitions in sync, enforce code quality and conventional commits.
+
 5. **Push and create a pull request**:
    ```bash
    git push origin your-feature-name
    ```
+
+The GitHub actions workflow automates containerisation by pushing container images to the GitHub Container Registry. Once the PR is merged, they also sync the name of container image corresponding to the branch (i.e. tagged with `:latest`).
 
 ## License
 

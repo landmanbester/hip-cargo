@@ -94,7 +94,7 @@ Follow these steps to complete the CI/CD and publishing setup for your project.
      Go to: https://github.com/<GITHUB_USER>/<PROJECT_NAME>/settings/secrets/actions
 
      Add two secrets:
-       APP_ID          → The App ID shown on the app's settings page
+       APP_CLIENT_ID   → The Client ID shown on the app's settings page
        APP_PRIVATE_KEY → The contents of the .pem file you downloaded
 
 ────────────────────────────────────────────────────────────────────────────────
