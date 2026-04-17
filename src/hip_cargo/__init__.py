@@ -2,6 +2,7 @@
 
 from hip_cargo.utils.config import get_container_image
 from hip_cargo.utils.decorators import stimela_cab, stimela_output
+from hip_cargo.utils.metadata import StimelaMeta
 from hip_cargo.utils.types import (
     ListFloat,
     ListInt,
@@ -16,6 +17,7 @@ __all__ = [
     "get_container_image",
     "stimela_cab",
     "stimela_output",
+    "StimelaMeta",
     "ListInt",
     "ListFloat",
     "ListStr",

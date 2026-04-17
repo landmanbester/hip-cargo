@@ -8,6 +8,8 @@ import types
 import typing
 from pathlib import Path
 
+from hip_cargo.utils.metadata import StimelaMeta
+
 CONTAINER_RUNTIMES = ["apptainer", "singularity", "docker", "podman"]
 
 
@@ -170,21 +172,28 @@ def _resolve_mounts(func: typing.Callable, params: dict[str, typing.Any]) -> dic
     return mounts
 
 
-def _extract_stimela_meta_from_hints(func: typing.Callable) -> dict[str, dict]:
-    """Extract {"stimela": {...}} metadata from function's Annotated type hints.
+def _extract_stimela_meta_from_hints(func: typing.Callable) -> dict[str, typing.Mapping]:
+    """Extract stimela metadata from a function's Annotated type hints.
+
+    Accepts both the preferred ``StimelaMeta(...)`` form and the legacy
+    ``{"stimela": {...}}`` dict literal form. Legacy dicts are wrapped in a
+    ``StimelaMeta`` so callers always get a Mapping.
 
     Returns:
-        Dict mapping parameter names to their stimela metadata dicts.
+        Dict mapping parameter names to their stimela metadata mappings.
     """
-    result: dict[str, dict] = {}
+    result: dict[str, typing.Mapping] = {}
     hints = typing.get_type_hints(func, include_extras=True)
     for param_name, hint in hints.items():
         origin = typing.get_origin(hint)
         if origin is not typing.Annotated:
             continue
         for meta_item in typing.get_args(hint)[1:]:
+            if isinstance(meta_item, StimelaMeta):
+                result[param_name] = meta_item
+                break
             if isinstance(meta_item, dict) and "stimela" in meta_item:
-                result[param_name] = meta_item["stimela"]
+                result[param_name] = StimelaMeta.from_mapping(meta_item["stimela"])
                 break
     return result
 

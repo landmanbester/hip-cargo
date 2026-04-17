@@ -11,6 +11,8 @@ jobs:
   quality:
     name: Code Quality
     runs-on: ubuntu-latest
+    env:
+      SKIP_CHECKS: 'false'
     steps:
       - name: Check for skip checks
         env:
@@ -61,6 +63,8 @@ jobs:
   test:
     name: Tests
     runs-on: ubuntu-latest
+    env:
+      SKIP_CHECKS: 'false'
     strategy:
       fail-fast: false
       matrix:

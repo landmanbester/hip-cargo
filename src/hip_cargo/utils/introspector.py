@@ -157,10 +157,17 @@ def extract_typer_metadata_libcst(metadata_nodes: list[cst.CSTNode]) -> dict[str
 
 def extract_stimela_metadata_libcst(metadata_nodes: list[cst.CSTNode]) -> dict[str, Any]:
     """
-    Extract custom Stimela metadata dict from Annotated metadata items.
+    Extract custom Stimela metadata from Annotated metadata items.
 
-    Looks for dict literals with a "stimela" key:
-        Annotated[Type, typer.Option(...), {"stimela": {...}}]
+    Recognises two forms:
+
+    * Preferred::
+
+          Annotated[Type, typer.Option(...), StimelaMeta(key=value, ...)]
+
+    * Legacy dict literal::
+
+          Annotated[Type, typer.Option(...), {"stimela": {...}}]
 
     Args:
         metadata_nodes: List of metadata CST nodes from Annotated
@@ -169,8 +176,23 @@ def extract_stimela_metadata_libcst(metadata_nodes: list[cst.CSTNode]) -> dict[s
         Dict with Stimela-specific metadata, or empty dict if not found
     """
     for node in metadata_nodes:
+        # Preferred form: StimelaMeta(...) call
+        if isinstance(node, cst.Call):
+            callee_name = None
+            func = node.func
+            if isinstance(func, cst.Name):
+                callee_name = func.value
+            elif isinstance(func, cst.Attribute):
+                callee_name = func.attr.value
+            if callee_name == "StimelaMeta":
+                result: dict[str, Any] = {}
+                for arg in node.args:
+                    if arg.keyword is not None:
+                        result[arg.keyword.value] = get_cst_value(arg.value)
+                return result
+
+        # Legacy form: {"stimela": {...}} dict literal
         if isinstance(node, cst.Dict):
-            # Use get_cst_value to safely extract the dict
             dict_value = get_cst_value(node)
             if isinstance(dict_value, dict) and "stimela" in dict_value:
                 return dict_value["stimela"]

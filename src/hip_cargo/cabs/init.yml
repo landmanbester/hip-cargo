@@ -79,6 +79,13 @@ cabs:
         default: main
         metadata:
           rich_help_panel: Inputs
+      auto-changelog:
+        info:
+          Enable git-cliff changelog generation and conventional commit enforcement via pre-commit.
+        dtype: bool
+        default: false
+        metadata:
+          rich_help_panel: Inputs
     outputs:
       project-dir:
         dtype: Directory
