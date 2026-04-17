@@ -18,7 +18,7 @@ It provides utilities to convert function signatures into `stimela` cabs (and vi
 pip install hip-cargo
 ```
 
-See the [Devepment](#development) section for instructions on how to set up the development environment and make contributions.
+See the [Development](#development) section for instructions on how to set up the development environment and make contributions.
 
 ## Key Principles
 
@@ -441,8 +441,9 @@ cd hip-cargo
 # Install dependencies with development tools
 uv sync --group dev --group test
 
-# Install pre-commit hooks (recommended)
-uv run pre-commit install --hook-type commit-msg
+# Install pre-commit hooks (recommended) — both the default pre-commit hook
+# (runs formatters/linters) and the commit-msg hook (enforces conventional commits).
+uv run pre-commit install --hook-type pre-commit --hook-type commit-msg
 ```
 
 This will automatically run the hooks before each commit.
