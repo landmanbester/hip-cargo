@@ -3,7 +3,7 @@ from typing import Annotated, Literal, NewType
 
 import typer
 
-from hip_cargo import stimela_cab, stimela_output
+from hip_cargo import StimelaMeta, stimela_cab, stimela_output
 
 Directory = NewType("Directory", Path)
 File = NewType("File", Path)
@@ -51,14 +51,18 @@ def generate_cabs(
         typer.Option(
             help="Execution backend.",
         ),
-        {"stimela": {"skip": True}},
+        StimelaMeta(
+            skip=True,
+        ),
     ] = "auto",
     always_pull_images: Annotated[
         bool,
         typer.Option(
             help="Always pull container images, even if cached locally.",
         ),
-        {"stimela": {"skip": True}},
+        StimelaMeta(
+            skip=True,
+        ),
     ] = False,
 ):
     """

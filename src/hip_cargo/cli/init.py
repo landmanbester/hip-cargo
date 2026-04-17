@@ -3,7 +3,7 @@ from typing import Annotated, Literal, NewType
 
 import typer
 
-from hip_cargo import stimela_cab, stimela_output
+from hip_cargo import StimelaMeta, stimela_cab, stimela_output
 
 Directory = NewType("Directory", Path)
 
@@ -106,25 +106,27 @@ def init(
             help="Output directory for the generated project.",
             rich_help_panel="Outputs",
         ),
-        {
-            "stimela": {
-                "must_exist": True,
-            },
-        },
+        StimelaMeta(
+            must_exist=True,
+        ),
     ] = None,
     backend: Annotated[
         Literal["auto", "native", "apptainer", "singularity", "docker", "podman"],
         typer.Option(
             help="Execution backend.",
         ),
-        {"stimela": {"skip": True}},
+        StimelaMeta(
+            skip=True,
+        ),
     ] = "auto",
     always_pull_images: Annotated[
         bool,
         typer.Option(
             help="Always pull container images, even if cached locally.",
         ),
-        {"stimela": {"skip": True}},
+        StimelaMeta(
+            skip=True,
+        ),
     ] = False,
 ):
     """

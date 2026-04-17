@@ -204,6 +204,34 @@ def split_info_at_periods(info: str) -> str:
     return "\n".join(sentences)
 
 
+def _format_value_multiline(value: Any, indent_level: int) -> str:
+    """Format a single value for inclusion in multi-line dict/call output."""
+    if isinstance(value, dict):
+        return format_dict_multiline(value, indent_level)
+    if isinstance(value, list):
+        item_strs = []
+        for item in value:
+            if isinstance(item, dict):
+                item_repr = format_dict_multiline(item, indent_level + 1)
+            elif isinstance(item, bool):
+                item_repr = "True" if item else "False"
+            elif isinstance(item, str):
+                item_repr = f'"{item}"'
+            elif item is None:
+                item_repr = "None"
+            else:
+                item_repr = str(item)
+            item_strs.append(item_repr)
+        return "[" + ", ".join(item_strs) + "]"
+    if isinstance(value, bool):
+        return "True" if value else "False"
+    if isinstance(value, str):
+        return f'"{value}"'
+    if value is None:
+        return "None"
+    return str(value)
+
+
 def format_dict_multiline(d: dict[str, Any], indent_level: int = 0) -> str:
     """
     Format a dictionary with each item on a new line and trailing commas.
@@ -225,40 +253,40 @@ def format_dict_multiline(d: dict[str, Any], indent_level: int = 0) -> str:
 
     lines = ["{"]
     for key, value in d.items():
-        # Format the key
         key_str = f'"{key}"' if isinstance(key, str) else str(key)
-
-        # Format the value
-        if isinstance(value, dict):
-            value_str = format_dict_multiline(value, indent_level + 1)
-        elif isinstance(value, list):
-            # Format list values to ensure proper literal representation
-            item_strs = []
-            for item in value:
-                if isinstance(item, dict):
-                    item_repr = format_dict_multiline(item, indent_level + 2)
-                elif isinstance(item, bool):
-                    item_repr = "True" if item else "False"
-                elif isinstance(item, str):
-                    item_repr = f'"{item}"'
-                elif item is None:
-                    item_repr = "None"
-                else:
-                    item_repr = str(item)
-                item_strs.append(item_repr)
-            value_str = "[" + ", ".join(item_strs) + "]"
-        elif isinstance(value, bool):
-            value_str = "True" if value else "False"
-        elif isinstance(value, str):
-            value_str = f'"{value}"'
-        elif value is None:
-            value_str = "None"
-        else:
-            value_str = str(value)
-
+        value_str = _format_value_multiline(value, indent_level + 1)
         lines.append(f"{next_indent}{key_str}: {value_str},")
 
     lines.append(f"{indent}}}")
+    return "\n".join(lines)
+
+
+def format_stimela_meta_call(meta: dict[str, Any], indent_level: int = 0) -> str:
+    """
+    Format a stimela metadata mapping as a ``StimelaMeta(...)`` call.
+
+    Keys become keyword arguments; nested dicts stay as dict literals (they are
+    re-frozen at runtime by ``StimelaMeta.__init__``). Produces ruff-compatible
+    output with one kwarg per line and trailing commas.
+
+    Args:
+        meta: Mapping of stimela metadata fields.
+        indent_level: Current indentation level.
+
+    Returns:
+        Formatted ``StimelaMeta(...)`` call string.
+    """
+    if not meta:
+        return "StimelaMeta()"
+
+    indent = "    " * indent_level
+    next_indent = "    " * (indent_level + 1)
+
+    lines = ["StimelaMeta("]
+    for key, value in meta.items():
+        value_str = _format_value_multiline(value, indent_level + 1)
+        lines.append(f"{next_indent}{key}={value_str},")
+    lines.append(f"{indent})")
     return "\n".join(lines)
 
 
@@ -459,11 +487,11 @@ def generate_parameter_signature(
         if key not in handled_fields and key != "policies":
             stimela_meta[key] = value
 
-    # If there are stimela metadata fields, add them as a dict to Annotated
+    # If there are stimela metadata fields, emit a StimelaMeta(...) call
     if stimela_meta:
         # Format with multi-line style and trailing commas for ruff compatibility
-        stimela_dict_str = format_dict_multiline({"stimela": stimela_meta}, indent_level=2)
-        lines_out.append(f"        {stimela_dict_str},")
+        stimela_call_str = format_stimela_meta_call(stimela_meta, indent_level=2)
+        lines_out.append(f"        {stimela_call_str},")
 
     # Add closing bracket and default if applicable
     if default is not None and not required:
