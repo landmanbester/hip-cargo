@@ -5,6 +5,24 @@ All notable changes to hip-cargo are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2026-04-17
+
+### Added
+
+- Add StimelaMeta dataclass to keep track of stimela metadata (favour over old dict approach)
+
+### Documentation
+
+- Address copilot review on PR #74
+- Add instructions for building image locally with apptainer
+- Update README with more comprehensive contribution guidelines. Sync templates.
+
+### Fixed
+
+- **release**: Use conventional commit format for tbump version bumps
+- Git add missing files
+
+
 ## [0.2.0rc2] - 2026-04-10
 
 ### Miscellaneous
@@ -13,6 +31,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Other
 
+- Bump version to 0.2.0rc2
 - Use pep440 type container tags instead of symver
 
 
@@ -56,6 +75,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Other
 
+- Bump version to 0.2.0rc1
 - Update container name
 - Modify tbump config to allow pre-releases and patches
 - Use uvx to run git-cliff in tbump
@@ -102,8 +122,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Other
 
+- Bump version to 0.1.8
 - Address copilot comments
 - Move image name to entry-points section in pyproject.toml
+- Bump version to 0.1.8
 - Attempt to [skip checks] again
 - Attempt to [skip checks]
 - Attempt to report job status even when CI is skipped
@@ -148,6 +170,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Fix Optional[...] for ... | None type parameters
 - Fix end message for init pp when cli-mode==single
 
+### Other
+
+- Bump version to 0.1.7
+
 
 ## [0.1.6] - 2026-03-13
 
@@ -162,6 +188,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Other
 
+- Bump version to 0.1.6
 - Revert tbump version bump manually
 - Add quotes around wildcard in hip-cargo generate-cabs command in tbump
 - Address copilot comments
@@ -189,6 +216,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Other
 
+- Bump version to 0.1.5
 - Rather let uv manage the lock file, just use a before_commit hook in tbump
 - Add uv.lock to the list of versions tbump bumps
 - Add a cron job every Monday and Thursday @ 2h30am UTC
@@ -214,6 +242,7 @@ This reverts commit 25e9d432ef5b5a2678a8057eeca2647103d746f0.
 
 ### Other
 
+- Bump version to 0.1.4
 - Add ListStr dtypes and parsers etc. to avoid the clumsy comma separted string unpacking and document them. Update README.md with new Quick start and Quirks sections
 - Use actions/setup-python to install python before running uv
 - Remove uv.lock from gitignore template
@@ -252,6 +281,7 @@ This reverts commit 25e9d432ef5b5a2678a8057eeca2647103d746f0.
 
 ### Other
 
+- Bump version to 0.1.3
 - Update .github/workflows/update-cabs.yml
 
 Co-authored-by: Copilot <175728472+Copilot@users.noreply.github.com>
@@ -324,9 +354,11 @@ Co-authored-by: Copilot <175728472+Copilot@users.noreply.github.com>
 
 ### Other
 
+- Bump version to 0.1.2
 - Also downgrade version in __init__.py, test on python3.13
 - Roll back version
 - Use pypi enviroment in publish workflow
+- Bump version to 0.1.2
 - Update lock file
 
 
@@ -338,6 +370,7 @@ Co-authored-by: Copilot <175728472+Copilot@users.noreply.github.com>
 
 ### Other
 
+- Bump version to 0.1.1
 - Dfr
 
 
@@ -357,6 +390,7 @@ Co-authored-by: Copilot <175728472+Copilot@users.noreply.github.com>
 
 ### Other
 
+- Bump version to 0.1.0
 - Add metadata
 - Use Path | None
 - Add round trip conversion test
@@ -400,6 +434,7 @@ Co-authored-by: Copilot <175728472+Copilot@users.noreply.github.com>
 
 ### Other
 
+- Bump version to 0.0.2
 - Update lock file
 - Reset version
 - Add publish workflow
@@ -421,6 +456,7 @@ Co-authored-by: Copilot <175728472+Copilot@users.noreply.github.com>
 - Initial commit
 
 
+[0.2.0]: https://github.com/landmanbester/hip-cargo/compare/v0.2.0rc2...v0.2.0
 [0.2.0rc2]: https://github.com/landmanbester/hip-cargo/compare/v0.2.0rc1...v0.2.0rc2
 [0.2.0rc1]: https://github.com/landmanbester/hip-cargo/compare/v0.1.8...v0.2.0rc1
 [0.1.8]: https://github.com/landmanbester/hip-cargo/compare/v0.1.7...v0.1.8
