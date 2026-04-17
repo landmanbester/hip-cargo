@@ -62,12 +62,12 @@ commit_parsers = [
     { message = "^docs", group = "Documentation" },
     { message = "^deps", group = "Dependencies" },
     { message = "^chore\\(deps\\)", group = "Dependencies" },
+    { message = "^chore\\(release\\)", skip = true },
     { message = "^chore: update cab definitions", skip = true },
     { message = "^chore", group = "Miscellaneous" },
     { message = "^ci", group = "CI" },
     { message = "^style", skip = true },
     { message = "^test", group = "Testing" },
-    { message = "^Bump version", skip = true },
     { message = "^Merge", skip = true },
     { message = "^manually revert", group = "Fixed" },
     # Catch-all for non-conventional commits

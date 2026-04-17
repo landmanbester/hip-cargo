@@ -31,7 +31,7 @@ name = "post"
 default = ""
 
 [git]
-message_template = "Bump version to {new_version}"
+message_template = "chore(release): bump version to {new_version}"
 tag_template = "v{new_version}"
 
 # before_commit hooks run before tbump's version-bump commit.
