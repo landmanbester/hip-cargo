@@ -264,6 +264,14 @@ podman build -t ghcr.io/GITHUB_USERNAME/REPO_NAME:IMAGE_TAG .
 podman push ghcr.io/GITHUB_USERNAME/REPO_NAME:IMAGE_TAG
 ```
 
+If you need an **apptainer** or **singularity** image locally, first build and save the docker image and then convert it:
+
+```bash
+docker build -t mylocalimage:latest .
+docker save mylocalimage:latest -o mylocalimage_local.tar
+apptainer build mylocalimage_local.sif docker-archive://mylocalimage_local.tar
+```
+
 ### 4. Link Container to GitHub Package
 
 To associate the container image with your repository:
