@@ -6,7 +6,9 @@ import subprocess
 import sys
 import types
 import typing
-from pathlib import Path
+from pathlib import Path, PurePath
+
+from upath import UPath
 
 from hip_cargo.utils.metadata import StimelaMeta
 
@@ -233,10 +235,10 @@ def _is_path_type(tp: typing.Any) -> bool:
         args = typing.get_args(tp)
         return bool(args) and _is_path_type(args[0])
 
-    # Direct Path check
+    # Path / UPath check: match pathlib hierarchy or UPath hierarchy
     if tp is Path:
         return True
-    if isinstance(tp, type) and issubclass(tp, Path):
+    if isinstance(tp, type) and (issubclass(tp, PurePath) or issubclass(tp, UPath)):
         return True
 
     # NewType: has __supertype__
