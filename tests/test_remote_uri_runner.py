@@ -61,3 +61,24 @@ def test_collect_remote_protocols_all_local():
         pass
 
     assert _collect_remote_protocols(fn, {"a": UPath("/tmp/a")}) == set()
+
+
+def test_collect_remote_protocols_none_value():
+    def fn(a: Annotated[File | None, typer.Option()] = None) -> None:
+        pass
+
+    assert _collect_remote_protocols(fn, {"a": None}) == set()
+
+
+def test_collect_remote_protocols_list_of_paths():
+    def fn(xs: Annotated[list[File], typer.Option()] = ()) -> None:  # noqa: B008
+        pass
+
+    params = {
+        "xs": [
+            UPath("/tmp/a"),
+            UPath("s3://bkt/x"),
+            UPath("memory:///c"),
+        ]
+    }
+    assert _collect_remote_protocols(fn, params) == {"s3", "memory"}
