@@ -13,6 +13,7 @@ from hip_cargo.utils.runner import (
     _collect_remote_protocols,
     _is_path_type,
     _is_remote_upath,
+    _resolve_mounts,
 )
 
 
@@ -82,3 +83,22 @@ def test_collect_remote_protocols_list_of_paths():
         ]
     }
     assert _collect_remote_protocols(fn, params) == {"s3", "memory"}
+
+
+def test_resolve_mounts_skips_remote_upaths(tmp_path):
+    local = tmp_path / "local.fits"
+    local.write_bytes(b"data")
+
+    def fn(
+        a: Annotated[File, typer.Option()] = UPath(str(local)),  # noqa: B008
+        b: Annotated[File, typer.Option()] = UPath("s3://bkt/k"),  # noqa: B008
+    ) -> None:
+        pass
+
+    params = {"a": UPath(str(local)), "b": UPath("s3://bkt/k")}
+    mounts = _resolve_mounts(fn, params)
+
+    # Remote param contributes nothing.
+    assert not any("s3" in p or "bkt" in p for p in mounts)
+    # Local param still produces a mount.
+    assert any(str(tmp_path) in p for p in mounts)

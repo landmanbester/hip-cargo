@@ -143,6 +143,8 @@ def _resolve_mounts(func: typing.Callable, params: dict[str, typing.Any]) -> dic
         paths = [value] if not isinstance(value, list) else value
 
         for p in paths:
+            if _is_remote_upath(p):
+                continue
             if not isinstance(p, Path):
                 continue
             abs_path = p.resolve()
