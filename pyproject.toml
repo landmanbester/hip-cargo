@@ -29,6 +29,8 @@ dependencies = [
     "libcst==1.8.6",
     "tomli>=2.0; python_version < '3.11'",
     "ruff>=0.13.2",
+    "fsspec>=2024.10.0",
+    "universal-pathlib>=0.2.5",
 ]
 
 [project.urls]
