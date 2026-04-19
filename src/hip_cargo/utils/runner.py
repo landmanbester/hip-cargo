@@ -248,6 +248,38 @@ def _is_path_type(tp: typing.Any) -> bool:
     return False
 
 
+_LOCAL_PROTOCOLS = frozenset({"", "file", "local"})
+
+
+def _is_remote_upath(value: typing.Any) -> bool:
+    """Return True if value is a UPath with a non-local protocol."""
+    protocol = getattr(value, "protocol", None)
+    if protocol is None:
+        return False
+    if isinstance(protocol, tuple):
+        protocol = protocol[0] if protocol else ""
+    return protocol not in _LOCAL_PROTOCOLS
+
+
+def _collect_remote_protocols(func: typing.Callable, params: dict[str, typing.Any]) -> set[str]:
+    """Scan path-typed params and return the set of non-local protocols in use."""
+    hints = typing.get_type_hints(func, include_extras=True)
+    protocols: set[str] = set()
+    for name, value in params.items():
+        if value is None:
+            continue
+        if name in hints and not _is_path_type(hints[name]):
+            continue
+        values = value if isinstance(value, list) else [value]
+        for v in values:
+            if _is_remote_upath(v):
+                proto = v.protocol
+                if isinstance(proto, tuple):
+                    proto = proto[0]
+                protocols.add(proto)
+    return protocols
+
+
 def _build_argv_with_native_backend() -> list[str]:
     """Copy sys.argv, replacing or appending --backend native."""
     args = list(sys.argv)
