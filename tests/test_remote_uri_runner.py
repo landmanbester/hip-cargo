@@ -13,6 +13,8 @@ from upath import UPath
 from hip_cargo.utils.introspector import MS, URI, Directory, File
 from hip_cargo.utils.metadata import StimelaMeta
 from hip_cargo.utils.runner import (
+    _build_credential_env,
+    _build_credential_mounts,
     _collect_remote_protocols,
     _is_path_type,
     _is_remote_upath,
@@ -157,3 +159,87 @@ def test_preflight_ignores_params_without_must_exist():
 
     # No StimelaMeta(must_exist=True) → skip.
     preflight_remote_must_exist(fn, {"x": UPath("memory:///nope.bin")})
+
+
+def test_credential_env_s3_when_vars_present():
+    env = {
+        "AWS_ACCESS_KEY_ID": "k",
+        "AWS_SECRET_ACCESS_KEY": "s",
+        "AWS_REGION": "eu-west-1",
+        "UNRELATED": "ignore",
+    }
+    result = _build_credential_env({"s3"}, env)
+    assert result["AWS_ACCESS_KEY_ID"] == "k"
+    assert result["AWS_SECRET_ACCESS_KEY"] == "s"
+    assert result["AWS_REGION"] == "eu-west-1"
+    assert "UNRELATED" not in result
+
+
+def test_credential_env_skips_unset_vars():
+    result = _build_credential_env({"s3"}, {"AWS_ACCESS_KEY_ID": "k"})
+    assert result == {"AWS_ACCESS_KEY_ID": "k"}
+
+
+def test_credential_env_gcs_includes_app_creds():
+    env = {"GOOGLE_APPLICATION_CREDENTIALS": "/home/u/key.json"}
+    result = _build_credential_env({"gcs"}, env)
+    assert result["GOOGLE_APPLICATION_CREDENTIALS"] == "/home/u/key.json"
+
+
+def test_credential_env_azure():
+    env = {"AZURE_STORAGE_ACCOUNT": "acct", "AZURE_STORAGE_KEY": "k"}
+    result = _build_credential_env({"az"}, env)
+    assert result["AZURE_STORAGE_ACCOUNT"] == "acct"
+    assert result["AZURE_STORAGE_KEY"] == "k"
+
+
+def test_credential_mounts_s3(tmp_path):
+    home = tmp_path / "home"
+    aws = home / ".aws"
+    aws.mkdir(parents=True)
+    (aws / "credentials").write_text("[default]\n")
+
+    mounts, keyfile = _build_credential_mounts({"s3"}, env={}, home=home)
+    assert str(aws) in mounts
+    assert keyfile is None
+
+
+def test_credential_mounts_s3_skipped_with_session_token(tmp_path):
+    home = tmp_path / "home"
+    aws = home / ".aws"
+    aws.mkdir(parents=True)
+
+    mounts, _ = _build_credential_mounts({"s3"}, env={"AWS_SESSION_TOKEN": "temp"}, home=home)
+    assert str(aws) not in mounts
+
+
+def test_credential_mounts_gcs_binds_key_file(tmp_path):
+    home = tmp_path / "home"
+    key = tmp_path / "service-account.json"
+    key.write_text("{}")
+
+    mounts, keyfile = _build_credential_mounts(
+        {"gcs"},
+        env={"GOOGLE_APPLICATION_CREDENTIALS": str(key)},
+        home=home,
+    )
+    assert str(key) in mounts
+    assert keyfile == str(key)
+
+
+def test_credential_mounts_gcs_binds_config_dir(tmp_path):
+    home = tmp_path / "home"
+    gcloud = home / ".config" / "gcloud"
+    gcloud.mkdir(parents=True)
+
+    mounts, _ = _build_credential_mounts({"gcs"}, env={}, home=home)
+    assert str(gcloud) in mounts
+
+
+def test_credential_mounts_azure(tmp_path):
+    home = tmp_path / "home"
+    azure = home / ".azure"
+    azure.mkdir(parents=True)
+
+    mounts, _ = _build_credential_mounts({"az"}, env={}, home=home)
+    assert str(azure) in mounts

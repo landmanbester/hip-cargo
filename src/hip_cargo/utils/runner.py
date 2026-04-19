@@ -317,6 +317,94 @@ def preflight_remote_must_exist(func: typing.Callable, params: dict[str, typing.
                 raise typer.Exit(code=1)
 
 
+# Per-scheme credential mapping. Keys are normalised protocol names; values
+# are the host env vars to forward when the scheme is present in the params.
+_CREDENTIAL_ENV_VARS: dict[str, tuple[str, ...]] = {
+    "s3": (
+        "AWS_ACCESS_KEY_ID",
+        "AWS_SECRET_ACCESS_KEY",
+        "AWS_SESSION_TOKEN",
+        "AWS_PROFILE",
+        "AWS_REGION",
+        "AWS_DEFAULT_REGION",
+        "AWS_ENDPOINT_URL",
+    ),
+    "gcs": ("GOOGLE_APPLICATION_CREDENTIALS",),
+    "az": (
+        "AZURE_STORAGE_ACCOUNT",
+        "AZURE_STORAGE_KEY",
+        "AZURE_STORAGE_CONNECTION_STRING",
+        "AZURE_CLIENT_ID",
+        "AZURE_TENANT_ID",
+        "AZURE_CLIENT_SECRET",
+    ),
+}
+
+# Alternate protocol names that should share a credential group.
+_PROTOCOL_ALIASES: dict[str, str] = {
+    "gs": "gcs",
+    "abfs": "az",
+    "adl": "az",
+}
+
+
+def _normalise_protocol(proto: str) -> str:
+    return _PROTOCOL_ALIASES.get(proto, proto)
+
+
+def _build_credential_env(protocols: set[str], env: dict[str, str]) -> dict[str, str]:
+    """Return host env vars to forward for the given protocol set."""
+    result: dict[str, str] = {}
+    seen: set[str] = set()
+    for proto in protocols:
+        group = _normalise_protocol(proto)
+        for var in _CREDENTIAL_ENV_VARS.get(group, ()):
+            if var in seen:
+                continue
+            seen.add(var)
+            if var in env:
+                result[var] = env[var]
+    return result
+
+
+def _build_credential_mounts(
+    protocols: set[str],
+    env: dict[str, str],
+    home: os.PathLike[str] | str,
+) -> tuple[dict[str, bool], str | None]:
+    """Return read-only mounts + optional GCS key file path for the given protocols."""
+    home_path = Path(home)
+    mounts: dict[str, bool] = {}
+    keyfile: str | None = None
+
+    for proto in protocols:
+        group = _normalise_protocol(proto)
+        if group == "s3":
+            # Skip ~/.aws when short-lived creds are active to avoid stale
+            # profile files masking the session.
+            if "AWS_SESSION_TOKEN" in env:
+                continue
+            aws = home_path / ".aws"
+            if aws.is_dir():
+                mounts[str(aws)] = False
+        elif group == "gcs":
+            gcloud = home_path / ".config" / "gcloud"
+            if gcloud.is_dir():
+                mounts[str(gcloud)] = False
+            key = env.get("GOOGLE_APPLICATION_CREDENTIALS")
+            if key:
+                key_path = Path(key)
+                if key_path.is_file():
+                    mounts[str(key_path)] = False
+                    keyfile = str(key_path)
+        elif group == "az":
+            azure = home_path / ".azure"
+            if azure.is_dir():
+                mounts[str(azure)] = False
+
+    return mounts, keyfile
+
+
 def _build_argv_with_native_backend() -> list[str]:
     """Copy sys.argv, replacing or appending --backend native."""
     args = list(sys.argv)
