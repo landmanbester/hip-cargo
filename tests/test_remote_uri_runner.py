@@ -289,3 +289,27 @@ def test_build_container_cmd_no_creds_keeps_existing_output():
     )
     # No credential env flags when nothing to forward.
     assert not any(v.startswith("AWS_") for v in cmd)
+
+
+def test_detect_runtime_error_mentions_extras_when_s3_in_argv(monkeypatch):
+    from hip_cargo.utils import runner
+
+    monkeypatch.setattr(runner.shutil, "which", lambda _: None)
+    monkeypatch.setattr("sys.argv", ["hip-cargo", "--input", "s3://bkt/k"])
+
+    with pytest.raises(RuntimeError) as exc:
+        runner._detect_runtime("auto")
+
+    assert "hip-cargo[s3]" in str(exc.value)
+
+
+def test_detect_runtime_error_plain_when_no_remote_scheme(monkeypatch):
+    from hip_cargo.utils import runner
+
+    monkeypatch.setattr(runner.shutil, "which", lambda _: None)
+    monkeypatch.setattr("sys.argv", ["hip-cargo", "--input", "/tmp/x"])
+
+    with pytest.raises(RuntimeError) as exc:
+        runner._detect_runtime("auto")
+
+    assert "hip-cargo[" not in str(exc.value)

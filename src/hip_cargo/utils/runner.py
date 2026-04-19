@@ -14,6 +14,25 @@ from hip_cargo.utils.metadata import StimelaMeta
 
 CONTAINER_RUNTIMES = ["apptainer", "singularity", "docker", "podman"]
 
+_EXTRA_FOR_SCHEME: dict[str, str] = {
+    "s3": "hip-cargo[s3]",
+    "gs": "hip-cargo[gcs]",
+    "gcs": "hip-cargo[gcs]",
+    "az": "hip-cargo[azure]",
+    "abfs": "hip-cargo[azure]",
+    "adl": "hip-cargo[azure]",
+}
+
+
+def _extras_hint_from_argv(argv: list[str]) -> str:
+    """Scan argv for remote URIs and return a `pip install` hint."""
+    hints: set[str] = set()
+    for arg in argv:
+        for scheme, extra in _EXTRA_FOR_SCHEME.items():
+            if arg.startswith(f"{scheme}://"):
+                hints.add(extra)
+    return ", ".join(sorted(hints))
+
 
 def run_in_container(
     func: typing.Callable,
@@ -70,11 +89,15 @@ def _detect_runtime(backend: str) -> str:
         if shutil.which(runtime):
             return runtime
 
-    raise RuntimeError(
+    hint = _extras_hint_from_argv(sys.argv)
+    msg = (
         "No container runtime found. Install one of: "
         + ", ".join(CONTAINER_RUNTIMES)
         + "\nOr install the full package dependencies to run natively."
     )
+    if hint:
+        msg += f"\nFor remote URIs, install the relevant extra: {hint}"
+    raise RuntimeError(msg)
 
 
 def _pull_image(runtime: str, image: str) -> None:
