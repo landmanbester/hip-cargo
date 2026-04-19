@@ -3,7 +3,7 @@ from typing import Annotated, Literal, NewType
 
 import typer
 
-from hip_cargo import StimelaMeta, stimela_cab, stimela_output
+from hip_cargo import StimelaMeta, parse_upath, stimela_cab, stimela_output
 
 File = NewType("File", Path)
 
@@ -25,7 +25,7 @@ def generate_function(
         File,
         typer.Option(
             ...,
-            parser=Path,
+            parser=parse_upath,
             help="Path to Stimela cab YAML file.",
             rich_help_panel="Inputs",
         ),
@@ -34,7 +34,7 @@ def generate_function(
         File,
         typer.Option(
             ...,
-            parser=Path,
+            parser=parse_upath,
             help="Name of output CLI function.",
             rich_help_panel="Outputs",
         ),
@@ -42,7 +42,7 @@ def generate_function(
     config_file: Annotated[
         File | None,
         typer.Option(
-            parser=Path,
+            parser=parse_upath,
             help="Optional path to ruff config file to use when generating function.",
             rich_help_panel="Inputs",
         ),
@@ -71,6 +71,18 @@ def generate_function(
     """
     if backend == "native" or backend == "auto":
         try:
+            # Pre-flight must_exist for remote URIs before dispatching.
+            from hip_cargo.utils.runner import preflight_remote_must_exist  # noqa: E402
+
+            preflight_remote_must_exist(
+                generate_function,
+                dict(
+                    cab_file=cab_file,
+                    config_file=config_file,
+                    output_file=output_file,
+                ),
+            )
+
             # Lazy import the core implementation
             from hip_cargo.core.generate_function import generate_function as generate_function_core  # noqa: E402
 

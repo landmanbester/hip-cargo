@@ -152,6 +152,8 @@ def generate_function(cab_file: Path, output_file: Path, config_file: Path | Non
     hip_cargo_imports = sorted(list_types_used) + sorted(LIST_TYPE_PARSERS[t] for t in list_types_used)
     if cab_def.get("image"):
         hip_cargo_imports.append("get_container_image")
+    if custom_types:
+        hip_cargo_imports.append("parse_upath")
     hip_cargo_imports.extend(["stimela_cab", "stimela_output", "StimelaMeta"])
     lines.append(f"from hip_cargo import {', '.join(sorted(hip_cargo_imports))}")
 
