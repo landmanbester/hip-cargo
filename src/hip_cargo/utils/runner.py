@@ -33,6 +33,9 @@ def run_in_container(
     """
     runtime = _detect_runtime(backend)
     mounts = _resolve_mounts(func, params)
+    protocols = _collect_remote_protocols(func, params)
+    cred_env = _build_credential_env(protocols, dict(os.environ))
+    cred_mounts, _gcs_keyfile = _build_credential_mounts(protocols, dict(os.environ), home=os.path.expanduser("~"))
     cwd = os.getcwd()
     # Ensure cwd is mounted read-write
     mounts[cwd] = True
@@ -41,7 +44,7 @@ def run_in_container(
     if always_pull_images:
         _pull_image(runtime, image)
 
-    cmd = _build_container_cmd(runtime, image, mounts, cwd, cli_args)
+    cmd = _build_container_cmd(runtime, image, mounts, cwd, cli_args, cred_env=cred_env, cred_mounts=cred_mounts)
 
     print(f"Falling back to container execution ({runtime})")
     print(f"  Image: {image}")
@@ -431,6 +434,8 @@ def _build_container_cmd(
     mounts: dict[str, bool],
     cwd: str,
     cli_args: list[str],
+    cred_env: dict[str, str] | None = None,
+    cred_mounts: dict[str, bool] | None = None,
 ) -> list[str]:
     """Assemble the full container execution command.
 
@@ -440,12 +445,20 @@ def _build_container_cmd(
         mounts: Dict of mount paths → read-write flag.
         cwd: Working directory inside the container.
         cli_args: The CLI command + arguments to run inside the container.
+        cred_env: Optional env vars to forward into the container (e.g. cloud creds).
+        cred_mounts: Optional read-only credential mounts merged with ``mounts``.
     """
+    cred_env = cred_env or {}
+    cred_mounts = cred_mounts or {}
+    all_mounts = {**mounts, **cred_mounts}
+
     if runtime in ("apptainer", "singularity"):
         cmd = [runtime, "exec", "--pwd", cwd]
-        for path, rw in sorted(mounts.items()):
+        for path, rw in sorted(all_mounts.items()):
             mode = "rw" if rw else "ro"
             cmd.extend(["--bind", f"{path}:{path}:{mode}"])
+        for var, value in sorted(cred_env.items()):
+            cmd.extend(["--env", f"{var}={value}"])
         # Add docker:// prefix for OCI image references
         if not image.endswith(".sif") and "://" not in image:
             image = f"docker://{image}"
@@ -454,9 +467,11 @@ def _build_container_cmd(
         # Run as current user so output files have correct ownership
         uid_gid = f"{os.getuid()}:{os.getgid()}"
         cmd = [runtime, "run", "--rm", "--user", uid_gid, "-w", cwd]
-        for path, rw in sorted(mounts.items()):
+        for path, rw in sorted(all_mounts.items()):
             mode = "rw" if rw else "ro"
             cmd.extend(["-v", f"{path}:{path}:{mode}"])
+        for var, value in sorted(cred_env.items()):
+            cmd.extend(["-e", f"{var}={value}"])
         cmd.append(image)
 
     cmd.extend(cli_args)

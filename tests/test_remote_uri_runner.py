@@ -13,6 +13,7 @@ from upath import UPath
 from hip_cargo.utils.introspector import MS, URI, Directory, File
 from hip_cargo.utils.metadata import StimelaMeta
 from hip_cargo.utils.runner import (
+    _build_container_cmd,
     _build_credential_env,
     _build_credential_mounts,
     _collect_remote_protocols,
@@ -243,3 +244,48 @@ def test_credential_mounts_azure(tmp_path):
 
     mounts, _ = _build_credential_mounts({"az"}, env={}, home=home)
     assert str(azure) in mounts
+
+
+def test_build_container_cmd_docker_forwards_env_and_mounts():
+    cmd = _build_container_cmd(
+        runtime="docker",
+        image="ghcr.io/u/r:tag",
+        mounts={"/data": True},
+        cwd="/data",
+        cli_args=["hip-cargo", "some-cmd"],
+        cred_env={"AWS_ACCESS_KEY_ID": "k", "AWS_SECRET_ACCESS_KEY": "s"},
+        cred_mounts={"/home/u/.aws": False},
+    )
+    assert "-e" in cmd
+    assert "AWS_ACCESS_KEY_ID=k" in cmd
+    assert "AWS_SECRET_ACCESS_KEY=s" in cmd
+    assert "/home/u/.aws:/home/u/.aws:ro" in cmd
+
+
+def test_build_container_cmd_apptainer_forwards_env_and_mounts():
+    cmd = _build_container_cmd(
+        runtime="apptainer",
+        image="ghcr.io/u/r:tag",
+        mounts={"/data": True},
+        cwd="/data",
+        cli_args=["hip-cargo", "some-cmd"],
+        cred_env={"AWS_ACCESS_KEY_ID": "k"},
+        cred_mounts={"/home/u/.aws": False},
+    )
+    assert "--env" in cmd
+    assert "AWS_ACCESS_KEY_ID=k" in cmd
+    assert any("/home/u/.aws:/home/u/.aws:ro" in arg for arg in cmd)
+
+
+def test_build_container_cmd_no_creds_keeps_existing_output():
+    cmd = _build_container_cmd(
+        runtime="docker",
+        image="img",
+        mounts={"/data": True},
+        cwd="/data",
+        cli_args=["hip-cargo"],
+        cred_env={},
+        cred_mounts={},
+    )
+    # No credential env flags when nothing to forward.
+    assert not any(v.startswith("AWS_") for v in cmd)
