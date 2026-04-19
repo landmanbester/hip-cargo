@@ -5,15 +5,19 @@ Subsequent tasks (6, 7, 9, 10, 11) append additional test functions here.
 
 from typing import Annotated
 
+import fsspec
+import pytest
 import typer
 from upath import UPath
 
 from hip_cargo.utils.introspector import MS, URI, Directory, File
+from hip_cargo.utils.metadata import StimelaMeta
 from hip_cargo.utils.runner import (
     _collect_remote_protocols,
     _is_path_type,
     _is_remote_upath,
     _resolve_mounts,
+    preflight_remote_must_exist,
 )
 
 
@@ -102,3 +106,54 @@ def test_resolve_mounts_skips_remote_upaths(tmp_path):
     assert not any("s3" in p or "bkt" in p for p in mounts)
     # Local param still produces a mount.
     assert any(str(tmp_path) in p for p in mounts)
+
+
+def test_preflight_passes_for_existing_remote_upath():
+    fs = fsspec.filesystem("memory")
+    with fs.open("/present.bin", "wb") as f:
+        f.write(b"x")
+
+    def fn(
+        x: Annotated[File, typer.Option(), StimelaMeta(must_exist=True)] = UPath(  # noqa: B008
+            "memory:///present.bin"
+        ),
+    ) -> None:
+        pass
+
+    preflight_remote_must_exist(fn, {"x": UPath("memory:///present.bin")})
+
+
+def test_preflight_fails_for_missing_remote_upath():
+    def fn(
+        x: Annotated[File, typer.Option(), StimelaMeta(must_exist=True)] = UPath(  # noqa: B008
+            "memory:///absent.bin"
+        ),
+    ) -> None:
+        pass
+
+    with pytest.raises(typer.Exit):
+        preflight_remote_must_exist(fn, {"x": UPath("memory:///absent.bin")})
+
+
+def test_preflight_ignores_local_paths(tmp_path):
+    missing = tmp_path / "does-not-exist.bin"
+
+    def fn(
+        x: Annotated[File, typer.Option(), StimelaMeta(must_exist=True)] = UPath(  # noqa: B008
+            str(missing)
+        ),
+    ) -> None:
+        pass
+
+    # Local paths are not pre-flighted here — mount logic owns that contract.
+    preflight_remote_must_exist(fn, {"x": UPath(str(missing))})
+
+
+def test_preflight_ignores_params_without_must_exist():
+    def fn(
+        x: Annotated[File, typer.Option()] = UPath("memory:///nope.bin"),  # noqa: B008
+    ) -> None:
+        pass
+
+    # No StimelaMeta(must_exist=True) → skip.
+    preflight_remote_must_exist(fn, {"x": UPath("memory:///nope.bin")})

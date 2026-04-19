@@ -282,6 +282,41 @@ def _collect_remote_protocols(func: typing.Callable, params: dict[str, typing.An
     return protocols
 
 
+def preflight_remote_must_exist(func: typing.Callable, params: dict[str, typing.Any]) -> None:
+    """For remote UPath params whose metadata sets must_exist=True, verify they exist.
+
+    Local paths and params without ``must_exist`` are ignored — those contracts
+    are enforced elsewhere (mount logic for local paths; the user's own code
+    otherwise). Raises ``typer.Exit(1)`` on a missing remote URI.
+    """
+    import typer
+
+    stimela_meta = _extract_stimela_meta_from_hints(func)
+    output_meta: dict[str, dict] = {}
+    for output_def in getattr(func, "__stimela_outputs__", []):
+        py_name = output_def["name"].replace("-", "_")
+        output_meta[py_name] = output_def
+
+    for name, value in params.items():
+        if value is None:
+            continue
+        values = value if isinstance(value, list) else [value]
+        meta = stimela_meta.get(name, {})
+        output_def = output_meta.get(name, {})
+        must_exist = meta.get("must_exist", output_def.get("must_exist"))
+        if not must_exist:
+            continue
+        for v in values:
+            if not _is_remote_upath(v):
+                continue
+            if not v.exists():
+                typer.echo(
+                    f"Parameter '{name}': '{v}' does not exist",
+                    err=True,
+                )
+                raise typer.Exit(code=1)
+
+
 def _build_argv_with_native_backend() -> list[str]:
     """Copy sys.argv, replacing or appending --backend native."""
     args = list(sys.argv)
