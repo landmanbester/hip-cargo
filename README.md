@@ -127,8 +127,7 @@ To transition an existing package that already contains `stimela` cab definition
 
 ## Package Structure
 
-We recommend using [uv](https://docs.astral.sh/uv/) as the package manager.
-Initialize your project with the following structure (again using `hip-cargo` as the example):
+We recommend using [uv](https://docs.astral.sh/uv/) as the package manager and following a structure similar to that used in `hip-cargo`:
 
 ```
 hip-cargo/
@@ -398,34 +397,6 @@ parameters:
 | `gs` / `gcs` | `GOOGLE_APPLICATION_CREDENTIALS` | `~/.config/gcloud` + the keyfile |
 | `az` / `abfs` / `adl` | `AZURE_STORAGE_ACCOUNT`, `AZURE_STORAGE_KEY`, `AZURE_STORAGE_CONNECTION_STRING`, `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_CLIENT_SECRET` | `~/.azure` |
 
-### Example
-
-```python
-from pathlib import Path
-from typing import Annotated, NewType
-
-import typer
-from hip_cargo import parse_upath, stimela_cab
-
-File = NewType("File", Path)
-
-
-@stimela_cab(name="inspect", info="Inspect a FITS file header")
-def inspect(
-    image: Annotated[File, typer.Option(..., parser=parse_upath, help="Path or URI to a FITS image")],
-) -> None:
-    # image is a UPath — same API locally and remotely.
-    with image.open("rb") as fh:
-        header = fh.read(2880)
-    print(header[:80])
-```
-
-Invoke it with either a local path or a remote URI:
-
-```bash
-hip-cargo inspect --image /data/x.fits
-hip-cargo inspect --image s3://my-bucket/x.fits
-```
 
 ### What about `must_exist`, `mkdir`, and `write_parent`?
 
@@ -491,8 +462,8 @@ from typing import NewType
 File = NewType("File", Path)
 ```
 
-These NewTypes serve double duty: they're valid Python type hints for Typer, and `hip-cargo` introspects the name to produce the correct Stimela dtype in the cab YAML.
-For these types, you also need `parser=parse_upath` in the `typer.Option()`, so Click parses the string argument into a `UPath` (which accepts both local paths and remote URIs — see [Remote URIs and object stores](#remote-uris-and-object-stores)).
+These `NewType`s serve double duty: they're valid Python type hints for Typer, and `hip-cargo` introspects the name to produce the correct Stimela dtype in the cab YAML.
+For these types, you also need `parser=parse_upath` in the `typer.Option()`, so Click parses the string argument into a `UPath` (which accepts both local paths and remote URIs — see [Remote URIs and object stores](#remote-uris-and-object-stores)). `UPath` emits a `Path` compatible object for local paths. Core modules that do not use remote URIs can therefore safely use `Path`.
 
 ### Ruff formatting and `config_file`
 

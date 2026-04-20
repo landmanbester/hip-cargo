@@ -29,7 +29,7 @@ def _extras_hint_from_argv(argv: list[str]) -> str:
     hints: set[str] = set()
     for arg in argv:
         for scheme, extra in _EXTRA_FOR_SCHEME.items():
-            if arg.startswith(f"{scheme}://"):
+            if f"{scheme}://" in arg:
                 hints.add(extra)
     return ", ".join(sorted(hints))
 

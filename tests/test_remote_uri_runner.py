@@ -313,3 +313,15 @@ def test_detect_runtime_error_plain_when_no_remote_scheme(monkeypatch):
         runner._detect_runtime("auto")
 
     assert "hip-cargo[" not in str(exc.value)
+
+
+def test_detect_runtime_error_mentions_extras_for_equals_form(monkeypatch):
+    from hip_cargo.utils import runner
+
+    monkeypatch.setattr(runner.shutil, "which", lambda _: None)
+    monkeypatch.setattr("sys.argv", ["hip-cargo", "--input=gs://bkt/k"])
+
+    with pytest.raises(RuntimeError) as exc:
+        runner._detect_runtime("auto")
+
+    assert "hip-cargo[gcs]" in str(exc.value)
