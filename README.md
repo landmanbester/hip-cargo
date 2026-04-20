@@ -127,8 +127,7 @@ To transition an existing package that already contains `stimela` cab definition
 
 ## Package Structure
 
-We recommend using [uv](https://docs.astral.sh/uv/) as the package manager.
-Initialize your project with the following structure (again using `hip-cargo` as the example):
+We recommend using [uv](https://docs.astral.sh/uv/) as the package manager and following a structure similar to that used in `hip-cargo`:
 
 ```
 hip-cargo/
@@ -357,6 +356,56 @@ Volume mounts are resolved automatically from the function's type hints:
 - Stimela path policies (`write_parent`, `access_parent`, `mkdir`) are respected
 - Docker/podman run as the current user to avoid root-owned output files
 
+## Remote URIs and object stores
+
+`File`, `Directory`, `MS`, and `URI` are backed by
+[`universal_pathlib.UPath`](https://github.com/fsspec/universal_pathlib),
+so every path-typed parameter accepts either a local filesystem path or a
+remote URI: `s3://bucket/key`, `gs://bucket/key`, `az://container/key`,
+`http(s)://...`, plus any other scheme fsspec supports (`memory://`, `ftp://`,
+etc.).
+
+### Installing backends
+
+hip-cargo's core install includes `fsspec` and `universal_pathlib`. Cloud
+backends are optional extras — install only what you need:
+
+```bash
+pip install 'hip-cargo[s3]'       # AWS S3 / S3-compatible endpoints
+pip install 'hip-cargo[gcs]'      # Google Cloud Storage
+pip install 'hip-cargo[azure]'    # Azure Blob Storage
+pip install 'hip-cargo[all]'      # all three
+```
+
+### Credentials
+
+Native execution uses each SDK's standard credential chain — no hip-cargo
+configuration. You already have the right setup if any of these work today:
+
+- **AWS:** `AWS_*` env vars, `~/.aws/credentials`, IAM instance/role creds
+- **GCS:** `GOOGLE_APPLICATION_CREDENTIALS`, `gcloud auth
+  application-default login`, workload identity
+- **Azure:** `AZURE_*` env vars, `az login`, managed identity
+
+When hip-cargo falls back to container execution, it forwards the relevant
+credentials automatically based on the schemes it detects in your
+parameters:
+
+| Scheme | Env vars forwarded | Config dir mounted (ro) |
+|---|---|---|
+| `s3` | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`, `AWS_PROFILE`, `AWS_REGION`, `AWS_DEFAULT_REGION`, `AWS_ENDPOINT_URL` | `~/.aws` (skipped if `AWS_SESSION_TOKEN` is set) |
+| `gs` / `gcs` | `GOOGLE_APPLICATION_CREDENTIALS` | `~/.config/gcloud` + the keyfile |
+| `az` / `abfs` / `adl` | `AZURE_STORAGE_ACCOUNT`, `AZURE_STORAGE_KEY`, `AZURE_STORAGE_CONNECTION_STRING`, `AZURE_CLIENT_ID`, `AZURE_TENANT_ID`, `AZURE_CLIENT_SECRET` | `~/.azure` |
+
+
+### What about `must_exist`, `mkdir`, and `write_parent`?
+
+For remote URIs, hip-cargo pre-flights `must_exist` with a single `exists()`
+call before dispatch, failing fast on typos or missing objects. `mkdir`,
+`write_parent`, and `access_parent` are skipped for remote URIs — they map
+to local container mount logic that has no meaning on object stores. Local
+paths keep their existing mount-driven semantics.
+
 ## Features
 
 - Automatic type inference from Python type hints
@@ -413,8 +462,8 @@ from typing import NewType
 File = NewType("File", Path)
 ```
 
-These NewTypes serve double duty: they're valid Python type hints for Typer, and `hip-cargo` introspects the name to produce the correct Stimela dtype in the cab YAML.
-For these types, you also need `parser=Path` in the `typer.Option()`, so Click knows how to parse the string argument.
+These `NewType`s serve double duty: they're valid Python type hints for Typer, and `hip-cargo` introspects the name to produce the correct Stimela dtype in the cab YAML.
+For these types, you also need `parser=parse_upath` in the `typer.Option()`, so Click parses the string argument into a `UPath` (which accepts both local paths and remote URIs — see [Remote URIs and object stores](#remote-uris-and-object-stores)). `UPath` emits a `Path` compatible object for local paths. Core modules that do not use remote URIs can therefore safely use `Path`.
 
 ### Ruff formatting and `config_file`
 

@@ -29,12 +29,20 @@ dependencies = [
     "libcst==1.8.6",
     "tomli>=2.0; python_version < '3.11'",
     "ruff>=0.13.2",
+    "fsspec>=2024.10.0",
+    "universal-pathlib>=0.2.5",
 ]
 
 [project.urls]
 Homepage = "https://github.com/landmanbester/hip-cargo"
 Repository = "https://github.com/landmanbester/hip-cargo"
 "Bug Tracker" = "https://github.com/landmanbester/hip-cargo/issues"
+
+[project.optional-dependencies]
+s3 = ["s3fs>=2024.10.0"]
+gcs = ["gcsfs>=2024.10.0"]
+azure = ["adlfs>=2024.7.0"]
+all = ["hip-cargo[s3,gcs,azure]"]
 
 [project.scripts]
 hip-cargo = "hip_cargo.cli:app"
