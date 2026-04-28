@@ -5,7 +5,7 @@ modules from the pfb-imaging package. It verifies that:
 1. Cabs can be generated from pfb-imaging CLI modules
 2. Functions can be regenerated from those cabs
 3. The regenerated functions compile without errors
-4. The regenerated function produces the same cab structure
+4. The regenerated Python source matches the original line-for-line
 
 Requires pfb-imaging to be installed (lightweight mode is sufficient):
     pip install pfb-imaging

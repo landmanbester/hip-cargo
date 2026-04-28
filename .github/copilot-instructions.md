@@ -1,22 +1,34 @@
-# AI Agent Instructions for hip-cargo
+# Code Review Instructions for hip-cargo
 
-## Project Overview
+You are an expert code reviewer for the `hip-cargo` project. Your primary role is to review pull requests, identify anti-patterns, and ensure architectural consistency. Keep your reviews concise, direct, and pragmatic. Point out specific violations without unnecessary fluff.
 
-**hip-cargo** generates Stimela cab YAML definitions from Python functions decorated with `@stimela_cab`. It enables bidirectional conversion: Python CLI → YAML cab → Python CLI with full comment preservation.
+**Important Context:** "hip-cargo" is the exact name of the project. Never expand "hip" into a fabricated acronym (such as Hierarchical Imaging Pipeline) in your reviews or comments.
 
-**Core philosophy**: Simplicity over features. Functional programming preferred. Minimize dependencies. Explicit over implicit.
+## 1. Architectural & Dependency Checks
+* **Keep it simple:** Flag any speculative abstractions or unnecessary classes. The project strictly prefers functional programming and solutions that just work reliably without over-engineering.
+* **Lazy Imports:** In `src/hip_cargo/cli/`, flag any heavy module-level imports. Heavy dependencies must be imported inside function bodies to ensure fast CLI startup.
+* **Zero New Dependencies:** Flag any added dependencies for strict justification.
 
-## Communication Guidelines
+## 2. Critical Syntax & Implementation Rules to Enforce
 
-**Response style**: Professional but friendly. Keep responses concise (1-3 sentences unless complex work). Explain reasoning when non-obvious, but avoid unnecessary fluff.
+* **Typer Syntax:** Flag `None` passed as a positional argument to `typer.Option`.
+    * ❌ `param: Annotated[str | None, typer.Option(None, help="...")] = None`
+    * ✅ `param: Annotated[str | None, typer.Option(help="...")] = None`
+* **Comment Preservation (LibCST vs AST):** Flag any use of the `ast` module for parsing decorated functions (it strips comments). The codebase must use LibCST (via `src/hip_cargo/utils/introspector.py`).
+* **List Parsing:** Flag manual comma-splitting logic for CLI inputs. Suggest using `ListInt`, `ListFloat`, or `ListStr` from `utils/types.py` paired with their respective parsers.
+* **CLI Mode Logic:** Ensure any modifications to `core/init.py` maintain distinct post-init messages for `--cli-mode multi` vs `single`. Typer command promotion behaviors differ between these modes; do not let a PR unify them.
 
-**Implementation approach**: Always ask before making changes. Propose edits but wait for confirmation before implementing.
+## 3. Container & CI/CD Rules (DO NOT FLAG THESE)
 
-**File references**: Use backticks for file/path mentions: `src/hip_cargo/utils/decorators.py` or `src/hip_cargo/utils/decorators.py:42` for line numbers.
+* **Branch-Specific Image Tags:** Generated cab files in `src/*/cabs/*.yml` and `_container_image.py` will often contain branch-specific image tags (e.g., `:feature-branch`). **This is correct.** Do not flag these as bugs or suggest changing them to `:latest`. The CI pipeline handles the conversion to `:latest` upon merge.
+* **Workflow Skip Logic:** Workflows use `[skip checks]`, not `[skip ci]`. Ensure that any edits to GitHub Actions workflows maintain the evaluation of this tag via `if: env.SKIP_CHECKS != 'true'`.
 
-**Formatting**: No emojis. Use clear technical language.
+## 4. Testing Standards
+* Flag tests that write to repository directories instead of using `tempfile.TemporaryDirectory()`.
+* Ensure tests for code generation actually compile the output using `compile(code, filename, "exec")`.
 
-## Architecture
+## 5. Review Output Format
+When providing your review summary, you must strictly format your response using the following categories. If a category has no items, omit it entirely.
 
 ```
 src/hip_cargo/

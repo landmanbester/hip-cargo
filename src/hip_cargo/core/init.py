@@ -24,6 +24,7 @@ def init(
     license_type: str = "MIT",
     cli_mode: str = "multi",
     default_branch: str = "main",
+    auto_changelog: bool = False,
     project_dir: Path | None = None,
 ) -> None:
     """Initialize a new hip-cargo project.
@@ -39,6 +40,7 @@ def init(
         license_type: License type (MIT, Apache-2.0, BSD-3-Clause).
         cli_mode: CLI mode (single or multi).
         default_branch: Default git branch name.
+        auto_changelog: Enable git-cliff changelog and conventional commit enforcement.
         project_dir: Output directory (defaults to ./<project_name>/).
     """
     # Derive values
@@ -96,9 +98,11 @@ def init(
 
     # Write template files
     _write_template("pyproject.toml", project_dir / "pyproject.toml", subs)
-    _write_template("tbump.toml", project_dir / "tbump.toml", subs)
+    _write_tbump(project_dir / "tbump.toml", subs, auto_changelog=auto_changelog)
+    if auto_changelog:
+        _write_template("cliff.toml", project_dir / "cliff.toml", subs)
     _write_template("Dockerfile", project_dir / "Dockerfile", subs)
-    _write_template("pre-commit-config.yaml", project_dir / ".pre-commit-config.yaml", subs)
+    _write_precommit(project_dir / ".pre-commit-config.yaml", subs, auto_changelog=auto_changelog)
     _write_template("gitignore", project_dir / ".gitignore", subs)
     _write_template("dependabot.yml", project_dir / ".github" / "dependabot.yml", subs)
     _write_template("devcontainer/devcontainer.json", project_dir / ".devcontainer" / "devcontainer.json", subs)
@@ -129,15 +133,6 @@ def init(
     if license_template and (TEMPLATES_DIR / license_template).exists():
         _write_template(license_template, project_dir / "LICENSE", subs)
 
-    # ci.yml adjustment for single mode: remove the "onboard --help" line
-    if cli_mode == "single":
-        ci_path = project_dir / ".github" / "workflows" / "ci.yml"
-        ci_content = ci_path.read_text()
-        # Remove the line with "onboard --help" since onboard is the root command in single mode
-        ci_lines = ci_content.splitlines(keepends=True)
-        ci_content = "".join(line for line in ci_lines if "onboard --help" not in line)
-        ci_path.write_text(ci_content)
-
     # Write generated files (inline content)
     _write_file(
         src_pkg / "__init__.py",
@@ -164,6 +159,10 @@ def init(
         '        raise FileNotFoundError(f"Cab not found: {name}")\n'
         "    return cab_path\n\n\n"
         '__all__ = ["CAB_DIR", "AVAILABLE_CABS", "get_cab_path"]\n',
+    )
+    _write_file(
+        src_pkg / "_container_image.py",
+        f'CONTAINER_IMAGE = "ghcr.io/{github_user}/{project_name}:latest"\n',
     )
     _write_file(project_dir / "tests" / "__init__.py", "")
     _write_file(
@@ -215,6 +214,8 @@ def init(
     _run_command(["git", "add", "."], cwd=project_dir)
     _run_command(["git", "commit", "-m", "chore: initial project scaffold"], cwd=project_dir)
     _run_command(["uv", "run", "pre-commit", "install"], cwd=project_dir)
+    if auto_changelog:
+        _run_command(["uv", "run", "pre-commit", "install", "--hook-type", "commit-msg"], cwd=project_dir)
 
     print(f"\nDone! Project '{project_name}' is ready at {project_dir}")
     print(f"\n  cd {project_dir}")
@@ -223,6 +224,67 @@ def init(
     else:
         print(f"  uv run {cli_command} onboard")
     print("\nto see setup instructions for CI/CD and publishing.")
+
+
+_CONVENTIONAL_PRECOMMIT_BLOCK = """\
+
+  - repo: https://github.com/compilerla/conventional-pre-commit
+    rev: v4.1.0
+    hooks:
+      - id: conventional-pre-commit
+        stages: [commit-msg]
+        args:
+          - feat
+          - fix
+          - refactor
+          - perf
+          - docs
+          - deps
+          - chore
+          - ci
+          - style
+          - test
+          - build
+"""
+
+
+def _write_precommit(target_path: Path, subs: dict[str, str], *, auto_changelog: bool) -> None:
+    """Write pre-commit config, optionally adding conventional-commit enforcement."""
+    content = _read_template("pre-commit-config.yaml")
+    content = _apply_substitutions(content, subs)
+    if auto_changelog:
+        # Add CHANGELOG.md exclusion to end-of-file-fixer
+        content = content.replace(
+            "      - id: end-of-file-fixer",
+            "      - id: end-of-file-fixer\n        exclude: ^CHANGELOG\\.md$",
+        )
+        # Insert conventional-pre-commit block before the local hooks section
+        content = content.replace(
+            "\n  # Local hooks",
+            _CONVENTIONAL_PRECOMMIT_BLOCK + "\n  # Local hooks",
+        )
+    _write_file(target_path, content)
+
+
+def _write_tbump(target_path: Path, subs: dict[str, str], *, auto_changelog: bool) -> None:
+    """Write tbump config, stripping changelog hooks when auto_changelog is disabled."""
+    import re
+
+    content = _read_template("tbump.toml")
+    content = _apply_substitutions(content, subs)
+    if not auto_changelog:
+        # Remove [[before_commit]] blocks whose name contains "changelog" (case-insensitive)
+        content = re.sub(
+            r'\[\[before_commit\]\]\nname = "[^"]*[Cc]hangelog[^"]*"\ncmd = "[^"]*"\n\n?',
+            "",
+            content,
+        )
+        # Update the comment to reflect no changelog generation
+        content = content.replace(
+            "# Generate changelog, update container image tag, and regenerate cabs with the release version.",
+            "# Update container image tag and regenerate cabs with the release version.",
+        )
+    _write_file(target_path, content)
 
 
 def _read_template(name: str) -> str:

@@ -45,3 +45,10 @@ tests/scratch/
 # OS
 .DS_Store
 Thumbs.db
+
+# AI
+.claude/
+.claude-work/
+
+# Docs (for now)
+docs/

@@ -234,13 +234,132 @@ def test_stimela(
 
         print(f"\nGenerated Python:\n{python_code}")
 
-        # Verify stimela dict in generated code (multi-line format with trailing commas)
-        assert '"stimela":' in python_code or "'stimela':" in python_code
+        # Generation emits the new StimelaMeta(...) form regardless of the
+        # input form, so the legacy dict literal should no longer appear.
+        assert "StimelaMeta(" in python_code
         assert "must_exist" in python_code
         assert "mkdir" in python_code
         assert "io" in python_code
 
         print("✓ Stimela metadata preserved in roundtrip")
+
+
+def test_extract_stimela_metadata_new_form():
+    """Extraction recognises the StimelaMeta(...) call form."""
+    code = """
+from typing import Annotated
+import typer
+from hip_cargo import StimelaMeta
+
+def foo(
+    param: Annotated[
+        str,
+        typer.Option(help="Test param"),
+        StimelaMeta(dtype="File", must_exist=True),
+    ]
+):
+    pass
+"""
+    cst_tree = cst.parse_module(code)
+    cst_func = cst_tree.body[-1]
+    cst_param = cst_func.params.params[0]
+
+    from hip_cargo.utils.introspector import parse_annotated_libcst
+
+    annotation_node = cst_param.annotation.annotation
+    _, metadata_nodes = parse_annotated_libcst(annotation_node)
+
+    stimela_meta = extract_stimela_metadata_libcst(metadata_nodes)
+    assert stimela_meta == {"dtype": "File", "must_exist": True}
+
+
+def test_extract_stimela_metadata_new_form_with_nested():
+    """Nested dict kwargs in StimelaMeta(...) are extracted as dicts."""
+    code = """
+from typing import Annotated
+import typer
+from hip_cargo import StimelaMeta
+
+def foo(
+    param: Annotated[
+        str,
+        typer.Option(help="Test param"),
+        StimelaMeta(mkdir=False, path_policies={"write_parent": True}),
+    ]
+):
+    pass
+"""
+    cst_tree = cst.parse_module(code)
+    cst_func = cst_tree.body[-1]
+    cst_param = cst_func.params.params[0]
+
+    from hip_cargo.utils.introspector import parse_annotated_libcst
+
+    annotation_node = cst_param.annotation.annotation
+    _, metadata_nodes = parse_annotated_libcst(annotation_node)
+
+    stimela_meta = extract_stimela_metadata_libcst(metadata_nodes)
+    assert stimela_meta == {"mkdir": False, "path_policies": {"write_parent": True}}
+
+
+def test_stimela_roundtrip_new_form():
+    """CLI written with StimelaMeta(...) → YAML → CLI re-emits StimelaMeta(...)."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmpdir = Path(tmpdir)
+
+        cli_dir = tmpdir / "src" / "test_pkg" / "cli"
+        cli_dir.mkdir(parents=True)
+        test_file = cli_dir / "test_stimela_new.py"
+
+        test_code = '''from pathlib import Path
+from typing import Annotated, NewType
+
+import typer
+
+from hip_cargo import StimelaMeta, stimela_cab
+
+File = NewType("File", Path)
+
+
+@stimela_cab(
+    name="test_stimela_new",
+    info="Test StimelaMeta form.",
+)
+def test_stimela_new(
+    input_file: Annotated[
+        File,
+        typer.Option(..., parser=Path, help="Input file"),
+        StimelaMeta(must_exist=True, policies={"io": "copy"}),
+    ],
+    output_dir: Annotated[
+        Path | None,
+        typer.Option(parser=Path, help="Output directory"),
+        StimelaMeta(dtype="Directory", mkdir=True),
+    ] = None,
+):
+    """Test command."""
+    pass
+'''
+        test_file.write_text(test_code)
+
+        # CLI → YAML
+        generate_cabs([test_file], output_dir=tmpdir)
+        cab_file = tmpdir / "test_stimela_new.yml"
+        yaml_content = cab_file.read_text()
+
+        assert "must_exist: true" in yaml_content
+        assert "mkdir: true" in yaml_content
+        assert "io: copy" in yaml_content
+
+        # YAML → CLI
+        gen_file = tmpdir / "test_stimela_new_generated.py"
+        generate_function(cab_file=cab_file, output_file=gen_file, config_file=Path("pyproject.toml"))
+        python_code = gen_file.read_text()
+
+        # New form should be emitted
+        assert "StimelaMeta(" in python_code
+        assert "must_exist" in python_code
+        assert "mkdir" in python_code
 
 
 def test_backward_compatibility():
@@ -281,7 +400,7 @@ def foo(
     param_name2, input_def2 = extract_input_libcst(cst_param2)
 
     assert param_name2 == "output"
-    assert "dtype" not in input_def2  # str is default, not added
+    assert input_def2["dtype"] == "Optional[str]"  # str | None produces Optional[str]
     # When default is None, it's not required but also doesn't have a default field
     # (None defaults are handled by the function signature itself)
     assert "required" not in input_def2 or input_def2.get("required") is False
@@ -300,6 +419,9 @@ if __name__ == "__main__":
     test_stimela_arbitrary_fields()
     test_stimela_policies_merge()
     test_stimela_roundtrip()
+    test_extract_stimela_metadata_new_form()
+    test_extract_stimela_metadata_new_form_with_nested()
+    test_stimela_roundtrip_new_form()
     test_backward_compatibility()
 
     print("\n" + "=" * 60)

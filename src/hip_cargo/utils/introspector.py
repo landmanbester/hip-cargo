@@ -2,16 +2,16 @@
 
 import ast
 import re
-from pathlib import Path
 from typing import Any, NewType
 
 import libcst as cst
 from libcst import matchers
+from upath import UPath
 
-MS = NewType("MS", Path)
-Directory = NewType("Directory", Path)
-File = NewType("File", Path)
-URI = NewType("URI", Path)
+MS = NewType("MS", UPath)
+Directory = NewType("Directory", UPath)
+File = NewType("File", UPath)
+URI = NewType("URI", UPath)
 
 
 def unwrap_optional_libcst(annotation_node: cst.CSTNode) -> cst.CSTNode:
@@ -157,10 +157,17 @@ def extract_typer_metadata_libcst(metadata_nodes: list[cst.CSTNode]) -> dict[str
 
 def extract_stimela_metadata_libcst(metadata_nodes: list[cst.CSTNode]) -> dict[str, Any]:
     """
-    Extract custom Stimela metadata dict from Annotated metadata items.
+    Extract custom Stimela metadata from Annotated metadata items.
 
-    Looks for dict literals with a "stimela" key:
-        Annotated[Type, typer.Option(...), {"stimela": {...}}]
+    Recognises two forms:
+
+    * Preferred::
+
+          Annotated[Type, typer.Option(...), StimelaMeta(key=value, ...)]
+
+    * Legacy dict literal::
+
+          Annotated[Type, typer.Option(...), {"stimela": {...}}]
 
     Args:
         metadata_nodes: List of metadata CST nodes from Annotated
@@ -169,8 +176,23 @@ def extract_stimela_metadata_libcst(metadata_nodes: list[cst.CSTNode]) -> dict[s
         Dict with Stimela-specific metadata, or empty dict if not found
     """
     for node in metadata_nodes:
+        # Preferred form: StimelaMeta(...) call
+        if isinstance(node, cst.Call):
+            callee_name = None
+            func = node.func
+            if isinstance(func, cst.Name):
+                callee_name = func.value
+            elif isinstance(func, cst.Attribute):
+                callee_name = func.attr.value
+            if callee_name == "StimelaMeta":
+                result: dict[str, Any] = {}
+                for arg in node.args:
+                    if arg.keyword is not None:
+                        result[arg.keyword.value] = get_cst_value(arg.value)
+                return result
+
+        # Legacy form: {"stimela": {...}} dict literal
         if isinstance(node, cst.Dict):
-            # Use get_cst_value to safely extract the dict
             dict_value = get_cst_value(node)
             if isinstance(dict_value, dict) and "stimela" in dict_value:
                 return dict_value["stimela"]
@@ -316,8 +338,12 @@ def _dtype_to_str_from_string(dtype_str: str) -> str:
     # Strip whitespace
     dtype_str = dtype_str.strip()
 
-    # Remove " | None" or "| None" from Union types
+    # Check if type is optional (X | None or None | X) before stripping
+    is_optional = " | None" in dtype_str or "| None" in dtype_str or "None |" in dtype_str or "None|" in dtype_str
+
+    # Remove None from union types (handles both X | None and None | X)
     dtype_str = dtype_str.replace(" | None", "").replace("| None", "")
+    dtype_str = dtype_str.replace("None | ", "").replace("None|", "")
 
     # If it's just "None", return "NoneType"
     if dtype_str == "None":
@@ -334,7 +360,8 @@ def _dtype_to_str_from_string(dtype_str: str) -> str:
         "ListStr": "List[str]",
     }
     if dtype_str in list_type_mapping:
-        return list_type_mapping[dtype_str]
+        resolved = list_type_mapping[dtype_str]
+        return f"Optional[{resolved}]" if is_optional else resolved
 
     # Map lowercase built-in types to stimela-compatible names
     # Handle both simple types (list) and generic types (list[File])
@@ -349,14 +376,14 @@ def _dtype_to_str_from_string(dtype_str: str) -> str:
     for old, new in type_mapping.items():
         # Replace "list[" with "List[" (preserve brackets and contents)
         if dtype_str.startswith(f"{old}["):
-            dtype_str = f"{new}{dtype_str[len(old) :]}"
-            return dtype_str
+            resolved = f"{new}{dtype_str[len(old) :]}"
+            return f"Optional[{resolved}]" if is_optional else resolved
         # Simple type without brackets
         elif dtype_str == old:
-            return new
+            return f"Optional[{new}]" if is_optional else new
 
     # Return as-is for custom types like File, Directory, etc.
-    return dtype_str
+    return f"Optional[{dtype_str}]" if is_optional else dtype_str
 
 
 def get_cst_value(node: cst.CSTNode) -> Any:

@@ -1,46 +1,36 @@
-"""Read project configuration from pyproject.toml."""
+"""Read container image from installed package metadata."""
 
-import sys
-from pathlib import Path
-
-if sys.version_info >= (3, 11):
-    import tomllib
-else:
-    try:
-        import tomllib  # type: ignore[import-not-found]
-    except ModuleNotFoundError:
-        import tomli as tomllib  # type: ignore[no-redef]
+import importlib
 
 
-def find_pyproject_toml(start: Path | None = None) -> Path | None:
-    """Walk up from *start* (default: cwd) to find pyproject.toml.
+def get_container_image(package_name: str, package_import_name: str | None = None) -> str | None:
+    """Return the container image registered in a package's _container_image module.
 
-    Returns:
-        Path to pyproject.toml, or None if not found.
-    """
-    current = (start or Path.cwd()).resolve()
-    for parent in [current, *current.parents]:
-        candidate = parent / "pyproject.toml"
-        if candidate.is_file():
-            return candidate
-    return None
-
-
-def get_project_image(start: Path | None = None) -> str | None:
-    """Read ``[tool.hip-cargo].image`` from the nearest pyproject.toml.
-
-    This works for any project that stores its container image base
-    under the ``[tool.hip-cargo]`` section in pyproject.toml.
+    Dynamically imports ``<package>._container_image`` and reads the
+    ``CONTAINER_IMAGE`` constant. This works from any directory because it
+    reads from the installed package, not from ``pyproject.toml``.
 
     Args:
-        start: Directory to start searching from (default: cwd).
-
+        package_name:
+            The distribution name of the package (e.g. 'pfb-imaging').
+            By default hyphens are converted to underscores to determine the name of the module to to import.
+        package_import_name:
+            The name of the module to import (e.g. 'pfb_imaging').
+            If not provided, it is derived from `package_name` by replacing hyphens with underscores.
     Returns:
-        The image base string (without tag), or None if not configured.
+        The full container image string (including tag), or None if the
+        package is not installed or has no ``_container_image`` module.
     """
-    pyproject = find_pyproject_toml(start)
-    if pyproject is None:
-        return None
-    with open(pyproject, "rb") as f:
-        data = tomllib.load(f)
-    return data.get("tool", {}).get("hip-cargo", {}).get("image")
+    if package_import_name is not None:
+        pkg = package_import_name
+    else:
+        pkg = package_name.replace("-", "_")
+    module_name = f"{pkg}._container_image"
+    try:
+        mod = importlib.import_module(module_name)
+        return getattr(mod, "CONTAINER_IMAGE", None)
+    except ModuleNotFoundError as exc:
+        if exc.name and module_name.startswith(exc.name):
+            # The package or its _container_image module is not installed
+            return None
+        raise

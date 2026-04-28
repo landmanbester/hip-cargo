@@ -128,8 +128,10 @@ def generate_function(cab_file: Path, output_file: Path, config_file: Path | Non
     list_types_used = set()
     for param_def in all_params.values():
         dtype = param_def.get("dtype", "str")
-        if dtype in STIMELA_DTYPE_TO_LIST_TYPE:
-            list_types_used.add(STIMELA_DTYPE_TO_LIST_TYPE[dtype])
+        # Unwrap Optional[...] for list type detection
+        lookup_dtype = dtype[9:-1] if dtype.startswith("Optional[") and dtype.endswith("]") else dtype
+        if lookup_dtype in STIMELA_DTYPE_TO_LIST_TYPE:
+            list_types_used.add(STIMELA_DTYPE_TO_LIST_TYPE[lookup_dtype])
 
     # Start building the function
     lines = []
@@ -148,8 +150,12 @@ def generate_function(cab_file: Path, output_file: Path, config_file: Path | Non
 
     # Build a single import line from hip_cargo with decorators + list types
     hip_cargo_imports = sorted(list_types_used) + sorted(LIST_TYPE_PARSERS[t] for t in list_types_used)
-    hip_cargo_imports.extend(["stimela_cab", "stimela_output"])
-    lines.append(f"from hip_cargo import {', '.join(hip_cargo_imports)}")
+    if cab_def.get("image"):
+        hip_cargo_imports.append("get_container_image")
+    if custom_types:
+        hip_cargo_imports.append("parse_upath")
+    hip_cargo_imports.extend(["stimela_cab", "stimela_output", "StimelaMeta"])
+    lines.append(f"from hip_cargo import {', '.join(sorted(hip_cargo_imports))}")
 
     lines.append("")
 
@@ -322,14 +328,18 @@ def generate_function(cab_file: Path, output_file: Path, config_file: Path | Non
         lines.append("        typer.Option(")
         lines.append('            help="Execution backend.",')
         lines.append("        ),")
-        lines.append('        {"stimela": {"skip": True}},')
+        lines.append("        StimelaMeta(")
+        lines.append("            skip=True,")
+        lines.append("        ),")
         lines.append('    ] = "auto",')
         lines.append("    always_pull_images: Annotated[")
         lines.append("        bool,")
         lines.append("        typer.Option(")
         lines.append('            help="Always pull container images, even if cached locally.",')
         lines.append("        ),")
-        lines.append('        {"stimela": {"skip": True}},')
+        lines.append("        StimelaMeta(")
+        lines.append("            skip=True,")
+        lines.append("        ),")
         lines.append("    ] = False,")
 
     lines.append("):")

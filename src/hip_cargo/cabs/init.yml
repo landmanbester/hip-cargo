@@ -5,7 +5,7 @@ cabs:
     name: init
     info:
       Initialize a new hip-cargo project with scaffolding and Stimela cab support.
-    image: ghcr.io/landmanbester/hip-cargo:latest
+    image: ghcr.io/landmanbester/hip-cargo:0.2.0
     inputs:
       project-name:
         info:
@@ -33,16 +33,19 @@ cabs:
       author-name:
         info:
           Author name (auto-detected from git config if omitted).
+        dtype: Optional[str]
         metadata:
           rich_help_panel: Inputs
       author-email:
         info:
           Author email (auto-detected from git config if omitted).
+        dtype: Optional[str]
         metadata:
           rich_help_panel: Inputs
       cli-command:
         info:
           CLI entry point name (derived from project-name if omitted).
+        dtype: Optional[str]
         metadata:
           rich_help_panel: Inputs
       initial-version:
@@ -74,6 +77,13 @@ cabs:
         info:
           Default git branch name.
         default: main
+        metadata:
+          rich_help_panel: Inputs
+      auto-changelog:
+        info:
+          Enable git-cliff changelog generation and conventional commit enforcement via pre-commit.
+        dtype: bool
+        default: false
         metadata:
           rich_help_panel: Inputs
     outputs:

@@ -94,7 +94,7 @@ Follow these steps to complete the CI/CD and publishing setup for your project.
      Go to: https://github.com/<GITHUB_USER>/<PROJECT_NAME>/settings/secrets/actions
 
      Add two secrets:
-       APP_ID          → The App ID shown on the app's settings page
+       APP_CLIENT_ID   → The Client ID shown on the app's settings page
        APP_PRIVATE_KEY → The contents of the .pem file you downloaded
 
 ────────────────────────────────────────────────────────────────────────────────
@@ -139,7 +139,36 @@ Follow these steps to complete the CI/CD and publishing setup for your project.
   That's it! Your CI/CD pipeline is fully configured.
 ================================================================================
 
-NOTE: Once you've completed the steps above, you can safely delete the
+────────────────────────────────────────────────────────────────────────────────
+  Day-to-Day Development: Image Tag Workflow
+────────────────────────────────────────────────────────────────────────────────
+
+  The container image is stored in src/<PACKAGE_NAME>/_container_image.py
+  as the single source of truth for cab generation and container fallback
+  execution. The tag portion must stay in sync with your current context.
+
+  When you create a feature branch:
+
+    1. Edit src/<PACKAGE_NAME>/_container_image.py and change the tag:
+
+         CONTAINER_IMAGE = "ghcr.io/<GITHUB_USER>/<PROJECT_NAME>:my-feature"
+
+    2. Commit and develop as normal — pre-commit hooks will generate cab
+       definitions with the correct branch-specific image tag.
+
+  You do NOT need to reset the tag before merging. On merge to <DEFAULT_BRANCH>,
+  the update-cabs workflow automatically:
+
+    - Resets the CONTAINER_IMAGE tag to "latest"
+    - Regenerates cab definitions
+    - Commits _container_image.py and cab YAML files
+
+  During releases, tbump updates the tag to the semantic version
+  (e.g. 0.1.0) via its before-commit hooks.
+
+────────────────────────────────────────────────────────────────────────────────
+
+NOTE: Once you've completed the setup steps above, you can safely delete the
 onboard command (cli/onboard.py and core/onboard.py) and remove it from
 cli/__init__.py.
 

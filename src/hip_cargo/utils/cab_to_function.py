@@ -98,6 +98,12 @@ def stimela_dtype_to_python_type(dtype: str, preserve_custom: bool = True) -> st
     Returns:
         Python type hint as string
     """
+    # Handle Optional types - unwrap and add | None
+    if dtype.startswith("Optional[") and dtype.endswith("]"):
+        inner = dtype[9:-1]
+        inner_py = stimela_dtype_to_python_type(inner, preserve_custom)
+        return f"{inner_py} | None"
+
     # Handle List types - use lowercase 'list'
     if dtype.startswith("List["):
         inner_type = dtype[5:-1]  # Extract inner type
@@ -198,6 +204,34 @@ def split_info_at_periods(info: str) -> str:
     return "\n".join(sentences)
 
 
+def _format_value_multiline(value: Any, indent_level: int) -> str:
+    """Format a single value for inclusion in multi-line dict/call output."""
+    if isinstance(value, dict):
+        return format_dict_multiline(value, indent_level)
+    if isinstance(value, list):
+        item_strs = []
+        for item in value:
+            if isinstance(item, dict):
+                item_repr = format_dict_multiline(item, indent_level + 1)
+            elif isinstance(item, bool):
+                item_repr = "True" if item else "False"
+            elif isinstance(item, str):
+                item_repr = f'"{item}"'
+            elif item is None:
+                item_repr = "None"
+            else:
+                item_repr = str(item)
+            item_strs.append(item_repr)
+        return "[" + ", ".join(item_strs) + "]"
+    if isinstance(value, bool):
+        return "True" if value else "False"
+    if isinstance(value, str):
+        return f'"{value}"'
+    if value is None:
+        return "None"
+    return str(value)
+
+
 def format_dict_multiline(d: dict[str, Any], indent_level: int = 0) -> str:
     """
     Format a dictionary with each item on a new line and trailing commas.
@@ -219,40 +253,40 @@ def format_dict_multiline(d: dict[str, Any], indent_level: int = 0) -> str:
 
     lines = ["{"]
     for key, value in d.items():
-        # Format the key
         key_str = f'"{key}"' if isinstance(key, str) else str(key)
-
-        # Format the value
-        if isinstance(value, dict):
-            value_str = format_dict_multiline(value, indent_level + 1)
-        elif isinstance(value, list):
-            # Format list values to ensure proper literal representation
-            item_strs = []
-            for item in value:
-                if isinstance(item, dict):
-                    item_repr = format_dict_multiline(item, indent_level + 2)
-                elif isinstance(item, bool):
-                    item_repr = "True" if item else "False"
-                elif isinstance(item, str):
-                    item_repr = f'"{item}"'
-                elif item is None:
-                    item_repr = "None"
-                else:
-                    item_repr = str(item)
-                item_strs.append(item_repr)
-            value_str = "[" + ", ".join(item_strs) + "]"
-        elif isinstance(value, bool):
-            value_str = "True" if value else "False"
-        elif isinstance(value, str):
-            value_str = f'"{value}"'
-        elif value is None:
-            value_str = "None"
-        else:
-            value_str = str(value)
-
+        value_str = _format_value_multiline(value, indent_level + 1)
         lines.append(f"{next_indent}{key_str}: {value_str},")
 
     lines.append(f"{indent}}}")
+    return "\n".join(lines)
+
+
+def format_stimela_meta_call(meta: dict[str, Any], indent_level: int = 0) -> str:
+    """
+    Format a stimela metadata mapping as a ``StimelaMeta(...)`` call.
+
+    Keys become keyword arguments; nested dicts stay as dict literals (they are
+    re-frozen at runtime by ``StimelaMeta.__init__``). Produces ruff-compatible
+    output with one kwarg per line and trailing commas.
+
+    Args:
+        meta: Mapping of stimela metadata fields.
+        indent_level: Current indentation level.
+
+    Returns:
+        Formatted ``StimelaMeta(...)`` call string.
+    """
+    if not meta:
+        return "StimelaMeta()"
+
+    indent = "    " * indent_level
+    next_indent = "    " * (indent_level + 1)
+
+    lines = ["StimelaMeta("]
+    for key, value in meta.items():
+        value_str = _format_value_multiline(value, indent_level + 1)
+        lines.append(f"{next_indent}{key}={value_str},")
+    lines.append(f"{indent})")
     return "\n".join(lines)
 
 
@@ -282,9 +316,12 @@ def generate_parameter_signature(
 
     # Check if this is a comma-separated list type (List[int], List[float], List[str])
     # These use dedicated ListType NewTypes with parser functions
-    list_type_name = STIMELA_DTYPE_TO_LIST_TYPE.get(dtype)
+    # Unwrap Optional[...] for the lookup since Optional[List[int]] should use ListInt too
+    is_optional = dtype.startswith("Optional[") and dtype.endswith("]")
+    lookup_dtype = dtype[9:-1] if is_optional else dtype
+    list_type_name = STIMELA_DTYPE_TO_LIST_TYPE.get(lookup_dtype)
     if list_type_name:
-        py_type = list_type_name
+        py_type = f"{list_type_name} | None" if is_optional else list_type_name
         # Convert list defaults to comma-separated strings (ListType takes a string at CLI level)
         if isinstance(default, list):
             default = ",".join(str(v) for v in default)
@@ -348,12 +385,13 @@ def generate_parameter_signature(
     lines_out.append(f"    {py_param_name}: Annotated[")
     lines_out.append(f"        {py_type},")
 
-    # Determine parser: list types use their own parser, custom types use Path
+    # Determine parser: list types use their own parser, custom path types
+    # use parse_upath so the CLI accepts local paths or remote URIs.
     parser_str = None
     if list_type_name:
         parser_str = LIST_TYPE_PARSERS[list_type_name]
     elif needs_parser:
-        parser_str = "Path"
+        parser_str = "parse_upath"
 
     # Build typer.Option with arguments on separate lines
     if required:
@@ -423,10 +461,14 @@ def generate_parameter_signature(
     # This happens when the type hint is generic (like str or Path) but dtype is specific (like File)
     # Skip for ListType NewTypes — their dtype is inferred from the type name
     if dtype not in ["str", "int", "float", "bool"] and not list_type_name:
-        # Normalize comparison: lowercase generics (list, tuple, dict) are equivalent
-        # to their capitalized forms (List, Tuple, Dict) since Python 3.9+
-        normalized_py_type = py_type.replace("list[", "List[").replace("tuple[", "Tuple[").replace("dict[", "Dict[")
-        normalized_dtype = dtype.replace("list[", "List[").replace("tuple[", "Tuple[").replace("dict[", "Dict[")
+        # Normalize comparison: strip Optional/None wrappers and lowercase generics
+        normalized_py_type = py_type.replace(" | None", "").replace("list[", "List[").replace("tuple[", "Tuple[")
+        normalized_py_type = normalized_py_type.replace("dict[", "Dict[")
+        normalized_dtype = dtype
+        if normalized_dtype.startswith("Optional[") and normalized_dtype.endswith("]"):
+            normalized_dtype = normalized_dtype[9:-1]
+        normalized_dtype = normalized_dtype.replace("list[", "List[").replace("tuple[", "Tuple[")
+        normalized_dtype = normalized_dtype.replace("dict[", "Dict[")
 
         # Check if the actual dtype differs from what we'd infer from py_type
         if normalized_py_type != normalized_dtype and not uses_literal:
@@ -446,11 +488,11 @@ def generate_parameter_signature(
         if key not in handled_fields and key != "policies":
             stimela_meta[key] = value
 
-    # If there are stimela metadata fields, add them as a dict to Annotated
+    # If there are stimela metadata fields, emit a StimelaMeta(...) call
     if stimela_meta:
         # Format with multi-line style and trailing commas for ruff compatibility
-        stimela_dict_str = format_dict_multiline({"stimela": stimela_meta}, indent_level=2)
-        lines_out.append(f"        {stimela_dict_str},")
+        stimela_call_str = format_stimela_meta_call(stimela_meta, indent_level=2)
+        lines_out.append(f"        {stimela_call_str},")
 
     # Add closing bracket and default if applicable
     if default is not None and not required:
@@ -501,6 +543,42 @@ def generate_function_body(cab_def: dict[str, Any], inputs: dict[str, Any], outp
     command_parts = command.split(".")
     import_path = ".".join(command_parts[:-1])
     core_func_name = command_parts[-1]
+
+    # Pre-flight must_exist for remote URIs before dispatching.
+    # The preflight calls .exists() on remote UPaths, which may raise ImportError
+    # if the fsspec backend is missing. When has_image is True, it must live
+    # INSIDE the try/except block so the container fallback can catch that.
+    if has_image:
+        lines.append(f"{indent}# Pre-flight must_exist for remote URIs before dispatching.")
+        lines.append(f"{indent}from hip_cargo.utils.runner import preflight_remote_must_exist  # noqa: E402")
+        lines.append(f"{indent}preflight_remote_must_exist(")
+        lines.append(f"{indent}    {func_name},")
+        lines.append(f"{indent}    dict(")
+        for param_name in inputs:
+            py_name = param_name.replace("-", "_")
+            lines.append(f"{indent}        {py_name}={py_name},")
+        for output_name in outputs:
+            py_name = output_name.replace("-", "_")
+            lines.append(f"{indent}        {py_name}={py_name},")
+        lines.append(f"{indent}    ),")
+        lines.append(f"{indent})")
+        lines.append("")
+    else:
+        lines.append("    # Pre-flight must_exist for remote URIs before dispatching.")
+        lines.append("    from hip_cargo.utils.runner import preflight_remote_must_exist  # noqa: E402")
+        lines.append("    preflight_remote_must_exist(")
+        lines.append(f"        {func_name},")
+        lines.append("        dict(")
+        for param_name in inputs:
+            py_name = param_name.replace("-", "_")
+            lines.append(f"            {py_name}={py_name},")
+        for output_name in outputs:
+            py_name = output_name.replace("-", "_")
+            lines.append(f"            {py_name}={py_name},")
+        lines.append("        ),")
+        lines.append("    )")
+        lines.append("")
+
     # Lazy import
     lines.append(f"{indent}# Lazy import the core implementation")
     lines.append(f"{indent}from {import_path} import {core_func_name} as {core_func_name}_core  # noqa: E402")
@@ -546,8 +624,19 @@ def generate_function_body(cab_def: dict[str, Any], inputs: dict[str, Any], outp
         lines.append("            if backend == 'native':")
         lines.append("                raise")
         lines.append("")
-        lines.append("    # Fall back to container execution")
+        lines.append("    # Resolve container image from installed package metadata")
+        lines.append("    from hip_cargo.utils.config import get_container_image  # noqa: E402")
         lines.append("    from hip_cargo.utils.runner import run_in_container  # noqa: E402")
+        lines.append("")
+
+        # Derive distribution name from command: "pfb_imaging.core.grid.grid" → "pfb-imaging"
+        command = cab_def.get("command", "")
+        import_name = command.split(".")[0] if command else ""
+        dist_name = import_name.replace("_", "-")
+
+        lines.append(f'    image = get_container_image("{dist_name}")')
+        lines.append("    if image is None:")
+        lines.append(f'        raise RuntimeError("No Container URL in {dist_name} metadata.")')
         lines.append("")
 
         # Build the params dict for run_in_container (excludes backend)
@@ -561,6 +650,7 @@ def generate_function_body(cab_def: dict[str, Any], inputs: dict[str, Any], outp
             py_name = output_name.replace("-", "_")
             lines.append(f"            {py_name}={py_name},")
         lines.append("        ),")
+        lines.append("        image=image,")
         lines.append("        backend=backend,")
         lines.append("        always_pull_images=always_pull_images,")
         lines.append("    )")
