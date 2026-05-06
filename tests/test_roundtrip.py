@@ -95,6 +95,37 @@ def test_roundtrip_generate_function():
             assert orig_line == gen_line, f"Line {i} differs:\n  Original:  {orig_line}\n  Generated: {gen_line}"
 
 
+def test_roundtrip_generate_schemas():
+    """Test round-trip: generate_schemas CLI -> cab -> generated function."""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmpdir = Path(tmpdir)
+        cab_dir = tmpdir / "cabs"
+        cab_dir.mkdir()
+
+        cli_module = Path("src/hip_cargo/cli/generate_schemas.py")
+        generate_cabs([cli_module], output_dir=cab_dir)
+
+        cab_file = cab_dir / "generate_schemas.yml"
+        assert cab_file.exists(), "Cab file should be generated"
+
+        generated_file = tmpdir / "generate_schemas_roundtrip.py"
+        generate_function(cab_file, output_file=generated_file, config_file=Path("pyproject.toml"))
+
+        assert generated_file.exists(), "Generated function should exist"
+        generated_code = generated_file.read_text()
+        compile(generated_code, str(generated_file), "exec")
+
+        original_code = cli_module.read_text()
+        original_lines = original_code.splitlines()
+        generated_lines = generated_code.splitlines()
+
+        assert len(original_lines) == len(generated_lines), (
+            f"Line count mismatch: original has {len(original_lines)} lines, generated has {len(generated_lines)} lines"
+        )
+        for i, (orig_line, gen_line) in enumerate(zip(original_lines, generated_lines), 1):
+            assert orig_line == gen_line, f"Line {i} differs:\n  Original:  {orig_line}\n  Generated: {gen_line}"
+
+
 def test_roundtrip_init():
     """Test round-trip: init CLI -> cab -> generated function."""
     with tempfile.TemporaryDirectory() as tmpdir:

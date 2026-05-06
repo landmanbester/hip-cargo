@@ -1196,6 +1196,7 @@ dev = [
     { name = "tbump" },
 ]
 test = [
+    { name = "pfb-imaging" },
     { name = "pytest" },
     { name = "pytest-cov" },
 ]
@@ -1224,6 +1225,7 @@ dev = [
     { name = "tbump", specifier = ">=6.11.0" },
 ]
 test = [
+    { name = "pfb-imaging", specifier = ">=0.0.9" },
     { name = "pytest", specifier = ">=8.4.2" },
     { name = "pytest-cov", specifier = ">=5.0.0" },
 ]
@@ -1684,6 +1686,18 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/42/92/cc564bf6381ff43ce1f4d06852fc19a2f11d180f23dc32d9588bee2f149d/pexpect-4.9.0.tar.gz", hash = "sha256:ee7d41123f3c9911050ea2c2dac107568dc43b2d3b0c7557a33212c398ead30f", size = 166450, upload-time = "2023-11-25T09:07:26.339Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/9e/c3/059298687310d527a58bb01f3b1965787ee3b40dce76752eda8b44e9a2c5/pexpect-4.9.0-py2.py3-none-any.whl", hash = "sha256:7236d1e080e4936be2dc3e326cec0af72acf9212a7e1d060210e70a47e253523", size = 63772, upload-time = "2023-11-25T06:56:14.81Z" },
+]
+
+[[package]]
+name = "pfb-imaging"
+version = "0.0.9"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "hip-cargo" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/ea/b5/9cb6a361e23fca68726cc0dbd9a039c10bb93d317a67d63bc425421532f9/pfb_imaging-0.0.9.tar.gz", hash = "sha256:ad1121c4d3884a034d95e4b5dad76fb184a3a0aded44eb5b33d8443fce79e1c0", size = 169860, upload-time = "2026-04-17T21:22:13.515Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/5c/a1/47092d06601b233641ecefcf686b504c3eddaac851e464d7370d32885784/pfb_imaging-0.0.9-py3-none-any.whl", hash = "sha256:92e2d7e3040f91db82d334862c18782d3b3e277c90f69a697b6d145c09bbd509", size = 234580, upload-time = "2026-04-17T21:22:11.817Z" },
 ]
 
 [[package]]
