@@ -3,7 +3,7 @@ from typing import Annotated, Literal, NewType
 
 import typer
 
-from hip_cargo import StimelaMeta, stimela_cab, stimela_output
+from hip_cargo import StimelaMeta, parse_upath, stimela_cab, stimela_output
 
 Directory = NewType("Directory", Path)
 File = NewType("File", Path)
@@ -24,7 +24,7 @@ def generate_cabs(
         list[File],
         typer.Option(
             ...,
-            parser=Path,
+            parser=parse_upath,
             help="CLI module path. "
             "Use wild card to generate cabs for multiple commands in module. "
             "For example, package/cli/*.",
@@ -41,7 +41,7 @@ def generate_cabs(
     output_dir: Annotated[
         Directory | None,
         typer.Option(
-            parser=Path,
+            parser=parse_upath,
             help="Output directory for cab definition. The cab will have the exact same name as the command.",  # noqa: E501
             rich_help_panel="Outputs",
         ),
@@ -70,6 +70,18 @@ def generate_cabs(
     """
     if backend == "native" or backend == "auto":
         try:
+            # Pre-flight must_exist for remote URIs before dispatching.
+            from hip_cargo.utils.runner import preflight_remote_must_exist  # noqa: E402
+
+            preflight_remote_must_exist(
+                generate_cabs,
+                dict(
+                    module=module,
+                    image=image,
+                    output_dir=output_dir,
+                ),
+            )
+
             # Lazy import the core implementation
             from hip_cargo.core.generate_cabs import generate_cabs as generate_cabs_core  # noqa: E402
 

@@ -6,11 +6,32 @@ import subprocess
 import sys
 import types
 import typing
-from pathlib import Path
+from pathlib import Path, PurePath
+
+from upath import UPath
 
 from hip_cargo.utils.metadata import StimelaMeta
 
 CONTAINER_RUNTIMES = ["apptainer", "singularity", "docker", "podman"]
+
+_EXTRA_FOR_SCHEME: dict[str, str] = {
+    "s3": "hip-cargo[s3]",
+    "gs": "hip-cargo[gcs]",
+    "gcs": "hip-cargo[gcs]",
+    "az": "hip-cargo[azure]",
+    "abfs": "hip-cargo[azure]",
+    "adl": "hip-cargo[azure]",
+}
+
+
+def _extras_hint_from_argv(argv: list[str]) -> str:
+    """Scan argv for remote URIs and return a `pip install` hint."""
+    hints: set[str] = set()
+    for arg in argv:
+        for scheme, extra in _EXTRA_FOR_SCHEME.items():
+            if f"{scheme}://" in arg:
+                hints.add(extra)
+    return ", ".join(sorted(hints))
 
 
 def run_in_container(
@@ -31,6 +52,9 @@ def run_in_container(
     """
     runtime = _detect_runtime(backend)
     mounts = _resolve_mounts(func, params)
+    protocols = _collect_remote_protocols(func, params)
+    cred_env = _build_credential_env(protocols, dict(os.environ))
+    cred_mounts, _gcs_keyfile = _build_credential_mounts(protocols, dict(os.environ), home=os.path.expanduser("~"))
     cwd = os.getcwd()
     # Ensure cwd is mounted read-write
     mounts[cwd] = True
@@ -39,7 +63,7 @@ def run_in_container(
     if always_pull_images:
         _pull_image(runtime, image)
 
-    cmd = _build_container_cmd(runtime, image, mounts, cwd, cli_args)
+    cmd = _build_container_cmd(runtime, image, mounts, cwd, cli_args, cred_env=cred_env, cred_mounts=cred_mounts)
 
     print(f"Falling back to container execution ({runtime})")
     print(f"  Image: {image}")
@@ -65,11 +89,15 @@ def _detect_runtime(backend: str) -> str:
         if shutil.which(runtime):
             return runtime
 
-    raise RuntimeError(
+    hint = _extras_hint_from_argv(sys.argv)
+    msg = (
         "No container runtime found. Install one of: "
         + ", ".join(CONTAINER_RUNTIMES)
         + "\nOr install the full package dependencies to run natively."
     )
+    if hint:
+        msg += f"\nFor remote URIs, install the relevant extra: {hint}"
+    raise RuntimeError(msg)
 
 
 def _pull_image(runtime: str, image: str) -> None:
@@ -141,6 +169,8 @@ def _resolve_mounts(func: typing.Callable, params: dict[str, typing.Any]) -> dic
         paths = [value] if not isinstance(value, list) else value
 
         for p in paths:
+            if _is_remote_upath(p):
+                continue
             if not isinstance(p, Path):
                 continue
             abs_path = p.resolve()
@@ -233,10 +263,10 @@ def _is_path_type(tp: typing.Any) -> bool:
         args = typing.get_args(tp)
         return bool(args) and _is_path_type(args[0])
 
-    # Direct Path check
+    # Path / UPath check: match pathlib hierarchy or UPath hierarchy
     if tp is Path:
         return True
-    if isinstance(tp, type) and issubclass(tp, Path):
+    if isinstance(tp, type) and (issubclass(tp, PurePath) or issubclass(tp, UPath)):
         return True
 
     # NewType: has __supertype__
@@ -244,6 +274,161 @@ def _is_path_type(tp: typing.Any) -> bool:
         return _is_path_type(tp.__supertype__)
 
     return False
+
+
+_LOCAL_PROTOCOLS = frozenset({"", "file", "local"})
+
+
+def _is_remote_upath(value: typing.Any) -> bool:
+    """Return True if value is a UPath with a non-local protocol."""
+    protocol = getattr(value, "protocol", None)
+    if protocol is None:
+        return False
+    if isinstance(protocol, tuple):
+        protocol = protocol[0] if protocol else ""
+    return protocol not in _LOCAL_PROTOCOLS
+
+
+def _collect_remote_protocols(func: typing.Callable, params: dict[str, typing.Any]) -> set[str]:
+    """Scan path-typed params and return the set of non-local protocols in use."""
+    hints = typing.get_type_hints(func, include_extras=True)
+    protocols: set[str] = set()
+    for name, value in params.items():
+        if value is None:
+            continue
+        if name in hints and not _is_path_type(hints[name]):
+            continue
+        values = value if isinstance(value, list) else [value]
+        for v in values:
+            if _is_remote_upath(v):
+                proto = v.protocol
+                if isinstance(proto, tuple):
+                    proto = proto[0]
+                protocols.add(proto)
+    return protocols
+
+
+def preflight_remote_must_exist(func: typing.Callable, params: dict[str, typing.Any]) -> None:
+    """For remote UPath params whose metadata sets must_exist=True, verify they exist.
+
+    Local paths and params without ``must_exist`` are ignored — those contracts
+    are enforced elsewhere (mount logic for local paths; the user's own code
+    otherwise). Raises ``typer.Exit(1)`` on a missing remote URI.
+    """
+    import typer
+
+    stimela_meta = _extract_stimela_meta_from_hints(func)
+    output_meta: dict[str, dict] = {}
+    for output_def in getattr(func, "__stimela_outputs__", []):
+        py_name = output_def["name"].replace("-", "_")
+        output_meta[py_name] = output_def
+
+    for name, value in params.items():
+        if value is None:
+            continue
+        values = value if isinstance(value, list) else [value]
+        meta = stimela_meta.get(name, {})
+        output_def = output_meta.get(name, {})
+        must_exist = meta.get("must_exist", output_def.get("must_exist"))
+        if not must_exist:
+            continue
+        for v in values:
+            if not _is_remote_upath(v):
+                continue
+            if not v.exists():
+                typer.echo(
+                    f"Parameter '{name}': '{v}' does not exist",
+                    err=True,
+                )
+                raise typer.Exit(code=1)
+
+
+# Per-scheme credential mapping. Keys are normalised protocol names; values
+# are the host env vars to forward when the scheme is present in the params.
+_CREDENTIAL_ENV_VARS: dict[str, tuple[str, ...]] = {
+    "s3": (
+        "AWS_ACCESS_KEY_ID",
+        "AWS_SECRET_ACCESS_KEY",
+        "AWS_SESSION_TOKEN",
+        "AWS_PROFILE",
+        "AWS_REGION",
+        "AWS_DEFAULT_REGION",
+        "AWS_ENDPOINT_URL",
+    ),
+    "gcs": ("GOOGLE_APPLICATION_CREDENTIALS",),
+    "az": (
+        "AZURE_STORAGE_ACCOUNT",
+        "AZURE_STORAGE_KEY",
+        "AZURE_STORAGE_CONNECTION_STRING",
+        "AZURE_CLIENT_ID",
+        "AZURE_TENANT_ID",
+        "AZURE_CLIENT_SECRET",
+    ),
+}
+
+# Alternate protocol names that should share a credential group.
+_PROTOCOL_ALIASES: dict[str, str] = {
+    "gs": "gcs",
+    "abfs": "az",
+    "adl": "az",
+}
+
+
+def _normalise_protocol(proto: str) -> str:
+    return _PROTOCOL_ALIASES.get(proto, proto)
+
+
+def _build_credential_env(protocols: set[str], env: dict[str, str]) -> dict[str, str]:
+    """Return host env vars to forward for the given protocol set."""
+    result: dict[str, str] = {}
+    seen: set[str] = set()
+    for proto in protocols:
+        group = _normalise_protocol(proto)
+        for var in _CREDENTIAL_ENV_VARS.get(group, ()):
+            if var in seen:
+                continue
+            seen.add(var)
+            if var in env:
+                result[var] = env[var]
+    return result
+
+
+def _build_credential_mounts(
+    protocols: set[str],
+    env: dict[str, str],
+    home: os.PathLike[str] | str,
+) -> tuple[dict[str, bool], str | None]:
+    """Return read-only mounts + optional GCS key file path for the given protocols."""
+    home_path = Path(home)
+    mounts: dict[str, bool] = {}
+    keyfile: str | None = None
+
+    for proto in protocols:
+        group = _normalise_protocol(proto)
+        if group == "s3":
+            # Skip ~/.aws when short-lived creds are active to avoid stale
+            # profile files masking the session.
+            if "AWS_SESSION_TOKEN" in env:
+                continue
+            aws = home_path / ".aws"
+            if aws.is_dir():
+                mounts[str(aws)] = False
+        elif group == "gcs":
+            gcloud = home_path / ".config" / "gcloud"
+            if gcloud.is_dir():
+                mounts[str(gcloud)] = False
+            key = env.get("GOOGLE_APPLICATION_CREDENTIALS")
+            if key:
+                key_path = Path(key)
+                if key_path.is_file():
+                    mounts[str(key_path)] = False
+                    keyfile = str(key_path)
+        elif group == "az":
+            azure = home_path / ".azure"
+            if azure.is_dir():
+                mounts[str(azure)] = False
+
+    return mounts, keyfile
 
 
 def _build_argv_with_native_backend() -> list[str]:
@@ -272,6 +457,8 @@ def _build_container_cmd(
     mounts: dict[str, bool],
     cwd: str,
     cli_args: list[str],
+    cred_env: dict[str, str] | None = None,
+    cred_mounts: dict[str, bool] | None = None,
 ) -> list[str]:
     """Assemble the full container execution command.
 
@@ -281,12 +468,20 @@ def _build_container_cmd(
         mounts: Dict of mount paths → read-write flag.
         cwd: Working directory inside the container.
         cli_args: The CLI command + arguments to run inside the container.
+        cred_env: Optional env vars to forward into the container (e.g. cloud creds).
+        cred_mounts: Optional read-only credential mounts merged with ``mounts``.
     """
+    cred_env = cred_env or {}
+    cred_mounts = cred_mounts or {}
+    all_mounts = {**mounts, **cred_mounts}
+
     if runtime in ("apptainer", "singularity"):
         cmd = [runtime, "exec", "--pwd", cwd]
-        for path, rw in sorted(mounts.items()):
+        for path, rw in sorted(all_mounts.items()):
             mode = "rw" if rw else "ro"
             cmd.extend(["--bind", f"{path}:{path}:{mode}"])
+        for var, value in sorted(cred_env.items()):
+            cmd.extend(["--env", f"{var}={value}"])
         # Add docker:// prefix for OCI image references
         if not image.endswith(".sif") and "://" not in image:
             image = f"docker://{image}"
@@ -295,9 +490,11 @@ def _build_container_cmd(
         # Run as current user so output files have correct ownership
         uid_gid = f"{os.getuid()}:{os.getgid()}"
         cmd = [runtime, "run", "--rm", "--user", uid_gid, "-w", cwd]
-        for path, rw in sorted(mounts.items()):
+        for path, rw in sorted(all_mounts.items()):
             mode = "rw" if rw else "ro"
             cmd.extend(["-v", f"{path}:{path}:{mode}"])
+        for var, value in sorted(cred_env.items()):
+            cmd.extend(["-e", f"{var}={value}"])
         cmd.append(image)
 
     cmd.extend(cli_args)

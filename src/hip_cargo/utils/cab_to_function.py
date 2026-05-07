@@ -385,12 +385,13 @@ def generate_parameter_signature(
     lines_out.append(f"    {py_param_name}: Annotated[")
     lines_out.append(f"        {py_type},")
 
-    # Determine parser: list types use their own parser, custom types use Path
+    # Determine parser: list types use their own parser, custom path types
+    # use parse_upath so the CLI accepts local paths or remote URIs.
     parser_str = None
     if list_type_name:
         parser_str = LIST_TYPE_PARSERS[list_type_name]
     elif needs_parser:
-        parser_str = "Path"
+        parser_str = "parse_upath"
 
     # Build typer.Option with arguments on separate lines
     if required:
@@ -542,6 +543,42 @@ def generate_function_body(cab_def: dict[str, Any], inputs: dict[str, Any], outp
     command_parts = command.split(".")
     import_path = ".".join(command_parts[:-1])
     core_func_name = command_parts[-1]
+
+    # Pre-flight must_exist for remote URIs before dispatching.
+    # The preflight calls .exists() on remote UPaths, which may raise ImportError
+    # if the fsspec backend is missing. When has_image is True, it must live
+    # INSIDE the try/except block so the container fallback can catch that.
+    if has_image:
+        lines.append(f"{indent}# Pre-flight must_exist for remote URIs before dispatching.")
+        lines.append(f"{indent}from hip_cargo.utils.runner import preflight_remote_must_exist  # noqa: E402")
+        lines.append(f"{indent}preflight_remote_must_exist(")
+        lines.append(f"{indent}    {func_name},")
+        lines.append(f"{indent}    dict(")
+        for param_name in inputs:
+            py_name = param_name.replace("-", "_")
+            lines.append(f"{indent}        {py_name}={py_name},")
+        for output_name in outputs:
+            py_name = output_name.replace("-", "_")
+            lines.append(f"{indent}        {py_name}={py_name},")
+        lines.append(f"{indent}    ),")
+        lines.append(f"{indent})")
+        lines.append("")
+    else:
+        lines.append("    # Pre-flight must_exist for remote URIs before dispatching.")
+        lines.append("    from hip_cargo.utils.runner import preflight_remote_must_exist  # noqa: E402")
+        lines.append("    preflight_remote_must_exist(")
+        lines.append(f"        {func_name},")
+        lines.append("        dict(")
+        for param_name in inputs:
+            py_name = param_name.replace("-", "_")
+            lines.append(f"            {py_name}={py_name},")
+        for output_name in outputs:
+            py_name = output_name.replace("-", "_")
+            lines.append(f"            {py_name}={py_name},")
+        lines.append("        ),")
+        lines.append("    )")
+        lines.append("")
+
     # Lazy import
     lines.append(f"{indent}# Lazy import the core implementation")
     lines.append(f"{indent}from {import_path} import {core_func_name} as {core_func_name}_core  # noqa: E402")

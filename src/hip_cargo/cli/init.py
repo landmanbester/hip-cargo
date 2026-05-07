@@ -3,7 +3,7 @@ from typing import Annotated, Literal, NewType
 
 import typer
 
-from hip_cargo import StimelaMeta, stimela_cab, stimela_output
+from hip_cargo import StimelaMeta, parse_upath, stimela_cab, stimela_output
 
 Directory = NewType("Directory", Path)
 
@@ -102,7 +102,7 @@ def init(
     project_dir: Annotated[
         Directory | None,
         typer.Option(
-            parser=Path,
+            parser=parse_upath,
             help="Output directory for the generated project.",
             rich_help_panel="Outputs",
         ),
@@ -134,6 +134,27 @@ def init(
     """
     if backend == "native" or backend == "auto":
         try:
+            # Pre-flight must_exist for remote URIs before dispatching.
+            from hip_cargo.utils.runner import preflight_remote_must_exist  # noqa: E402
+
+            preflight_remote_must_exist(
+                init,
+                dict(
+                    project_name=project_name,
+                    github_user=github_user,
+                    description=description,
+                    author_name=author_name,
+                    author_email=author_email,
+                    cli_command=cli_command,
+                    initial_version=initial_version,
+                    license_type=license_type,
+                    cli_mode=cli_mode,
+                    default_branch=default_branch,
+                    auto_changelog=auto_changelog,
+                    project_dir=project_dir,
+                ),
+            )
+
             # Lazy import the core implementation
             from hip_cargo.core.init import init as init_core  # noqa: E402
 

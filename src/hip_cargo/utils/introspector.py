@@ -2,16 +2,16 @@
 
 import ast
 import re
-from pathlib import Path
 from typing import Any, NewType
 
 import libcst as cst
 from libcst import matchers
+from upath import UPath
 
-MS = NewType("MS", Path)
-Directory = NewType("Directory", Path)
-File = NewType("File", Path)
-URI = NewType("URI", Path)
+MS = NewType("MS", UPath)
+Directory = NewType("Directory", UPath)
+File = NewType("File", UPath)
+URI = NewType("URI", UPath)
 
 
 def unwrap_optional_libcst(annotation_node: cst.CSTNode) -> cst.CSTNode:
