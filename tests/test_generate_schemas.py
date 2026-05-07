@@ -206,6 +206,18 @@ def test_rejects_path_typed_tunables(annotation, default, name):
         _render_schema_module(cmd)
 
 
+def test_ruff_format_falls_back_when_ruff_missing():
+    """If the ruff binary is missing, _ruff_format must fall back to source, not crash."""
+    from unittest.mock import patch
+
+    from hip_cargo.core.generate_schemas import _ruff_format
+
+    with patch("hip_cargo.core.generate_schemas.subprocess.run", side_effect=FileNotFoundError("ruff")):
+        with pytest.warns(UserWarning, match="Ruff not available"):
+            result = _ruff_format("x = 1\n", config_file=None)
+    assert result == "x = 1\n"
+
+
 def test_rejects_tunable_with_typer_callback():
     source = textwrap.dedent('''
         from typing import Annotated

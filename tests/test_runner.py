@@ -494,10 +494,31 @@ class TestResolveMountableAncestor:
 
     @pytest.mark.unit
     def test_raises_when_only_root_exists(self):
-        """If walk-up reaches the filesystem root without finding anything, refuse."""
-        with patch.object(Path, "exists", return_value=False):
-            with pytest.raises(RuntimeError, match="No mountable ancestor"):
+        """If walk-up reaches the filesystem root without finding a directory, refuse."""
+        with patch.object(Path, "is_dir", return_value=False):
+            with pytest.raises(RuntimeError, match="No mountable directory ancestor"):
                 _resolve_mountable_ancestor(Path("/foo/bar/baz"))
+
+    @pytest.mark.unit
+    def test_walks_past_a_regular_file(self, tmp_path):
+        """A file at an intermediate position is walked past, not returned as a mount point."""
+        intermediate_file = tmp_path / "not_a_dir"
+        intermediate_file.write_text("hi")
+        # Path goes through the file as if it were a dir — pathologically constructed.
+        through_file = intermediate_file / "child" / "leaf"
+        # Should walk up past the file and return tmp_path (the nearest real directory).
+        assert _resolve_mountable_ancestor(through_file) == tmp_path
+
+    @pytest.mark.unit
+    def test_walks_past_a_broken_symlink(self, tmp_path):
+        """A broken symlink at an intermediate position is walked past."""
+        target = tmp_path / "deleted"
+        target.write_text("hi")
+        link = tmp_path / "broken_link"
+        link.symlink_to(target)
+        target.unlink()  # link now points at nothing
+        # is_dir() returns False on a broken symlink
+        assert _resolve_mountable_ancestor(link / "child") == tmp_path
 
 
 class TestResolveMountsWalkUp:

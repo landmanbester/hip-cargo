@@ -192,6 +192,10 @@ def _ruff_format(source: str, config_file: Path | None) -> str:
     except subprocess.CalledProcessError as e:
         warnings.warn("Ruff failed during schema generation; using unformatted source.\n" + e.stderr)
         return source
+    except OSError as e:
+        # ruff binary missing or otherwise not invocable
+        warnings.warn(f"Ruff not available during schema generation; using unformatted source: {e}")
+        return source
 
 
 def generate_schemas(

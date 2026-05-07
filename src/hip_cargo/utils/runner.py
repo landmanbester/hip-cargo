@@ -348,20 +348,22 @@ _LOCAL_PROTOCOLS = frozenset({"", "file", "local"})
 
 
 def _resolve_mountable_ancestor(p: Path) -> Path:
-    """Return the deepest existing ancestor of p, refusing to return the filesystem root.
+    """Return the deepest existing directory ancestor of p, refusing to return the filesystem root.
 
-    Walks up from p until an existing directory is found. Raises RuntimeError if
-    nothing below the root exists — mounting "/" would shadow the container's own
-    root filesystem and is almost always a misconfiguration.
+    Walks up from p until an existing directory is found. A non-directory at an
+    intermediate position (regular file, broken symlink) is walked past rather
+    than returned — handing a file to ``--bind``/``-v`` would mount the file
+    and produce a confusing ``NotADirectoryError`` downstream. Raises
+    ``RuntimeError`` if nothing below the root qualifies.
     """
     cur = p
     root = Path(cur.anchor or "/")
     while cur != root:
-        if cur.exists():
+        if cur.is_dir():
             return cur
         cur = cur.parent
     raise RuntimeError(
-        f"No mountable ancestor exists for '{p}' below '{root}'. "
+        f"No mountable directory ancestor exists for '{p}' below '{root}'. "
         "Pre-create a parent directory on the host or fix the path."
     )
 
