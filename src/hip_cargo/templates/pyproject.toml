@@ -4,12 +4,12 @@ version = "<INITIAL_VERSION>"
 description = "<DESCRIPTION>"
 readme = "README.md"
 requires-python = ">=3.10"
-license = { text = "<LICENSE_TYPE>" }
+license = "<LICENSE_TYPE>"
+license-files = ["LICENSE"]
 authors = [
     { name = "<AUTHOR_NAME>", email = "<AUTHOR_EMAIL>" }
 ]
 classifiers = [
-    "<LICENSE_CLASSIFIER>",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
