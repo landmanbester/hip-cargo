@@ -5,7 +5,7 @@ cabs:
     name: generate_schemas
     info:
       Generate Pydantic schemas of tunable parameters from Python CLI modules.
-    image: ghcr.io/landmanbester/hip-cargo:latest
+    image: ghcr.io/landmanbester/hip-cargo:0.2.1
     inputs:
       module:
         info:
