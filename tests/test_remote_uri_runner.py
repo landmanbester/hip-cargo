@@ -162,6 +162,82 @@ def test_preflight_ignores_params_without_must_exist():
     preflight_remote_must_exist(fn, {"x": UPath("memory:///nope.bin")})
 
 
+def test_collect_remote_protocols_picks_up_implicit_output():
+    """Implicit output rendering to s3:// should contribute its scheme."""
+    from hip_cargo.utils.decorators import stimela_cab, stimela_output
+
+    @stimela_cab(name="t", info="t")
+    @stimela_output(name="result", dtype="File", implicit="s3://bucket/{prefix}.fits")
+    def fn(prefix: Annotated[str, typer.Option()] = "x"):
+        pass
+
+    protocols = _collect_remote_protocols(fn, {"prefix": "run1"})
+    assert "s3" in protocols
+
+
+def test_collect_remote_protocols_skips_implicit_local_template():
+    """Implicit output rendering to a local path adds nothing."""
+    from hip_cargo.utils.decorators import stimela_cab, stimela_output
+
+    @stimela_cab(name="t", info="t")
+    @stimela_output(name="result", dtype="File", implicit="/tmp/{prefix}.fits")
+    def fn(prefix: Annotated[str, typer.Option()] = "x"):
+        pass
+
+    assert _collect_remote_protocols(fn, {"prefix": "r"}) == set()
+
+
+def test_preflight_checks_implicit_remote_must_exist_present():
+    """Implicit output with must_exist=True rendering to memory:// existing path passes."""
+    from hip_cargo.utils.decorators import stimela_cab, stimela_output
+
+    fs = fsspec.filesystem("memory")
+    with fs.open("/implicit_present.bin", "wb") as f:
+        f.write(b"x")
+
+    @stimela_cab(name="t", info="t")
+    @stimela_output(
+        name="result",
+        dtype="File",
+        implicit="memory:///{prefix}.bin",
+        must_exist=True,
+    )
+    def fn(prefix: Annotated[str, typer.Option()] = "x"):
+        pass
+
+    preflight_remote_must_exist(fn, {"prefix": "implicit_present"})
+
+
+def test_preflight_fails_for_implicit_remote_must_exist_missing():
+    """Implicit output with must_exist=True rendering to a missing memory:// path raises."""
+    from hip_cargo.utils.decorators import stimela_cab, stimela_output
+
+    @stimela_cab(name="t", info="t")
+    @stimela_output(
+        name="result",
+        dtype="File",
+        implicit="memory:///{prefix}.bin",
+        must_exist=True,
+    )
+    def fn(prefix: Annotated[str, typer.Option()] = "x"):
+        pass
+
+    with pytest.raises(typer.Exit):
+        preflight_remote_must_exist(fn, {"prefix": "implicit_missing"})
+
+
+def test_preflight_skips_implicit_without_must_exist():
+    """Implicit output without must_exist=True is not preflighted even if remote+missing."""
+    from hip_cargo.utils.decorators import stimela_cab, stimela_output
+
+    @stimela_cab(name="t", info="t")
+    @stimela_output(name="result", dtype="File", implicit="memory:///{prefix}.bin")
+    def fn(prefix: Annotated[str, typer.Option()] = "x"):
+        pass
+
+    preflight_remote_must_exist(fn, {"prefix": "still_missing"})
+
+
 def test_credential_env_s3_when_vars_present():
     env = {
         "AWS_ACCESS_KEY_ID": "k",

@@ -1,0 +1,28 @@
+cabs:
+  generate_schemas:
+    flavour: python
+    command: hip_cargo.core.generate_schemas.generate_schemas
+    name: generate_schemas
+    info:
+      Generate Pydantic schemas of tunable parameters from Python CLI modules.
+    image: ghcr.io/landmanbester/hip-cargo:schemas
+    inputs:
+      module:
+        info:
+          CLI module path.
+          Use wild card to generate schemas for multiple commands in module.
+          For example, package/cli/*.
+        dtype: List[File]
+        required: true
+        policies:
+          positional: true
+        metadata:
+          rich_help_panel: Inputs
+    outputs:
+      output-dir:
+        dtype: Directory
+        info:
+          Output directory for generated schemas.
+          One file per command with tunable parameters.
+        metadata:
+          rich_help_panel: Outputs

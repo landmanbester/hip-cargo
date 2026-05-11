@@ -6,12 +6,6 @@ from pathlib import Path
 
 from hip_cargo.templates import TEMPLATES_DIR
 
-LICENSE_CLASSIFIERS = {
-    "MIT": "License :: OSI Approved :: MIT License",
-    "Apache-2.0": "License :: OSI Approved :: Apache Software License",
-    "BSD-3-Clause": "License :: OSI Approved :: BSD License",
-}
-
 
 def init(
     project_name: str,
@@ -54,7 +48,6 @@ def init(
     github_url = f"https://github.com/{github_user}/{project_name}"
     if cli_command is None:
         cli_command = project_name
-    license_classifier = LICENSE_CLASSIFIERS.get(license_type, LICENSE_CLASSIFIERS["MIT"])
     year = str(datetime.datetime.now().year)
 
     # Auto-detect author info from git config
@@ -78,7 +71,6 @@ def init(
         "<AUTHOR_EMAIL>": author_email,
         "<CLI_COMMAND>": cli_command,
         "<INITIAL_VERSION>": initial_version,
-        "<LICENSE_CLASSIFIER>": license_classifier,
         "<LICENSE_TYPE>": license_type,
         "<YEAR>": year,
         "<DEFAULT_BRANCH>": default_branch,
