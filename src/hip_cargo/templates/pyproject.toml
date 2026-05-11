@@ -16,8 +16,19 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
 ]
 dependencies = [
-    "hip-cargo>=0.1.3",
+    "hip-cargo>=0.2.0",
 ]
+
+# Lightweight install (default):  pip install <PROJECT_NAME>
+#     Only pulls hip-cargo + typer. Suitable for cab consumers (e.g. stimela)
+#     and for running commands via container fallback. Generated CLI wrappers
+#     lazy-import core/, so when heavy deps are missing the wrapper drops into
+#     run_in_container() automatically.
+# Full install:                    pip install <PROJECT_NAME>[full]
+#     Adds the heavy runtime deps that core/ implementations need to execute
+#     natively. Add new deps to the "full" extra below as you grow core/.
+[project.optional-dependencies]
+full = []
 
 [project.urls]
 Homepage = "<GITHUB_URL>"
