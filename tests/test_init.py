@@ -29,6 +29,7 @@ def test_init_produces_clean_project():
             "pyproject.toml",
             "tbump.toml",
             "Dockerfile",
+            "CLAUDE.md",
             ".gitignore",
             ".pre-commit-config.yaml",
             "LICENSE",
@@ -47,6 +48,7 @@ def test_init_produces_clean_project():
             f"src/{pkg}/cabs/__init__.py",
             "tests/__init__.py",
             "tests/test_install.py",
+            "tests/test_roundtrip.py",
         ]
         for filepath in expected_files:
             assert (project_dir / filepath).exists(), f"Missing scaffold file: {filepath}"
