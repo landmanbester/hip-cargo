@@ -59,7 +59,7 @@ jobs:
           "
 
       - name: Regenerate cab definitions with latest tag
-        run: uv run <CLI_COMMAND> generate-cabs --module 'src/<PACKAGE_NAME>/cli/*.py' --output-dir src/<PACKAGE_NAME>/cabs
+        run: uv run hip-cargo generate-cabs --module 'src/<PACKAGE_NAME>/cli/*.py' --output-dir src/<PACKAGE_NAME>/cabs
 
       - name: Check for changes
         id: check_changes

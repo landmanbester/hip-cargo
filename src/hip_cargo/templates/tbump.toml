@@ -50,7 +50,7 @@ cmd = "python -c \"import re; p = 'src/<PACKAGE_NAME>/_container_image.py'; t = 
 
 [[before_commit]]
 name = "Regenerate cab definitions with release version"
-cmd = "<CLI_COMMAND> generate-cabs --module 'src/<PACKAGE_NAME>/cli/*.py' --output-dir src/<PACKAGE_NAME>/cabs"
+cmd = "hip-cargo generate-cabs --module 'src/<PACKAGE_NAME>/cli/*.py' --output-dir src/<PACKAGE_NAME>/cabs"
 
 [[before_commit]]
 name = "Stage updated cab definitions"
@@ -78,7 +78,3 @@ search = 'version = "{current_version}"'
 [[file]]
 src = "src/<PACKAGE_NAME>/__init__.py"
 search = '__version__ = "{current_version}"'
-
-[[file]]
-src = "src/<PACKAGE_NAME>/_container_image.py"
-search = 'CONTAINER_IMAGE = "ghcr.io/<GITHUB_USER>/<PROJECT_NAME>:{current_version}"'
