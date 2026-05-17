@@ -2,11 +2,14 @@
 
 import ast
 import re
+from pathlib import Path
 from typing import Any, NewType
 
 import libcst as cst
 from libcst import matchers
 from upath import UPath
+
+from hip_cargo.utils.spec import CommandSpec, ModuleSpec, ParamSpec
 
 MS = NewType("MS", UPath)
 Directory = NewType("Directory", UPath)
@@ -199,83 +202,46 @@ def extract_stimela_metadata_libcst(metadata_nodes: list[cst.CSTNode]) -> dict[s
     return {}
 
 
-def extract_input_libcst(param: cst.Param) -> tuple[str, dict[str, Any]]:
-    """
-    Extract input schema from a single function parameter LibCST node.
+def extract_param_spec(param: cst.Param) -> ParamSpec:
+    """Extract a neutral :class:`ParamSpec` from a CST Param node.
+
+    Pulls only structural facts — name, type-as-string, default, typer kwargs,
+    stimela metadata, inline comment. Applies no cab semantics. Used by both
+    cab and schema generators.
 
     Args:
-        param: LibCST Param node to analyze (contains both type annotation and default)
+        param: LibCST Param node to analyse.
 
     Returns:
-        Tuple of (param_name, input_def) where input_def is a dictionary
-        with input configuration (dtype, info, required, default, policies)
-        plus any additional fields from optional stimela metadata dict
+        A :class:`ParamSpec` describing the parameter.
+
+    Raises:
+        ValueError: If the parameter has a non-``Annotated`` type annotation.
+        RuntimeError: If neither ``param.default`` nor ``typer.Option(default=...)``
+            yields a default and no required-marker (``...``) is present.
     """
     param_name = param.name.value
 
-    # Get type annotation
     if param.annotation is not None:
         annotation_node = param.annotation.annotation
-
-        # Parse Annotated[dtype, metadata, ...] directly - NO EVAL!
         try:
             dtype_node, metadata_nodes = parse_annotated_libcst(annotation_node)
         except ValueError:
             raise ValueError("Only Annotated types are supported")
 
-        # Convert dtype to string representation
         dtype_str = _cst_node_to_code(dtype_node)
-
-        # Extract typer metadata from the metadata items
         typer_metadata = extract_typer_metadata_libcst(metadata_nodes)
-
-        # Extract Stimela metadata from the metadata items
         stimela_metadata = extract_stimela_metadata_libcst(metadata_nodes)
     else:
         dtype_str = "str"
         typer_metadata = {}
         stimela_metadata = {}
 
-    # Get parameter description from typer metadata
-    param_info = typer_metadata.get("help")
-
-    # Extract inline comments from help string
     inline_comment = _extract_inline_comment_from_help_string(param)
 
-    # Build input definition
-    input_def = {}
-
-    # Only add info field if it has a value (stimela doesn't support null)
-    if param_info:
-        # Append inline comment to info if found
-        if inline_comment:
-            input_def["info"] = f"{param_info}  {inline_comment}"
-        else:
-            input_def["info"] = param_info
-
-    # dtype: use Stimela override if provided, else infer from type hint
-    if "dtype" in stimela_metadata:
-        dtype = stimela_metadata["dtype"]
-        # When explicitly provided, always add to input_def
-        if dtype != "str":
-            input_def["dtype"] = dtype
-    else:
-        # Infer dtype from type hint
-        dtype = _dtype_to_str_from_string(dtype_str)
-
-        if dtype != "str" and dtype != "NoneType":
-            # if it's a Literal we add a choices field and assume param dtype is str
-            if "Literal" in dtype:
-                input_def["choices"] = ast.literal_eval(dtype.removeprefix("Literal").strip())
-            else:
-                input_def["dtype"] = dtype
-
-    # Get default value from param.default
     if param.default is not None:
-        # Use get_cst_value to extract default (handles None, literals, etc.)
         default = get_cst_value(param.default)
     elif "default" in typer_metadata:
-        # Get default from typer.Option(default=...)
         default = typer_metadata["default"]
     else:
         raise RuntimeError(
@@ -284,43 +250,98 @@ def extract_input_libcst(param: cst.Param) -> tuple[str, dict[str, Any]]:
             f"param.default={param.default!r}, typer_metadata={typer_metadata!r}"
         )
 
-    # Determine if required
-    required = default is ...
+    return ParamSpec(
+        name=param_name,
+        dtype_str=dtype_str,
+        default=default,
+        required=default is ...,
+        help=typer_metadata.get("help"),
+        stimela_meta=dict(stimela_metadata),
+        raw_typer_meta=dict(typer_metadata),
+        inline_comment=inline_comment,
+    )
 
-    # Add required field if True
-    if required:
+
+def param_spec_to_cab_input(spec: ParamSpec) -> tuple[str, dict[str, Any]]:
+    """Convert a :class:`ParamSpec` to a cab YAML input definition.
+
+    All cab-specific shaping lives here: dtype inference vs explicit override,
+    Literal → choices, policies (positional/repeat), info+inline-comment merge,
+    rich_help_panel → metadata dict, and the final stimela_metadata merge.
+
+    Args:
+        spec: Neutral parameter specification.
+
+    Returns:
+        Tuple of ``(param_name, input_def)`` where ``input_def`` is the dict
+        ready to be inserted under the cab's ``inputs`` mapping.
+    """
+    stimela_metadata = spec.stimela_meta
+    input_def: dict[str, Any] = {}
+
+    if spec.help:
+        if spec.inline_comment:
+            input_def["info"] = f"{spec.help}  {spec.inline_comment}"
+        else:
+            input_def["info"] = spec.help
+
+    if "dtype" in stimela_metadata:
+        dtype = stimela_metadata["dtype"]
+        if dtype != "str":
+            input_def["dtype"] = dtype
+    else:
+        dtype = _dtype_to_str_from_string(spec.dtype_str)
+        if dtype != "str" and dtype != "NoneType":
+            if "Literal" in dtype:
+                input_def["choices"] = ast.literal_eval(dtype.removeprefix("Literal").strip())
+            else:
+                input_def["dtype"] = dtype
+
+    if spec.required:
         input_def["required"] = True
         input_def["policies"] = {}
         input_def["policies"]["positional"] = True
         if dtype == "list" or dtype == "List":
             input_def["policies"]["repeat"] = "list"
     else:
-        # only set default if not required
-        if default is not None:
-            input_def["default"] = default
+        if spec.default is not None:
+            input_def["default"] = spec.default
         if dtype == "list" or dtype == "List":
             input_def["policies"] = {}
             input_def["policies"]["repeat"] = "list"
 
-    # Extract rich_help_panel from typer metadata and store as metadata
-    rich_help_panel = typer_metadata.get("rich_help_panel")
+    rich_help_panel = spec.raw_typer_meta.get("rich_help_panel")
     if rich_help_panel:
         input_def.setdefault("metadata", {})["rich_help_panel"] = rich_help_panel
 
-    # Merge Stimela metadata - arbitrary fields allowed
-    # Stimela metadata overrides inferred values
     for key, value in stimela_metadata.items():
         if key == "dtype":
-            # Already handled above
             continue
         elif key == "policies" and "policies" in input_def:
-            # Merge policies: inferred + explicit
             input_def["policies"].update(value)
+        elif key == "metadata" and "metadata" in input_def:
+            # Merge with rich_help_panel (and any future typer-derived metadata)
+            # rather than overwriting.
+            input_def["metadata"].update(value)
         else:
-            # Override or add any field (arbitrary fields allowed)
             input_def[key] = value
 
-    return param_name, input_def
+    return spec.name, input_def
+
+
+def extract_input_libcst(param: cst.Param) -> tuple[str, dict[str, Any]]:
+    """Extract a cab-shaped input definition from a CST Param node.
+
+    Thin compose of :func:`extract_param_spec` and
+    :func:`param_spec_to_cab_input`. Retained for backward compatibility.
+
+    Args:
+        param: LibCST Param node to analyse.
+
+    Returns:
+        Tuple of ``(param_name, input_def)``.
+    """
+    return param_spec_to_cab_input(extract_param_spec(param))
 
 
 def _dtype_to_str_from_string(dtype_str: str) -> str:
@@ -558,6 +579,50 @@ def parse_decorator_libcst(dec: cst.Decorator) -> dict:
     else:
         # Complex decorator (e.g., chained attributes)
         raise ValueError("Unsupported decorator format")
+
+
+def parse_module(module_path: Path) -> ModuleSpec:
+    """Parse one CLI module and return all ``@stimela_cab`` commands as a :class:`ModuleSpec`.
+
+    A single CST walk extracts every ``@stimela_cab``-decorated function,
+    its decorators, and its parameters. Both ``generate-cabs`` and
+    ``generate-schemas`` consume this IR.
+
+    Args:
+        module_path: Path to the ``.py`` CLI module.
+
+    Returns:
+        A :class:`ModuleSpec` containing zero or more :class:`CommandSpec`
+        entries (zero if the module has no ``@stimela_cab`` decorators).
+    """
+    module_path = Path(module_path)
+    with open(module_path, "r") as f:
+        tree = cst.parse_module(f.read())
+
+    commands: list[CommandSpec] = []
+    for node in tree.body:
+        if not isinstance(node, cst.FunctionDef):
+            continue
+
+        decorators: dict[str, dict[str, Any]] = {}
+        for dec in node.decorators:
+            deco_name, deco_args = parse_decorator_libcst(dec)
+            decorators[deco_name] = deco_args
+
+        if "stimela_cab" not in decorators:
+            continue
+
+        params = tuple(extract_param_spec(p) for p in node.params.params)
+        commands.append(
+            CommandSpec(
+                name=node.name.value,
+                module_path=module_path,
+                decorators=decorators,
+                params=params,
+            )
+        )
+
+    return ModuleSpec(path=module_path, commands=tuple(commands))
 
 
 def format_info_fields(yaml_str, comment_map=None):

@@ -175,31 +175,99 @@ def _resolve_mounts(func: typing.Callable, params: dict[str, typing.Any]) -> dic
                 continue
             abs_path = p.resolve()
             path_str = str(abs_path)
-            parent_str = str(abs_path.parent)
 
             if write_parent or do_mkdir:
                 # Mount the parent directory rw instead of the path itself.
-                # This avoids "device or resource busy" when the container
-                # needs to create/overwrite the target directory.
-                add_mount(parent_str, True)
+                # Walk up to the deepest existing ancestor — handles nested
+                # missing parents and avoids root-owned auto-create on docker.
+                target = _resolve_mountable_ancestor(abs_path.parent)
+                add_mount(str(target), True)
             elif abs_path.is_dir():
                 add_mount(path_str, is_output)
             elif abs_path.exists():
-                add_mount(parent_str, is_output)
+                add_mount(str(abs_path.parent), is_output)
             else:
-                # Path doesn't exist — mount parent
                 if must_exist:
                     raise RuntimeError(f"Parameter '{param_name}': path '{abs_path}' does not exist")
-                add_mount(parent_str, is_output)
+                target = _resolve_mountable_ancestor(abs_path.parent)
+                add_mount(str(target), is_output)
 
-            # Also mount parent if access_parent is requested
             if access_parent and not write_parent:
-                add_mount(parent_str, False)
+                target = _resolve_mountable_ancestor(abs_path.parent)
+                add_mount(str(target), False)
+
+    # Second pass: implicit outputs declared via @stimela_output(implicit=...) but
+    # not present as CLI params. String templates are rendered against current
+    # params; implicit=True is a non-path runtime value and is skipped.
+    _resolve_implicit_output_mounts(func, params, add_mount)
 
     # Eliminate redundant child mounts when parent is already mounted with >= privileges
     _prune_child_mounts(mounts)
 
     return mounts
+
+
+_PATH_DTYPES = frozenset({"File", "Directory", "MS", "URI"})
+
+
+def _resolve_implicit_output_mounts(
+    func: typing.Callable,
+    params: dict[str, typing.Any],
+    add_mount: typing.Callable[[str, bool], None],
+) -> None:
+    """Add RW mounts for implicit outputs that aren't CLI parameters."""
+    fmt_args: dict[str, str] | None = None  # built lazily
+    for output_def in getattr(func, "__stimela_outputs__", []):
+        py_name = output_def["name"].replace("-", "_")
+        if py_name in params:
+            continue  # handled by the param loop
+
+        implicit = output_def.get("implicit", False)
+        if not isinstance(implicit, str):
+            continue  # True/False sentinel — not a path
+
+        if output_def.get("dtype") not in _PATH_DTYPES:
+            continue
+
+        if fmt_args is None:
+            fmt_args = {k: ("" if v is None else str(v)) for k, v in params.items()}
+        try:
+            path_str = implicit.format(**fmt_args)
+        except (KeyError, IndexError):
+            continue
+
+        if not path_str:
+            continue
+        if "://" in path_str:
+            scheme = path_str.split("://", 1)[0]
+            if scheme and scheme not in _LOCAL_PROTOCOLS:
+                continue
+
+        abs_path = Path(path_str).resolve()
+        path_str_resolved = str(abs_path)
+
+        base_policies = output_def.get("path_policies") or {}
+        do_mkdir = output_def.get("mkdir", False)
+        must_exist = output_def.get("must_exist", False)
+        write_parent = base_policies.get("write_parent", False)
+        access_parent = base_policies.get("access_parent", False)
+
+        if write_parent or do_mkdir:
+            target = _resolve_mountable_ancestor(abs_path.parent)
+            add_mount(str(target), True)
+        elif abs_path.is_dir():
+            add_mount(path_str_resolved, True)
+        elif abs_path.exists():
+            add_mount(str(abs_path.parent), True)
+        else:
+            if must_exist:
+                raise RuntimeError(f"Implicit output '{output_def['name']}': path '{abs_path}' does not exist")
+            target = _resolve_mountable_ancestor(abs_path.parent)
+            add_mount(str(target), True)
+
+        if access_parent and not write_parent:
+            target = _resolve_mountable_ancestor(abs_path.parent)
+            add_mount(str(target), False)
 
 
 def _extract_stimela_meta_from_hints(func: typing.Callable) -> dict[str, typing.Mapping]:
@@ -279,6 +347,27 @@ def _is_path_type(tp: typing.Any) -> bool:
 _LOCAL_PROTOCOLS = frozenset({"", "file", "local"})
 
 
+def _resolve_mountable_ancestor(p: Path) -> Path:
+    """Return the deepest existing directory ancestor of p, refusing to return the filesystem root.
+
+    Walks up from p until an existing directory is found. A non-directory at an
+    intermediate position (regular file, broken symlink) is walked past rather
+    than returned — handing a file to ``--bind``/``-v`` would mount the file
+    and produce a confusing ``NotADirectoryError`` downstream. Raises
+    ``RuntimeError`` if nothing below the root qualifies.
+    """
+    cur = p
+    root = Path(cur.anchor or "/")
+    while cur != root:
+        if cur.is_dir():
+            return cur
+        cur = cur.parent
+    raise RuntimeError(
+        f"No mountable directory ancestor exists for '{p}' below '{root}'. "
+        "Pre-create a parent directory on the host or fix the path."
+    )
+
+
 def _is_remote_upath(value: typing.Any) -> bool:
     """Return True if value is a UPath with a non-local protocol."""
     protocol = getattr(value, "protocol", None)
@@ -290,7 +379,7 @@ def _is_remote_upath(value: typing.Any) -> bool:
 
 
 def _collect_remote_protocols(func: typing.Callable, params: dict[str, typing.Any]) -> set[str]:
-    """Scan path-typed params and return the set of non-local protocols in use."""
+    """Scan path-typed params and implicit outputs, return non-local protocols in use."""
     hints = typing.get_type_hints(func, include_extras=True)
     protocols: set[str] = set()
     for name, value in params.items():
@@ -305,6 +394,29 @@ def _collect_remote_protocols(func: typing.Callable, params: dict[str, typing.An
                 if isinstance(proto, tuple):
                     proto = proto[0]
                 protocols.add(proto)
+
+    # Implicit outputs whose template renders to a remote URI.
+    fmt_args: dict[str, str] | None = None
+    for output_def in getattr(func, "__stimela_outputs__", []):
+        py_name = output_def["name"].replace("-", "_")
+        if py_name in params:
+            continue
+        implicit = output_def.get("implicit", False)
+        if not isinstance(implicit, str):
+            continue
+        if output_def.get("dtype") not in _PATH_DTYPES:
+            continue
+        if fmt_args is None:
+            fmt_args = {k: ("" if v is None else str(v)) for k, v in params.items()}
+        try:
+            rendered = implicit.format(**fmt_args)
+        except (KeyError, IndexError):
+            continue
+        if "://" not in rendered:
+            continue
+        scheme = rendered.split("://", 1)[0]
+        if scheme and scheme not in _LOCAL_PROTOCOLS:
+            protocols.add(scheme)
     return protocols
 
 
@@ -341,6 +453,38 @@ def preflight_remote_must_exist(func: typing.Callable, params: dict[str, typing.
                     err=True,
                 )
                 raise typer.Exit(code=1)
+
+    # Implicit outputs with must_exist=True whose template renders to a remote URI.
+    fmt_args: dict[str, str] | None = None
+    for output_def in getattr(func, "__stimela_outputs__", []):
+        py_name = output_def["name"].replace("-", "_")
+        if py_name in params:
+            continue
+        if not output_def.get("must_exist"):
+            continue
+        implicit = output_def.get("implicit", False)
+        if not isinstance(implicit, str):
+            continue
+        if output_def.get("dtype") not in _PATH_DTYPES:
+            continue
+        if fmt_args is None:
+            fmt_args = {k: ("" if v is None else str(v)) for k, v in params.items()}
+        try:
+            rendered = implicit.format(**fmt_args)
+        except (KeyError, IndexError):
+            continue
+        if "://" not in rendered:
+            continue
+        scheme = rendered.split("://", 1)[0]
+        if not scheme or scheme in _LOCAL_PROTOCOLS:
+            continue
+        upath = UPath(rendered)
+        if not upath.exists():
+            typer.echo(
+                f"Implicit output '{output_def['name']}': '{upath}' does not exist",
+                err=True,
+            )
+            raise typer.Exit(code=1)
 
 
 # Per-scheme credential mapping. Keys are normalised protocol names; values

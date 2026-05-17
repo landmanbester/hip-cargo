@@ -14,6 +14,7 @@ from hip_cargo.utils.runner import (
     _is_path_type,
     _prune_child_mounts,
     _pull_image,
+    _resolve_mountable_ancestor,
     _resolve_mounts,
     run_in_container,
 )
@@ -472,6 +473,355 @@ class TestPruneChildMounts:
         mounts = {}
         _prune_child_mounts(mounts)
         assert mounts == {}
+
+
+class TestResolveMountableAncestor:
+    """Test _resolve_mountable_ancestor walk-up helper."""
+
+    @pytest.mark.unit
+    def test_returns_path_itself_when_existing(self, tmp_path):
+        assert _resolve_mountable_ancestor(tmp_path) == tmp_path
+
+    @pytest.mark.unit
+    def test_walks_up_one_level(self, tmp_path):
+        missing = tmp_path / "missing"
+        assert _resolve_mountable_ancestor(missing) == tmp_path
+
+    @pytest.mark.unit
+    def test_walks_up_multiple_levels(self, tmp_path):
+        deep = tmp_path / "a" / "b" / "c"
+        assert _resolve_mountable_ancestor(deep) == tmp_path
+
+    @pytest.mark.unit
+    def test_raises_when_only_root_exists(self):
+        """If walk-up reaches the filesystem root without finding a directory, refuse."""
+        with patch.object(Path, "is_dir", return_value=False):
+            with pytest.raises(RuntimeError, match="No mountable directory ancestor"):
+                _resolve_mountable_ancestor(Path("/foo/bar/baz"))
+
+    @pytest.mark.unit
+    def test_walks_past_a_regular_file(self, tmp_path):
+        """A file at an intermediate position is walked past, not returned as a mount point."""
+        intermediate_file = tmp_path / "not_a_dir"
+        intermediate_file.write_text("hi")
+        # Path goes through the file as if it were a dir — pathologically constructed.
+        through_file = intermediate_file / "child" / "leaf"
+        # Should walk up past the file and return tmp_path (the nearest real directory).
+        assert _resolve_mountable_ancestor(through_file) == tmp_path
+
+    @pytest.mark.unit
+    def test_walks_past_a_broken_symlink(self, tmp_path):
+        """A broken symlink at an intermediate position is walked past."""
+        target = tmp_path / "deleted"
+        target.write_text("hi")
+        link = tmp_path / "broken_link"
+        link.symlink_to(target)
+        target.unlink()  # link now points at nothing
+        # is_dir() returns False on a broken symlink
+        assert _resolve_mountable_ancestor(link / "child") == tmp_path
+
+
+class TestResolveMountsWalkUp:
+    """_resolve_mounts should walk up to an existing ancestor when intermediate dirs are missing."""
+
+    @pytest.mark.unit
+    def test_nested_missing_output_walks_up(self, tmp_path):
+        """Output path with multiple missing ancestors mounts the deepest existing one."""
+        from hip_cargo.utils.decorators import stimela_cab, stimela_output
+
+        @stimela_cab(name="test", info="test")
+        @stimela_output(name="output_dir", dtype="Directory", info="output")
+        def func(output_dir: Annotated[Directory | None, typer.Option(parser=Path, help="o")] = None):
+            pass
+
+        deep = tmp_path / "a" / "b" / "c" / "results"
+        mounts = _resolve_mounts(func, {"output_dir": deep})
+        assert str(tmp_path) in mounts
+        assert mounts[str(tmp_path)] is True
+
+    @pytest.mark.unit
+    def test_mkdir_with_missing_parent_walks_up(self, tmp_path):
+        """mkdir=True with a missing parent should still find an existing ancestor to mount rw."""
+        from hip_cargo.utils.decorators import stimela_cab
+
+        @stimela_cab(name="test", info="test")
+        def func(
+            output_dir: Annotated[
+                Directory | None,
+                typer.Option(parser=Path, help="o"),
+                {"stimela": {"mkdir": True}},
+            ] = None,
+        ):
+            pass
+
+        deep = tmp_path / "missing_intermediate" / "leaf"
+        mounts = _resolve_mounts(func, {"output_dir": deep})
+        assert str(tmp_path) in mounts
+        assert mounts[str(tmp_path)] is True
+
+    @pytest.mark.unit
+    def test_write_parent_with_missing_parent_walks_up(self, tmp_path):
+        """write_parent with a missing parent should walk up to the deepest existing ancestor."""
+        from hip_cargo.utils.decorators import stimela_cab, stimela_output
+
+        @stimela_cab(name="test", info="test")
+        @stimela_output(
+            name="result",
+            dtype="Directory",
+            info="r",
+            path_policies={"write_parent": True},
+        )
+        def func(
+            result: Annotated[
+                Directory,
+                typer.Option(..., parser=Path, help="r"),
+                {"stimela": {"path_policies": {"write_parent": True}}},
+            ],
+        ):
+            pass
+
+        deep = tmp_path / "a" / "b" / "result_dir"
+        mounts = _resolve_mounts(func, {"result": deep})
+        assert str(tmp_path) in mounts
+        assert mounts[str(tmp_path)] is True
+
+    @pytest.mark.unit
+    def test_walk_up_prunes_existing_child_mounts(self, tmp_path):
+        """When walk-up adds a broader rw ancestor, narrower mounts are pruned (existing behavior)."""
+        from hip_cargo.utils.decorators import stimela_cab, stimela_output
+
+        existing_input = tmp_path / "inputs"
+        existing_input.mkdir()
+
+        @stimela_cab(name="test", info="test")
+        @stimela_output(name="output_dir", dtype="Directory", info="o")
+        def func(
+            input_dir: Annotated[Directory, typer.Option(..., parser=Path, help="i")],
+            output_dir: Annotated[Directory | None, typer.Option(parser=Path, help="o")] = None,
+        ):
+            pass
+
+        # Output path's parent doesn't exist — walk-up lands on tmp_path
+        deep_output = tmp_path / "missing" / "results"
+        mounts = _resolve_mounts(func, {"input_dir": existing_input, "output_dir": deep_output})
+        # tmp_path mounted rw subsumes the inputs subdir
+        assert mounts.get(str(tmp_path)) is True
+        assert str(existing_input) not in mounts
+
+
+class TestResolveMountsImplicit:
+    """Test _resolve_mounts handles implicit outputs (no corresponding CLI param)."""
+
+    @pytest.mark.unit
+    def test_string_template_mounts_parent_rw(self, tmp_path):
+        """File template renders against params; parent of result is mounted rw."""
+        from hip_cargo.utils.decorators import stimela_cab, stimela_output
+
+        @stimela_cab(name="test", info="test")
+        @stimela_output(name="result", dtype="File", implicit="{outdir}/run.fits")
+        def func(outdir: Annotated[Directory, typer.Option(..., parser=Path, help="out")]):
+            pass
+
+        outdir = tmp_path / "outputs"
+        outdir.mkdir()
+        mounts = _resolve_mounts(func, {"outdir": outdir})
+        assert str(outdir) in mounts
+        assert mounts[str(outdir)] is True
+
+    @pytest.mark.unit
+    def test_implicit_true_skipped(self, tmp_path):
+        """implicit=True (no path template) should not produce a mount."""
+        from hip_cargo.utils.decorators import stimela_cab, stimela_output
+
+        @stimela_cab(name="test", info="test")
+        @stimela_output(name="result", dtype="File", implicit=True)
+        def func(prefix: Annotated[str, typer.Option(..., help="p")]):
+            pass
+
+        mounts = _resolve_mounts(func, {"prefix": "run1"})
+        assert mounts == {}
+
+    @pytest.mark.unit
+    def test_non_path_dtype_skipped(self):
+        """Implicit output with non-path dtype should not produce a mount even with a template."""
+        from hip_cargo.utils.decorators import stimela_cab, stimela_output
+
+        @stimela_cab(name="test", info="test")
+        @stimela_output(name="metric", dtype="float", implicit="{prefix}_metric.txt")
+        def func(prefix: Annotated[str, typer.Option(..., help="p")]):
+            pass
+
+        mounts = _resolve_mounts(func, {"prefix": "run1"})
+        assert mounts == {}
+
+    @pytest.mark.unit
+    def test_existing_directory_mounted_rw_directly(self, tmp_path):
+        """Implicit Directory that already exists should be mounted rw on itself."""
+        from hip_cargo.utils.decorators import stimela_cab, stimela_output
+
+        existing = tmp_path / "outputs"
+        existing.mkdir()
+
+        @stimela_cab(name="test", info="test")
+        @stimela_output(name="output_dir", dtype="Directory", implicit=str(existing))
+        def func(prefix: Annotated[str, typer.Option(..., help="p")]):
+            pass
+
+        mounts = _resolve_mounts(func, {"prefix": "run1"})
+        assert str(existing) in mounts
+        assert mounts[str(existing)] is True
+
+    @pytest.mark.unit
+    def test_mkdir_mounts_parent_rw(self, tmp_path):
+        """Implicit Directory with mkdir=True should mount parent rw."""
+        from hip_cargo.utils.decorators import stimela_cab, stimela_output
+
+        @stimela_cab(name="test", info="test")
+        @stimela_output(
+            name="output_dir",
+            dtype="Directory",
+            implicit="{outdir}/results",
+            mkdir=True,
+        )
+        def func(outdir: Annotated[Directory, typer.Option(..., parser=Path, help="out")]):
+            pass
+
+        outdir = tmp_path / "wrk"
+        outdir.mkdir()
+        mounts = _resolve_mounts(func, {"outdir": outdir})
+        # parent of {outdir}/results == outdir, mounted rw because of mkdir
+        assert str(outdir) in mounts
+        assert mounts[str(outdir)] is True
+
+    @pytest.mark.unit
+    def test_must_exist_missing_raises(self, tmp_path):
+        """Implicit output with must_exist=True and missing path should raise."""
+        from hip_cargo.utils.decorators import stimela_cab, stimela_output
+
+        @stimela_cab(name="test", info="test")
+        @stimela_output(
+            name="result",
+            dtype="File",
+            implicit="{outdir}/result.fits",
+            must_exist=True,
+        )
+        def func(outdir: Annotated[Directory, typer.Option(..., parser=Path, help="out")]):
+            pass
+
+        outdir = tmp_path / "wrk"
+        outdir.mkdir()  # parent exists, but result.fits does not
+        with pytest.raises(RuntimeError, match="does not exist"):
+            _resolve_mounts(func, {"outdir": outdir})
+
+    @pytest.mark.unit
+    def test_unresolvable_template_silently_skipped(self):
+        """Template referencing a missing param should be silently skipped."""
+        from hip_cargo.utils.decorators import stimela_cab, stimela_output
+
+        @stimela_cab(name="test", info="test")
+        @stimela_output(
+            name="result",
+            dtype="File",
+            implicit="{nonexistent}/result.fits",
+        )
+        def func(prefix: Annotated[str, typer.Option(..., help="p")]):
+            pass
+
+        mounts = _resolve_mounts(func, {"prefix": "run1"})
+        assert mounts == {}
+
+    @pytest.mark.unit
+    def test_remote_scheme_skipped(self):
+        """Implicit output that resolves to a remote URI should be skipped."""
+        from hip_cargo.utils.decorators import stimela_cab, stimela_output
+
+        @stimela_cab(name="test", info="test")
+        @stimela_output(name="result", dtype="File", implicit="s3://bucket/{prefix}.fits")
+        def func(prefix: Annotated[str, typer.Option(..., help="p")]):
+            pass
+
+        mounts = _resolve_mounts(func, {"prefix": "run1"})
+        assert mounts == {}
+
+    @pytest.mark.unit
+    def test_write_parent_policy(self, tmp_path):
+        """Implicit output with path_policies.write_parent=True mounts parent rw."""
+        from hip_cargo.utils.decorators import stimela_cab, stimela_output
+
+        target = tmp_path / "outputs"
+        target.mkdir()
+
+        @stimela_cab(name="test", info="test")
+        @stimela_output(
+            name="result",
+            dtype="Directory",
+            implicit=str(target),
+            path_policies={"write_parent": True},
+        )
+        def func(prefix: Annotated[str, typer.Option(..., help="p")]):
+            pass
+
+        mounts = _resolve_mounts(func, {"prefix": "run1"})
+        # write_parent → parent of target mounted rw, target itself NOT mounted
+        assert str(tmp_path) in mounts
+        assert mounts[str(tmp_path)] is True
+        assert str(target) not in mounts
+
+    @pytest.mark.unit
+    def test_name_collision_with_param_uses_param_loop(self, tmp_path):
+        """If the output name matches a CLI param, the param loop handles it (no double-process)."""
+        from hip_cargo.utils.decorators import stimela_cab, stimela_output
+
+        @stimela_cab(name="test", info="test")
+        @stimela_output(name="output_dir", dtype="Directory", implicit="{prefix}_out")
+        def func(
+            output_dir: Annotated[Directory | None, typer.Option(parser=Path, help="out")] = None,
+            prefix: Annotated[str, typer.Option(..., help="p")] = "x",
+        ):
+            pass
+
+        explicit_out = tmp_path / "explicit"
+        explicit_out.mkdir()
+        mounts = _resolve_mounts(func, {"output_dir": explicit_out, "prefix": "x"})
+        # The explicit param's path is mounted rw via the param loop
+        assert str(explicit_out) in mounts
+        assert mounts[str(explicit_out)] is True
+        # The implicit-rendered path must NOT also appear as a separate mount
+        rendered = (Path.cwd() / "x_out").resolve()
+        assert str(rendered) not in mounts
+
+    @pytest.mark.unit
+    def test_implicit_walks_up_through_missing_ancestors(self, tmp_path):
+        """Implicit output rendering to a path with missing ancestors walks up."""
+        from hip_cargo.utils.decorators import stimela_cab, stimela_output
+
+        @stimela_cab(name="test", info="test")
+        @stimela_output(name="result", dtype="File", implicit="{outdir}/missing/leaf.fits")
+        def func(outdir: Annotated[Directory, typer.Option(..., parser=Path, help="o")]):
+            pass
+
+        outdir = tmp_path / "wrk"
+        outdir.mkdir()
+        # rendered: {outdir}/missing/leaf.fits — neither leaf nor "missing" exist
+        mounts = _resolve_mounts(func, {"outdir": outdir})
+        assert str(outdir) in mounts
+        assert mounts[str(outdir)] is True
+
+    @pytest.mark.unit
+    def test_ms_dtype_treated_as_path(self, tmp_path):
+        """MS dtype should be treated as a path."""
+        from hip_cargo.utils.decorators import stimela_cab, stimela_output
+
+        @stimela_cab(name="test", info="test")
+        @stimela_output(name="output_ms", dtype="MS", implicit="{outdir}/run.ms")
+        def func(outdir: Annotated[Directory, typer.Option(..., parser=Path, help="out")]):
+            pass
+
+        outdir = tmp_path / "wrk"
+        outdir.mkdir()
+        mounts = _resolve_mounts(func, {"outdir": outdir})
+        assert str(outdir) in mounts
+        assert mounts[str(outdir)] is True
 
 
 class TestResolveMountsAccessParent:

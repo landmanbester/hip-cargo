@@ -447,6 +447,13 @@ def generate_parameter_signature(
     # Build stimela metadata dict for non-standard fields
     stimela_meta = {}
 
+    # Anything in param_def["metadata"] other than rich_help_panel rides as
+    # StimelaMeta(metadata={...}) so it round-trips back into the type hint
+    # (e.g. metadata.tunable).
+    extra_metadata = {k: v for k, v in param_metadata.items() if k != "rich_help_panel"}
+    if extra_metadata:
+        stimela_meta["metadata"] = extra_metadata
+
     # Fields that are handled by typer.Option or inferred from type hints
     handled_fields = {
         "info",  # becomes help= in typer.Option
@@ -454,7 +461,7 @@ def generate_parameter_signature(
         "required",  # handled by default=... in typer.Option
         "default",  # handled by function default value
         "choices",  # handled by Literal type
-        "metadata",  # handled by rich_help_panel in typer.Option
+        "metadata",  # split above: rich_help_panel → typer.Option, rest → StimelaMeta(metadata=...)
     }
 
     # Check if dtype needs explicit override (can't be inferred from type hint alone)

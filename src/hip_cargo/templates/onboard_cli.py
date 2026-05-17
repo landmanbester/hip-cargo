@@ -1,15 +1,60 @@
-from hip_cargo import stimela_cab
+from typing import Annotated, Literal
+
+import typer
+from hip_cargo import StimelaMeta, stimela_cab
 
 
 @stimela_cab(
     name="onboard",
     info="Print setup instructions for CI/CD, PyPI publishing, and GitHub configuration.",
 )
-def onboard():
+def onboard(
+    backend: Annotated[
+        Literal["auto", "native", "apptainer", "singularity", "docker", "podman"],
+        typer.Option(
+            help="Execution backend.",
+        ),
+        StimelaMeta(
+            skip=True,
+        ),
+    ] = "auto",
+    always_pull_images: Annotated[
+        bool,
+        typer.Option(
+            help="Always pull container images, even if cached locally.",
+        ),
+        StimelaMeta(
+            skip=True,
+        ),
+    ] = False,
+):
     """
     Print setup instructions for CI/CD, PyPI publishing, and GitHub configuration.
     """
-    # Lazy import the core implementation
-    from <PACKAGE_NAME>.core.onboard import onboard as onboard_core  # noqa: E402
+    if backend == "native" or backend == "auto":
+        try:
+            # Lazy import the core implementation
+            from <PACKAGE_NAME>.core.onboard import onboard as onboard_core  # noqa: E402
 
-    onboard_core()
+            # Call the core function with all parameters
+            onboard_core()
+            return
+        except ImportError:
+            if backend == "native":
+                raise
+
+    # Resolve container image from installed package metadata
+    from hip_cargo.utils.config import get_container_image  # noqa: E402
+    from hip_cargo.utils.runner import run_in_container  # noqa: E402
+
+    image = get_container_image("<PROJECT_NAME>")
+    if image is None:
+        raise RuntimeError("No Container URL in <PROJECT_NAME> metadata.")
+
+    run_in_container(
+        onboard,
+        dict(),
+        image=image,
+        backend=backend,
+        always_pull_images=always_pull_images,
+    )
