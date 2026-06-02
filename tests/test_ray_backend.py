@@ -19,13 +19,8 @@ from hip_cargo.utils.progress import EventType, ProgressEvent  # noqa: E402
 
 @pytest.fixture(scope="module")
 def ray_context():
-    """Start and stop a local Ray instance for testing.
-
-    Uses runtime_env with empty working_dir to prevent Ray from
-    packaging the project directory and creating a separate venv
-    for workers (which would lack the ray module itself).
-    """
-    ray.init(num_cpus=2, ignore_reinit_error=True, runtime_env={"working_dir": None})
+    """Start and stop a local Ray instance for testing."""
+    ray.init(num_cpus=2, ignore_reinit_error=True)
     yield
     ray.shutdown()
 

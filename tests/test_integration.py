@@ -28,11 +28,7 @@ FIXTURES = Path(__file__).parent / "fixtures"
 @pytest.fixture(scope="module")
 def ray_context():
     """Start a local Ray cluster for integration tests."""
-    ctx = ray.init(
-        num_cpus=2,
-        ignore_reinit_error=True,
-        runtime_env={"working_dir": None},
-    )
+    ctx = ray.init(num_cpus=2, ignore_reinit_error=True)
     yield ctx
     ray.shutdown()
 
