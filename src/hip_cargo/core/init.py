@@ -85,11 +85,18 @@ def init(
         project_dir / "tests",
         project_dir / ".github" / "workflows",
         project_dir / ".devcontainer",
+        project_dir / ".claude" / "rules",
     ]:
         d.mkdir(parents=True, exist_ok=True)
 
     # Write template files
     _write_template("CLAUDE.md", project_dir / "CLAUDE.md", subs)
+    for rule in ("architecture", "python-standards", "testing-and-ci"):
+        _write_template(
+            f"claude/rules/{rule}.md",
+            project_dir / ".claude" / "rules" / f"{rule}.md",
+            subs,
+        )
     _write_template("pyproject.toml", project_dir / "pyproject.toml", subs)
     _write_tbump(project_dir / "tbump.toml", subs, auto_changelog=auto_changelog)
     if auto_changelog:
@@ -97,7 +104,9 @@ def init(
     _write_template("Dockerfile", project_dir / "Dockerfile", subs)
     _write_precommit(project_dir / ".pre-commit-config.yaml", subs, auto_changelog=auto_changelog)
     _write_template("gitignore", project_dir / ".gitignore", subs)
+    _write_template("python-version", project_dir / ".python-version", subs)
     _write_template("dependabot.yml", project_dir / ".github" / "dependabot.yml", subs)
+    _write_template("CODEOWNERS", project_dir / ".github" / "CODEOWNERS", subs)
     _write_template("devcontainer/devcontainer.json", project_dir / ".devcontainer" / "devcontainer.json", subs)
 
     # Workflow files
@@ -207,9 +216,10 @@ def init(
     _run_command(["git", "config", "user.email", author_email], cwd=project_dir)
     _run_command(["git", "add", "."], cwd=project_dir)
     _run_command(["git", "commit", "-m", "chore: initial project scaffold"], cwd=project_dir)
+    # default_install_hook_types in .pre-commit-config.yaml wires up both the
+    # pre-commit and commit-msg stages, so a plain install covers the
+    # conventional-pre-commit hook when --auto-changelog is enabled.
     _run_command(["uv", "run", "pre-commit", "install"], cwd=project_dir)
-    if auto_changelog:
-        _run_command(["uv", "run", "pre-commit", "install", "--hook-type", "commit-msg"], cwd=project_dir)
 
     print(f"\nDone! Project '{project_name}' is ready at {project_dir}")
     print(f"\n  cd {project_dir}")
