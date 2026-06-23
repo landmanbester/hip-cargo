@@ -14,6 +14,7 @@ from hip_cargo.utils.runner import (
     _is_path_type,
     _prune_child_mounts,
     _pull_image,
+    _resolve_gpu_request,
     _resolve_mountable_ancestor,
     _resolve_mounts,
     run_in_container,
@@ -508,6 +509,77 @@ class TestResolveMountableAncestor:
         through_file = intermediate_file / "child" / "leaf"
         # Should walk up past the file and return tmp_path (the nearest real directory).
         assert _resolve_mountable_ancestor(through_file) == tmp_path
+
+
+class TestResolveGpuRequest:
+    """Test _resolve_gpu_request normalisation, env override, and auto gating."""
+
+    @pytest.fixture(autouse=True)
+    def _clear_env(self, monkeypatch):
+        monkeypatch.delenv("HIP_CARGO_GPUS", raising=False)
+
+    @pytest.mark.unit
+    def test_false_is_none(self):
+        assert _resolve_gpu_request(False, "docker") is None
+
+    @pytest.mark.unit
+    def test_true_is_all(self):
+        assert _resolve_gpu_request(True, "docker") == "all"
+
+    @pytest.mark.unit
+    def test_string_all_and_none(self):
+        assert _resolve_gpu_request("all", "docker") == "all"
+        assert _resolve_gpu_request("none", "docker") is None
+
+    @pytest.mark.unit
+    def test_device_spec_passthrough(self):
+        assert _resolve_gpu_request("device=0,1", "docker") == "device=0,1"
+
+    @pytest.mark.unit
+    def test_env_override_wins(self, monkeypatch):
+        monkeypatch.setenv("HIP_CARGO_GPUS", "none")
+        assert _resolve_gpu_request(True, "docker") is None
+
+    @pytest.mark.unit
+    def test_auto_docker_requires_gpu_and_toolkit(self, monkeypatch):
+        from hip_cargo.utils import runner
+
+        monkeypatch.setattr(runner, "_gpu_available", lambda: True)
+        monkeypatch.setattr(runner, "_toolkit_available", lambda: True)
+        assert runner._resolve_gpu_request("auto", "docker") == "all"
+
+        monkeypatch.setattr(runner, "_toolkit_available", lambda: False)
+        assert runner._resolve_gpu_request("auto", "docker") is None
+
+        monkeypatch.setattr(runner, "_gpu_available", lambda: False)
+        monkeypatch.setattr(runner, "_toolkit_available", lambda: True)
+        assert runner._resolve_gpu_request("auto", "docker") is None
+
+    @pytest.mark.unit
+    def test_auto_apptainer_needs_only_gpu(self, monkeypatch):
+        from hip_cargo.utils import runner
+
+        monkeypatch.setattr(runner, "_gpu_available", lambda: True)
+        monkeypatch.setattr(runner, "_toolkit_available", lambda: False)
+        assert runner._resolve_gpu_request("auto", "apptainer") == "all"
+
+    @pytest.mark.unit
+    def test_gpu_available_detects_nvidia_smi(self, monkeypatch):
+        from hip_cargo.utils import runner
+
+        monkeypatch.setattr(
+            runner.shutil, "which", lambda name: "/usr/bin/nvidia-smi" if name == "nvidia-smi" else None
+        )
+        monkeypatch.setattr(runner.os.path, "exists", lambda p: False)
+        assert runner._gpu_available() is True
+
+    @pytest.mark.unit
+    def test_gpu_available_false_when_absent(self, monkeypatch):
+        from hip_cargo.utils import runner
+
+        monkeypatch.setattr(runner.shutil, "which", lambda name: None)
+        monkeypatch.setattr(runner.os.path, "exists", lambda p: False)
+        assert runner._gpu_available() is False
 
     @pytest.mark.unit
     def test_walks_past_a_broken_symlink(self, tmp_path):

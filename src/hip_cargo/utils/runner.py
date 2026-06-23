@@ -595,6 +595,50 @@ def _build_argv_with_native_backend() -> list[str]:
     return args
 
 
+def _gpu_available() -> bool:
+    """Return True if a GPU is plausibly present on the host."""
+    return shutil.which("nvidia-smi") is not None or os.path.exists("/dev/nvidia0")
+
+
+def _toolkit_available() -> bool:
+    """Return True if the NVIDIA container toolkit is plausibly installed."""
+    return shutil.which("nvidia-ctk") is not None or shutil.which("nvidia-container-runtime") is not None
+
+
+def _resolve_gpu_request(gpu_setting: bool | str, runtime: str) -> str | None:
+    """Resolve the effective GPU spec for a runtime.
+
+    Precedence: the ``HIP_CARGO_GPUS`` env var overrides ``gpu_setting``.
+
+    Returns:
+        ``None`` for no GPU, ``"all"`` to request all devices, or a raw
+        device-spec string (the runtime's native syntax).
+    """
+    raw: bool | str | None = os.environ.get("HIP_CARGO_GPUS")
+    if raw is None:
+        raw = gpu_setting
+
+    if raw is True:
+        token = "all"
+    elif raw is False or raw is None:
+        token = "none"
+    else:
+        token = str(raw).strip()
+
+    low = token.lower()
+    if low in ("", "none", "false", "0"):
+        return None
+    if low in ("all", "true"):
+        return "all"
+    if low == "auto":
+        if not _gpu_available():
+            return None
+        if runtime in ("docker", "podman") and not _toolkit_available():
+            return None
+        return "all"
+    return token  # explicit device spec, in the runtime's native syntax
+
+
 def _build_container_cmd(
     runtime: str,
     image: str,
