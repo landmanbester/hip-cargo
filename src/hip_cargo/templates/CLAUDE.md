@@ -146,6 +146,25 @@ Three things keep this in sync — do not bypass them:
 3. **Releases:** `tbump <version>` rewrites the tag to the semantic version and
    regenerates cabs as a `before_commit` hook.
 
+### GPU passthrough & extra run-args
+
+For a GPU image, declare it in `src/<PACKAGE_NAME>/_container_image.py` alongside
+`CONTAINER_IMAGE`:
+
+```python
+GPU = True                  # True | False | "auto" | a device spec ("device=0,1")
+RUN_ARGS_APPTAINER = []     # per-backend extras: _DOCKER / _PODMAN / _APPTAINER / _SINGULARITY
+```
+
+On the container-fallback path the runner translates `GPU` per runtime (`--gpus`
+for docker, CDI `--device nvidia.com/gpu=...` for podman, `--nv` for
+apptainer/singularity) and appends the matching `RUN_ARGS_*` verbatim. `"auto"`
+only requests a GPU when one is detected (and, for docker/podman, the NVIDIA
+Container Toolkit is present). Override per-invocation with `HIP_CARGO_GPUS`
+(e.g. `HIP_CARGO_GPUS=none`) and `HIP_CARGO_RUN_ARGS`. These constants live only
+in `_container_image.py` — they are deliberately kept out of the cab YAML, since
+Stimela manages its own container execution.
+
 ### Remote URIs (S3 / GCS / Azure)
 
 Path-typed parameters (`File`, `Directory`, `MS`, `URI`) accept both local
