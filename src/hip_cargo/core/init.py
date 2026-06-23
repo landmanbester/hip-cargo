@@ -155,7 +155,22 @@ def init(
     )
     _write_file(
         src_pkg / "_container_image.py",
-        f'CONTAINER_IMAGE = "ghcr.io/{github_user}/{project_name}:latest"\n',
+        (
+            f'CONTAINER_IMAGE = "ghcr.io/{github_user}/{project_name}:latest"\n'
+            "\n"
+            "# Optional GPU passthrough for the container-fallback path.\n"
+            '# Set GPU = True for a CUDA/GPU image, or "auto" to request a GPU only\n'
+            "# when one is detected (and, for docker/podman, the NVIDIA Container\n"
+            "# Toolkit is present). Absent => no GPU flags (the default).\n"
+            "# GPU = True\n"
+            "\n"
+            "# Optional per-backend extra arguments, passed verbatim to the container\n"
+            '# runtime during fallback. Example: RUN_ARGS_APPTAINER = ["--ipc=host"].\n'
+            "# RUN_ARGS_DOCKER = []\n"
+            "# RUN_ARGS_PODMAN = []\n"
+            "# RUN_ARGS_APPTAINER = []\n"
+            "# RUN_ARGS_SINGULARITY = []\n"
+        ),
     )
     _write_file(project_dir / "tests" / "__init__.py", "")
     _write_template("test_roundtrip.py", project_dir / "tests" / "test_roundtrip.py", subs)
