@@ -11,6 +11,7 @@ from hip_cargo.utils.runner import (
     _build_argv_with_native_backend,
     _build_container_cmd,
     _detect_runtime,
+    _gpu_args,
     _is_path_type,
     _prune_child_mounts,
     _pull_image,
@@ -969,3 +970,44 @@ class TestResolveMountsAccessParent:
         mounts = _resolve_mounts(func, {"output_dir": output_dir})
         assert str(tmp_path) in mounts
         assert mounts[str(tmp_path)] is True
+
+
+class TestGpuArgs:
+    """Test _gpu_args per-runtime flag mapping."""
+
+    @pytest.mark.unit
+    def test_none_spec_yields_nothing(self):
+        assert _gpu_args("docker", None) == ([], {})
+        assert _gpu_args("apptainer", None) == ([], {})
+
+    @pytest.mark.unit
+    def test_docker_all(self):
+        assert _gpu_args("docker", "all") == (["--gpus", "all"], {})
+
+    @pytest.mark.unit
+    def test_docker_device_spec_passthrough(self):
+        assert _gpu_args("docker", "device=0,1") == (["--gpus", "device=0,1"], {})
+
+    @pytest.mark.unit
+    def test_podman_cdi_all(self):
+        assert _gpu_args("podman", "all") == (["--device", "nvidia.com/gpu=all"], {})
+
+    @pytest.mark.unit
+    def test_apptainer_nv_all(self):
+        assert _gpu_args("apptainer", "all") == (["--nv"], {})
+
+    @pytest.mark.unit
+    def test_singularity_nv_all(self):
+        assert _gpu_args("singularity", "all") == (["--nv"], {})
+
+    @pytest.mark.unit
+    def test_apptainer_device_spec_sets_cuda_env(self):
+        args, env = _gpu_args("apptainer", "device=0,1")
+        assert args == ["--nv"]
+        assert env == {"CUDA_VISIBLE_DEVICES": "0,1"}
+
+    @pytest.mark.unit
+    def test_apptainer_bare_device_spec_sets_cuda_env(self):
+        args, env = _gpu_args("apptainer", "0,1")
+        assert args == ["--nv"]
+        assert env == {"CUDA_VISIBLE_DEVICES": "0,1"}

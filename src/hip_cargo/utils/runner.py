@@ -639,6 +639,33 @@ def _resolve_gpu_request(gpu_setting: bool | str, runtime: str) -> str | None:
     return token  # explicit device spec, in the runtime's native syntax
 
 
+def _gpu_args(runtime: str, gpu_spec: str | None) -> tuple[list[str], dict[str, str]]:
+    """Map a resolved GPU spec to runtime flags and any extra env.
+
+    Args:
+        runtime: Container runtime name.
+        gpu_spec: ``None`` (no GPU), ``"all"``, or a device-spec string.
+
+    Returns:
+        ``(flags, env)`` where ``flags`` are inserted after the run/exec
+        subcommand and ``env`` is merged into the forwarded environment
+        (used to translate device specs for apptainer/singularity).
+    """
+    if gpu_spec is None:
+        return [], {}
+    if runtime == "docker":
+        return ["--gpus", gpu_spec], {}
+    if runtime == "podman":
+        return ["--device", f"nvidia.com/gpu={gpu_spec}"], {}
+    if runtime in ("apptainer", "singularity"):
+        env: dict[str, str] = {}
+        if gpu_spec != "all":
+            # --nv selects all visible devices; narrow via CUDA_VISIBLE_DEVICES.
+            env["CUDA_VISIBLE_DEVICES"] = gpu_spec.replace("device=", "")
+        return ["--nv"], env
+    return [], {}
+
+
 def _build_container_cmd(
     runtime: str,
     image: str,
