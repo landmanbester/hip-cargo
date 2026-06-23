@@ -163,7 +163,7 @@ only requests a GPU when one is detected (and, for docker/podman, the NVIDIA
 Container Toolkit is present). Override per-invocation with `HIP_CARGO_GPUS`
 (e.g. `HIP_CARGO_GPUS=none`) and `HIP_CARGO_RUN_ARGS`. These constants live only
 in `_container_image.py` — they are deliberately kept out of the cab YAML, since
-Stimela manages its own container execution.
+Stimela manages its own container execution. Explicit device specs (e.g. `device=0,1`) target docker and apptainer/singularity; on podman prefer `True`/`"auto"`/`"all"` since CDI uses a different device grammar.
 
 ### Remote URIs (S3 / GCS / Azure)
 

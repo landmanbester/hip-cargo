@@ -542,6 +542,13 @@ class TestResolveGpuRequest:
         assert _resolve_gpu_request(True, "docker") is None
 
     @pytest.mark.unit
+    def test_env_override_to_all(self, monkeypatch):
+        from hip_cargo.utils.runner import _resolve_gpu_request
+
+        monkeypatch.setenv("HIP_CARGO_GPUS", "all")
+        assert _resolve_gpu_request(False, "docker") == "all"
+
+    @pytest.mark.unit
     def test_auto_docker_requires_gpu_and_toolkit(self, monkeypatch):
         from hip_cargo.utils import runner
 
@@ -1057,11 +1064,24 @@ class TestBuildContainerCmdGpuRunArgs:
 
     @pytest.mark.unit
     def test_no_gpu_or_run_args_is_unchanged(self):
+        import os
+
         from hip_cargo.utils.runner import _build_container_cmd
 
         cmd = _build_container_cmd("docker", "img:latest", {}, "/work", ["pkg"])
         assert "--gpus" not in cmd
         assert cmd[0:2] == ["docker", "run"]
+        assert cmd == [
+            "docker",
+            "run",
+            "--rm",
+            "--user",
+            f"{os.getuid()}:{os.getgid()}",
+            "-w",
+            "/work",
+            "img:latest",
+            "pkg",
+        ]
 
 
 class TestRunInContainerGpu:

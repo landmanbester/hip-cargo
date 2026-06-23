@@ -691,7 +691,7 @@ def _gpu_args(runtime: str, gpu_spec: str | None) -> tuple[list[str], dict[str, 
         env: dict[str, str] = {}
         if gpu_spec != "all":
             # --nv selects all visible devices; narrow via CUDA_VISIBLE_DEVICES.
-            env["CUDA_VISIBLE_DEVICES"] = gpu_spec.replace("device=", "")
+            env["CUDA_VISIBLE_DEVICES"] = gpu_spec.removeprefix("device=")
         return ["--nv"], env
     return [], {}
 
