@@ -562,6 +562,7 @@ class TestResolveGpuRequest:
         monkeypatch.setattr(runner, "_gpu_available", lambda: True)
         monkeypatch.setattr(runner, "_toolkit_available", lambda: False)
         assert runner._resolve_gpu_request("auto", "apptainer") == "all"
+        assert runner._resolve_gpu_request("auto", "singularity") == "all"
 
     @pytest.mark.unit
     def test_gpu_available_detects_nvidia_smi(self, monkeypatch):
@@ -580,6 +581,14 @@ class TestResolveGpuRequest:
         monkeypatch.setattr(runner.shutil, "which", lambda name: None)
         monkeypatch.setattr(runner.os.path, "exists", lambda p: False)
         assert runner._gpu_available() is False
+
+    @pytest.mark.unit
+    def test_gpu_available_detects_dev_node(self, monkeypatch):
+        from hip_cargo.utils import runner
+
+        monkeypatch.setattr(runner.shutil, "which", lambda name: None)
+        monkeypatch.setattr(runner.os.path, "exists", lambda p: p == "/dev/nvidia0")
+        assert runner._gpu_available() is True
 
     @pytest.mark.unit
     def test_walks_past_a_broken_symlink(self, tmp_path):
