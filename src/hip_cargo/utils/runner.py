@@ -1,6 +1,7 @@
 """Container fallback execution for hip-cargo CLI commands."""
 
 import os
+import shlex
 import shutil
 import subprocess
 import sys
@@ -10,6 +11,7 @@ from pathlib import Path, PurePath
 
 from upath import UPath
 
+from hip_cargo.utils.config import get_container_gpu, get_container_run_args
 from hip_cargo.utils.metadata import StimelaMeta
 
 CONTAINER_RUNTIMES = ["apptainer", "singularity", "docker", "podman"]
@@ -60,10 +62,38 @@ def run_in_container(
     mounts[cwd] = True
     cli_args = _build_argv_with_native_backend()
 
+    # Resolve GPU passthrough and per-backend extra run-args declared by the
+    # package in its _container_image module, with env overrides.
+    import_name = func.__module__.split(".")[0]
+    gpu_spec = _resolve_gpu_request(get_container_gpu(import_name), runtime)
+    gpu_args, gpu_env = _gpu_args(runtime, gpu_spec)
+    run_args = list(get_container_run_args(import_name, runtime))
+    extra_run_args = os.environ.get("HIP_CARGO_RUN_ARGS")
+    if extra_run_args:
+        run_args.extend(shlex.split(extra_run_args))
+
+    # Forward host CUDA_VISIBLE_DEVICES into the container; an explicit device
+    # spec (apptainer/singularity) takes precedence.
+    run_env = dict(cred_env)
+    host_cvd = os.environ.get("CUDA_VISIBLE_DEVICES")
+    if host_cvd is not None:
+        run_env.setdefault("CUDA_VISIBLE_DEVICES", host_cvd)
+    run_env.update(gpu_env)
+
     if always_pull_images:
         _pull_image(runtime, image)
 
-    cmd = _build_container_cmd(runtime, image, mounts, cwd, cli_args, cred_env=cred_env, cred_mounts=cred_mounts)
+    cmd = _build_container_cmd(
+        runtime,
+        image,
+        mounts,
+        cwd,
+        cli_args,
+        cred_env=run_env,
+        cred_mounts=cred_mounts,
+        gpu_args=gpu_args,
+        run_args=run_args,
+    )
 
     print(f"Falling back to container execution ({runtime})")
     print(f"  Image: {image}")
@@ -674,6 +704,8 @@ def _build_container_cmd(
     cli_args: list[str],
     cred_env: dict[str, str] | None = None,
     cred_mounts: dict[str, bool] | None = None,
+    gpu_args: list[str] | None = None,
+    run_args: list[str] | None = None,
 ) -> list[str]:
     """Assemble the full container execution command.
 
@@ -685,13 +717,17 @@ def _build_container_cmd(
         cli_args: The CLI command + arguments to run inside the container.
         cred_env: Optional env vars to forward into the container (e.g. cloud creds).
         cred_mounts: Optional read-only credential mounts merged with ``mounts``.
+        gpu_args: Optional GPU-passthrough flags, inserted after the run/exec subcommand.
+        run_args: Optional extra runtime args, inserted after ``gpu_args``.
     """
     cred_env = cred_env or {}
     cred_mounts = cred_mounts or {}
+    gpu_args = gpu_args or []
+    run_args = run_args or []
     all_mounts = {**mounts, **cred_mounts}
 
     if runtime in ("apptainer", "singularity"):
-        cmd = [runtime, "exec", "--pwd", cwd]
+        cmd = [runtime, "exec", "--pwd", cwd, *gpu_args, *run_args]
         for path, rw in sorted(all_mounts.items()):
             mode = "rw" if rw else "ro"
             cmd.extend(["--bind", f"{path}:{path}:{mode}"])
@@ -704,7 +740,7 @@ def _build_container_cmd(
     else:  # docker, podman
         # Run as current user so output files have correct ownership
         uid_gid = f"{os.getuid()}:{os.getgid()}"
-        cmd = [runtime, "run", "--rm", "--user", uid_gid, "-w", cwd]
+        cmd = [runtime, "run", "--rm", "--user", uid_gid, "-w", cwd, *gpu_args, *run_args]
         for path, rw in sorted(all_mounts.items()):
             mode = "rw" if rw else "ro"
             cmd.extend(["-v", f"{path}:{path}:{mode}"])
