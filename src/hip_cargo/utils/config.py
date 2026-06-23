@@ -1,6 +1,7 @@
 """Read container image from installed package metadata."""
 
 import importlib
+import types
 
 
 def get_container_image(package_name: str, package_import_name: str | None = None) -> str | None:
@@ -36,7 +37,7 @@ def get_container_image(package_name: str, package_import_name: str | None = Non
         raise
 
 
-def _load_container_image_module(import_name: str):
+def _load_container_image_module(import_name: str) -> types.ModuleType | None:
     """Import ``<import_name>._container_image`` or return None if absent.
 
     Mirrors the ModuleNotFoundError discrimination in get_container_image:
