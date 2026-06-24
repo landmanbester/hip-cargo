@@ -47,5 +47,4 @@ tests/scratch/
 Thumbs.db
 
 # AI
-.claude/
 .claude-work/

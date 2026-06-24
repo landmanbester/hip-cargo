@@ -1,6 +1,7 @@
 """Read container image from installed package metadata."""
 
 import importlib
+import types
 from pathlib import Path
 
 
@@ -52,3 +53,68 @@ def get_container_image(package_name: str, package_import_name: str | None = Non
             # The package or its _container_image module is not installed
             return None
         raise
+
+
+def _load_container_image_module(import_name: str) -> types.ModuleType | None:
+    """Import ``<import_name>._container_image`` or return None if absent.
+
+    Mirrors the ModuleNotFoundError discrimination in get_container_image:
+    a missing package/module returns None, while an unrelated import failure
+    inside the module propagates.
+    """
+    module_name = f"{import_name}._container_image"
+    try:
+        return importlib.import_module(module_name)
+    except ModuleNotFoundError as exc:
+        if exc.name and module_name.startswith(exc.name):
+            return None
+        raise
+
+
+def get_container_gpu(import_name: str) -> bool | str:
+    """Return a package's declared GPU passthrough setting.
+
+    Reads the ``GPU`` constant from ``<import_name>._container_image``.
+
+    Args:
+        import_name: Python import name of the package (e.g. 'kremetart').
+
+    Returns:
+        The ``GPU`` value (True/False or a string spec), or False if the
+        package declares none.
+    """
+    mod = _load_container_image_module(import_name)
+    if mod is None:
+        return False
+    return getattr(mod, "GPU", False)
+
+
+def get_container_run_args(import_name: str, runtime: str) -> list[str]:
+    """Return a package's declared extra run-args for a container runtime.
+
+    Reads the ``RUN_ARGS_<RUNTIME>`` constant (e.g. ``RUN_ARGS_APPTAINER``)
+    from ``<import_name>._container_image``.
+
+    Args:
+        import_name: Python import name of the package.
+        runtime: Container runtime name (docker/podman/apptainer/singularity).
+
+    Returns:
+        A list of extra arguments, or an empty list if none are declared.
+
+    Raises:
+        TypeError: If the declared ``RUN_ARGS_<RUNTIME>`` is not a list/tuple
+            (e.g. a bare string), which would otherwise be silently split into
+            characters and produce a broken container command.
+    """
+    mod = _load_container_image_module(import_name)
+    if mod is None:
+        return []
+    const_name = f"RUN_ARGS_{runtime.upper()}"
+    value = getattr(mod, const_name, [])
+    if not isinstance(value, (list, tuple)):
+        raise TypeError(
+            f"{const_name} in {import_name}._container_image must be a list of strings, "
+            f"got {type(value).__name__}: {value!r}"
+        )
+    return list(value)

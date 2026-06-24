@@ -5,6 +5,45 @@ All notable changes to hip-cargo are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.2] - 2026-06-24
+
+### Added
+
+- Add gpu args to _container_image.py to allow executing in containerised backend
+- **runner**: Print full container command on fallback
+- **init**: Scaffold commented GPU/RUN_ARGS in _container_image.py
+- **runner**: Pass GPU and per-backend run-args into container cmd
+- **runner**: Map resolved GPU spec to per-runtime flags
+- **runner**: Resolve GPU request with env override and auto-detect
+- **runner**: Read GPU/RUN_ARGS from package _container_image
+
+### CI
+
+- Bump actions/checkout from 6 to 7 in the github-actions group
+
+### Changed
+
+- **runner**: Tighten device-spec handling; doc podman caveat; strengthen tests
+
+### Documentation
+
+- Document GPU passthrough and RUN_ARGS in README and CLAUDE.md
+- Document GPU passthrough and per-backend run-args
+- Add GPU container-fallback implementation plan
+- Add GPU container-fallback design spec
+
+### Fixed
+
+- **runner**: Normalise bare docker GPU index lists to device= form
+- Address Copilot review on PR #80
+- **runner**: Annotate _load_container_image_module return type
+
+### Testing
+
+- Add opt-in live GPU container smoke test
+- **runner**: Cover /dev/nvidia0 detection and singularity auto-gating
+
+
 ## [0.2.1] - 2026-05-11
 
 ### Added
@@ -506,6 +545,7 @@ Co-authored-by: Copilot <175728472+Copilot@users.noreply.github.com>
 - Initial commit
 
 
+[0.2.2]: https://github.com/landmanbester/hip-cargo/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/landmanbester/hip-cargo/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/landmanbester/hip-cargo/compare/v0.2.0rc2...v0.2.0
 [0.2.0rc2]: https://github.com/landmanbester/hip-cargo/compare/v0.2.0rc1...v0.2.0rc2

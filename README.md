@@ -401,6 +401,46 @@ Volume mounts are resolved automatically from the function's type hints:
 - Stimela path policies (`write_parent`, `access_parent`, `mkdir`) are respected
 - Docker/podman run as the current user to avoid root-owned output files
 
+### GPU passthrough and extra run-args
+
+GPU-based packages can have the host GPU attached automatically on the
+container-fallback path. A package opts in by declaring constants in its
+`_container_image.py`, alongside `CONTAINER_IMAGE`:
+
+```python
+GPU = True                  # True | False | "auto" | a device spec ("device=0,1")
+RUN_ARGS_DOCKER = []        # extra `docker run` args, verbatim
+RUN_ARGS_PODMAN = []        # extra `podman run` args
+RUN_ARGS_APPTAINER = []     # extra `apptainer exec` args
+RUN_ARGS_SINGULARITY = []   # extra `singularity exec` args
+```
+
+All are optional — with none declared, the fallback command is exactly as
+before. `GPU` is translated per runtime: `--gpus` (docker), CDI
+`--device nvidia.com/gpu=...` (podman; host needs `nvidia-ctk cdi generate`),
+`--nv` (apptainer/singularity). The host's `CUDA_VISIBLE_DEVICES` is forwarded
+into the container.
+
+- `GPU = True` requests a GPU **unconditionally** (fails fast on a host without
+  one, or without the NVIDIA Container Toolkit).
+- `GPU = "auto"` requests one **only when** a GPU is detected and — for
+  docker/podman — the NVIDIA Container Toolkit is present; otherwise it adds no
+  GPU flags (today's behaviour).
+- Explicit device specs (e.g. `device=0,1`) target docker and
+  apptainer/singularity; on podman prefer `True`/`"auto"`/`"all"` since CDI uses
+  a different device grammar.
+
+Override per invocation with environment variables (no flag, no cab change):
+
+- `HIP_CARGO_GPUS` — overrides the `GPU` constant (e.g. `HIP_CARGO_GPUS=none` to
+  disable, `HIP_CARGO_GPUS=all` to force).
+- `HIP_CARGO_RUN_ARGS` — extra args appended to whichever backend is active
+  (shell-split).
+
+These constants live only in `_container_image.py` — they are deliberately kept
+out of the generated cab YAML, since Stimela manages its own container
+execution.
+
 ## Remote URIs and object stores
 
 `File`, `Directory`, `MS`, and `URI` are backed by
@@ -592,6 +632,7 @@ print(schema.inputs.keys())   # parameter names
 print(schema.outputs.keys())  # output parameter names
 ```
 - Runtime image resolution from `_container_image.py` via dynamic module import — no CWD dependency
+- Optional GPU passthrough (`--gpus` / podman CDI / `--nv`) and per-backend extra run-args, declared per package in `_container_image.py` (`GPU`, `RUN_ARGS_*`), with `HIP_CARGO_GPUS` / `HIP_CARGO_RUN_ARGS` env overrides
 
 ## Quirks
 

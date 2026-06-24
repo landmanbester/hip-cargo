@@ -53,6 +53,12 @@ def test_init_produces_clean_project():
         for filepath in expected_files:
             assert (project_dir / filepath).exists(), f"Missing scaffold file: {filepath}"
 
+        # GPU / RUN_ARGS knobs are scaffolded (commented) for discoverability.
+        container_image = (project_dir / f"src/{pkg}/_container_image.py").read_text()
+        assert "CONTAINER_IMAGE = " in container_image
+        assert "# GPU = True" in container_image
+        assert "RUN_ARGS_APPTAINER" in container_image
+
         # Verify ruff format check passes (no files would be reformatted)
         result = subprocess.run(
             ["uv", "run", "ruff", "format", "--check", "."],
