@@ -11,9 +11,11 @@ from hip_cargo.utils.runner import (
     _build_argv_with_native_backend,
     _build_container_cmd,
     _detect_runtime,
+    _gpu_args,
     _is_path_type,
     _prune_child_mounts,
     _pull_image,
+    _resolve_gpu_request,
     _resolve_mountable_ancestor,
     _resolve_mounts,
     run_in_container,
@@ -509,6 +511,93 @@ class TestResolveMountableAncestor:
         # Should walk up past the file and return tmp_path (the nearest real directory).
         assert _resolve_mountable_ancestor(through_file) == tmp_path
 
+
+class TestResolveGpuRequest:
+    """Test _resolve_gpu_request normalisation, env override, and auto gating."""
+
+    @pytest.fixture(autouse=True)
+    def _clear_env(self, monkeypatch):
+        monkeypatch.delenv("HIP_CARGO_GPUS", raising=False)
+
+    @pytest.mark.unit
+    def test_false_is_none(self):
+        assert _resolve_gpu_request(False, "docker") is None
+
+    @pytest.mark.unit
+    def test_true_is_all(self):
+        assert _resolve_gpu_request(True, "docker") == "all"
+
+    @pytest.mark.unit
+    def test_string_all_and_none(self):
+        assert _resolve_gpu_request("all", "docker") == "all"
+        assert _resolve_gpu_request("none", "docker") is None
+
+    @pytest.mark.unit
+    def test_device_spec_passthrough(self):
+        assert _resolve_gpu_request("device=0,1", "docker") == "device=0,1"
+
+    @pytest.mark.unit
+    def test_env_override_wins(self, monkeypatch):
+        monkeypatch.setenv("HIP_CARGO_GPUS", "none")
+        assert _resolve_gpu_request(True, "docker") is None
+
+    @pytest.mark.unit
+    def test_env_override_to_all(self, monkeypatch):
+        from hip_cargo.utils.runner import _resolve_gpu_request
+
+        monkeypatch.setenv("HIP_CARGO_GPUS", "all")
+        assert _resolve_gpu_request(False, "docker") == "all"
+
+    @pytest.mark.unit
+    def test_auto_docker_requires_gpu_and_toolkit(self, monkeypatch):
+        from hip_cargo.utils import runner
+
+        monkeypatch.setattr(runner, "_gpu_available", lambda: True)
+        monkeypatch.setattr(runner, "_toolkit_available", lambda: True)
+        assert runner._resolve_gpu_request("auto", "docker") == "all"
+
+        monkeypatch.setattr(runner, "_toolkit_available", lambda: False)
+        assert runner._resolve_gpu_request("auto", "docker") is None
+
+        monkeypatch.setattr(runner, "_gpu_available", lambda: False)
+        monkeypatch.setattr(runner, "_toolkit_available", lambda: True)
+        assert runner._resolve_gpu_request("auto", "docker") is None
+
+    @pytest.mark.unit
+    def test_auto_apptainer_needs_only_gpu(self, monkeypatch):
+        from hip_cargo.utils import runner
+
+        monkeypatch.setattr(runner, "_gpu_available", lambda: True)
+        monkeypatch.setattr(runner, "_toolkit_available", lambda: False)
+        assert runner._resolve_gpu_request("auto", "apptainer") == "all"
+        assert runner._resolve_gpu_request("auto", "singularity") == "all"
+
+    @pytest.mark.unit
+    def test_gpu_available_detects_nvidia_smi(self, monkeypatch):
+        from hip_cargo.utils import runner
+
+        monkeypatch.setattr(
+            runner.shutil, "which", lambda name: "/usr/bin/nvidia-smi" if name == "nvidia-smi" else None
+        )
+        monkeypatch.setattr(runner.os.path, "exists", lambda p: False)
+        assert runner._gpu_available() is True
+
+    @pytest.mark.unit
+    def test_gpu_available_false_when_absent(self, monkeypatch):
+        from hip_cargo.utils import runner
+
+        monkeypatch.setattr(runner.shutil, "which", lambda name: None)
+        monkeypatch.setattr(runner.os.path, "exists", lambda p: False)
+        assert runner._gpu_available() is False
+
+    @pytest.mark.unit
+    def test_gpu_available_detects_dev_node(self, monkeypatch):
+        from hip_cargo.utils import runner
+
+        monkeypatch.setattr(runner.shutil, "which", lambda name: None)
+        monkeypatch.setattr(runner.os.path, "exists", lambda p: p == "/dev/nvidia0")
+        assert runner._gpu_available() is True
+
     @pytest.mark.unit
     def test_walks_past_a_broken_symlink(self, tmp_path):
         """A broken symlink at an intermediate position is walked past."""
@@ -888,3 +977,254 @@ class TestResolveMountsAccessParent:
         mounts = _resolve_mounts(func, {"output_dir": output_dir})
         assert str(tmp_path) in mounts
         assert mounts[str(tmp_path)] is True
+
+
+class TestGpuArgs:
+    """Test _gpu_args per-runtime flag mapping."""
+
+    @pytest.mark.unit
+    def test_none_spec_yields_nothing(self):
+        assert _gpu_args("docker", None) == ([], {})
+        assert _gpu_args("apptainer", None) == ([], {})
+
+    @pytest.mark.unit
+    def test_docker_all(self):
+        assert _gpu_args("docker", "all") == (["--gpus", "all"], {})
+
+    @pytest.mark.unit
+    def test_docker_device_spec_passthrough(self):
+        assert _gpu_args("docker", "device=0,1") == (["--gpus", "device=0,1"], {})
+
+    @pytest.mark.unit
+    def test_docker_bare_index_list_normalised_to_device_form(self):
+        # A bare "0,1" is invalid for docker --gpus; it gets the device= prefix.
+        assert _gpu_args("docker", "0,1") == (["--gpus", "device=0,1"], {})
+
+    @pytest.mark.unit
+    def test_docker_single_integer_is_count_not_index(self):
+        # A single integer is a GPU *count* for docker; leave it untouched.
+        assert _gpu_args("docker", "2") == (["--gpus", "2"], {})
+
+    @pytest.mark.unit
+    def test_podman_cdi_all(self):
+        assert _gpu_args("podman", "all") == (["--device", "nvidia.com/gpu=all"], {})
+
+    @pytest.mark.unit
+    def test_apptainer_nv_all(self):
+        assert _gpu_args("apptainer", "all") == (["--nv"], {})
+
+    @pytest.mark.unit
+    def test_singularity_nv_all(self):
+        assert _gpu_args("singularity", "all") == (["--nv"], {})
+
+    @pytest.mark.unit
+    def test_apptainer_device_spec_sets_cuda_env(self):
+        args, env = _gpu_args("apptainer", "device=0,1")
+        assert args == ["--nv"]
+        assert env == {"CUDA_VISIBLE_DEVICES": "0,1"}
+
+    @pytest.mark.unit
+    def test_apptainer_bare_device_spec_sets_cuda_env(self):
+        args, env = _gpu_args("apptainer", "0,1")
+        assert args == ["--nv"]
+        assert env == {"CUDA_VISIBLE_DEVICES": "0,1"}
+
+
+class TestBuildContainerCmdGpuRunArgs:
+    """Test gpu_args / run_args placement in _build_container_cmd."""
+
+    @pytest.mark.unit
+    def test_docker_gpu_and_run_args_after_subcommand(self):
+        from hip_cargo.utils.runner import _build_container_cmd
+
+        cmd = _build_container_cmd(
+            "docker",
+            "img:latest",
+            {},
+            "/work",
+            ["pkg", "cmd"],
+            gpu_args=["--gpus", "all"],
+            run_args=["--ipc=host"],
+        )
+        # run is at index 1; gpu+run args follow the -w <cwd> block, before the image
+        assert cmd[0:2] == ["docker", "run"]
+        assert "--gpus" in cmd and "all" in cmd
+        assert "--ipc=host" in cmd
+        # gpu args precede the image reference
+        assert cmd.index("--gpus") < cmd.index("img:latest")
+        assert cmd.index("--ipc=host") < cmd.index("img:latest")
+
+    @pytest.mark.unit
+    def test_apptainer_gpu_and_run_args_after_exec(self):
+        from hip_cargo.utils.runner import _build_container_cmd
+
+        cmd = _build_container_cmd(
+            "apptainer",
+            "img:latest",
+            {},
+            "/work",
+            ["pkg", "cmd"],
+            gpu_args=["--nv"],
+            run_args=["--ipc=host"],
+        )
+        assert cmd[0:2] == ["apptainer", "exec"]
+        assert "--nv" in cmd
+        assert "--ipc=host" in cmd
+        assert cmd.index("--nv") < cmd.index("docker://img:latest")
+
+    @pytest.mark.unit
+    def test_no_gpu_or_run_args_is_unchanged(self):
+        import os
+
+        from hip_cargo.utils.runner import _build_container_cmd
+
+        cmd = _build_container_cmd("docker", "img:latest", {}, "/work", ["pkg"])
+        assert "--gpus" not in cmd
+        assert cmd[0:2] == ["docker", "run"]
+        assert cmd == [
+            "docker",
+            "run",
+            "--rm",
+            "--user",
+            f"{os.getuid()}:{os.getgid()}",
+            "-w",
+            "/work",
+            "img:latest",
+            "pkg",
+        ]
+
+
+class TestRunInContainerGpu:
+    """Test run_in_container threads GPU/run-args/env into the command."""
+
+    @pytest.fixture(autouse=True)
+    def _clean_env(self, monkeypatch):
+        monkeypatch.delenv("HIP_CARGO_GPUS", raising=False)
+        monkeypatch.delenv("HIP_CARGO_RUN_ARGS", raising=False)
+        monkeypatch.delenv("CUDA_VISIBLE_DEVICES", raising=False)
+
+    def _make_func(self):
+        from hip_cargo.utils.decorators import stimela_cab
+
+        @stimela_cab(name="test-cmd", info="test")
+        def func(input_file: Annotated[File, typer.Option(..., parser=Path, help="input")]):
+            pass
+
+        return func
+
+    @pytest.mark.unit
+    def test_declared_gpu_adds_docker_flag(self, tmp_path, monkeypatch):
+        from hip_cargo.utils import runner
+
+        func = self._make_func()
+        input_file = tmp_path / "data.ms"
+        input_file.touch()
+
+        monkeypatch.setattr(runner, "get_container_gpu", lambda import_name: True)
+        monkeypatch.setattr(runner, "get_container_run_args", lambda import_name, rt: [])
+        with (
+            patch("hip_cargo.utils.runner._detect_runtime", return_value="docker"),
+            patch("hip_cargo.utils.runner.subprocess.run") as mock_run,
+            patch("hip_cargo.utils.runner.sys") as mock_sys,
+        ):
+            mock_sys.argv = ["/usr/bin/test-cmd", "--input-file", str(input_file)]
+            runner.run_in_container(func, {"input_file": input_file}, image="img:v1", backend="docker")
+
+        cmd = mock_run.call_args[0][0]
+        assert "--gpus" in cmd
+        assert cmd[cmd.index("--gpus") + 1] == "all"
+
+    @pytest.mark.unit
+    def test_full_container_command_is_printed(self, tmp_path, monkeypatch, capsys):
+        from hip_cargo.utils import runner
+
+        func = self._make_func()
+        input_file = tmp_path / "data.ms"
+        input_file.touch()
+
+        monkeypatch.setattr(runner, "get_container_gpu", lambda import_name: True)
+        monkeypatch.setattr(runner, "get_container_run_args", lambda import_name, rt: [])
+        with (
+            patch("hip_cargo.utils.runner._detect_runtime", return_value="docker"),
+            patch("hip_cargo.utils.runner.subprocess.run"),
+            patch("hip_cargo.utils.runner.sys") as mock_sys,
+        ):
+            mock_sys.argv = ["/usr/bin/test-cmd", "--input-file", str(input_file)]
+            runner.run_in_container(func, {"input_file": input_file}, image="img:v1", backend="docker")
+
+        out = capsys.readouterr().out
+        assert "Full command:" in out
+        assert "--gpus all" in out
+
+    @pytest.mark.unit
+    def test_full_command_redacts_forwarded_credentials(self, tmp_path, monkeypatch, capsys):
+        from hip_cargo.utils import runner
+
+        func = self._make_func()
+        input_file = tmp_path / "data.ms"
+        input_file.touch()
+
+        monkeypatch.setattr(runner, "get_container_gpu", lambda import_name: True)
+        monkeypatch.setattr(runner, "get_container_run_args", lambda import_name, rt: [])
+        # Force a forwarded AWS secret into the command.
+        monkeypatch.setattr(
+            runner, "_build_credential_env", lambda protocols, env: {"AWS_SECRET_ACCESS_KEY": "supersecret"}
+        )
+        with (
+            patch("hip_cargo.utils.runner._detect_runtime", return_value="docker"),
+            patch("hip_cargo.utils.runner.subprocess.run"),
+            patch("hip_cargo.utils.runner.sys") as mock_sys,
+        ):
+            mock_sys.argv = ["/usr/bin/test-cmd", "--input-file", str(input_file)]
+            runner.run_in_container(func, {"input_file": input_file}, image="img:v1", backend="docker")
+
+        out = capsys.readouterr().out
+        assert "supersecret" not in out
+        assert "AWS_SECRET_ACCESS_KEY=<redacted>" in out
+        assert "--gpus all" in out  # non-secret flags still visible
+
+    @pytest.mark.unit
+    def test_run_args_env_override_appends(self, tmp_path, monkeypatch):
+        from hip_cargo.utils import runner
+
+        func = self._make_func()
+        input_file = tmp_path / "data.ms"
+        input_file.touch()
+
+        monkeypatch.setattr(runner, "get_container_gpu", lambda import_name: False)
+        monkeypatch.setattr(runner, "get_container_run_args", lambda import_name, rt: ["--shm-size=1g"])
+        monkeypatch.setenv("HIP_CARGO_RUN_ARGS", "--ipc=host")
+        with (
+            patch("hip_cargo.utils.runner._detect_runtime", return_value="docker"),
+            patch("hip_cargo.utils.runner.subprocess.run") as mock_run,
+            patch("hip_cargo.utils.runner.sys") as mock_sys,
+        ):
+            mock_sys.argv = ["/usr/bin/test-cmd", "--input-file", str(input_file)]
+            runner.run_in_container(func, {"input_file": input_file}, image="img:v1", backend="docker")
+
+        cmd = mock_run.call_args[0][0]
+        assert "--shm-size=1g" in cmd
+        assert "--ipc=host" in cmd
+
+    @pytest.mark.unit
+    def test_host_cuda_visible_devices_forwarded(self, tmp_path, monkeypatch):
+        from hip_cargo.utils import runner
+
+        func = self._make_func()
+        input_file = tmp_path / "data.ms"
+        input_file.touch()
+
+        monkeypatch.setattr(runner, "get_container_gpu", lambda import_name: True)
+        monkeypatch.setattr(runner, "get_container_run_args", lambda import_name, rt: [])
+        monkeypatch.setenv("CUDA_VISIBLE_DEVICES", "1")
+        with (
+            patch("hip_cargo.utils.runner._detect_runtime", return_value="docker"),
+            patch("hip_cargo.utils.runner.subprocess.run") as mock_run,
+            patch("hip_cargo.utils.runner.sys") as mock_sys,
+        ):
+            mock_sys.argv = ["/usr/bin/test-cmd", "--input-file", str(input_file)]
+            runner.run_in_container(func, {"input_file": input_file}, image="img:v1", backend="docker")
+
+        cmd = mock_run.call_args[0][0]
+        assert "-e" in cmd
+        assert "CUDA_VISIBLE_DEVICES=1" in cmd

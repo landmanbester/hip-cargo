@@ -1,6 +1,7 @@
 """Container fallback execution for hip-cargo CLI commands."""
 
 import os
+import shlex
 import shutil
 import subprocess
 import sys
@@ -10,6 +11,7 @@ from pathlib import Path, PurePath
 
 from upath import UPath
 
+from hip_cargo.utils.config import get_container_gpu, get_container_run_args
 from hip_cargo.utils.metadata import StimelaMeta
 
 CONTAINER_RUNTIMES = ["apptainer", "singularity", "docker", "podman"]
@@ -60,14 +62,43 @@ def run_in_container(
     mounts[cwd] = True
     cli_args = _build_argv_with_native_backend()
 
+    # Resolve GPU passthrough and per-backend extra run-args declared by the
+    # package in its _container_image module, with env overrides.
+    import_name = func.__module__.split(".")[0]
+    gpu_spec = _resolve_gpu_request(get_container_gpu(import_name), runtime)
+    gpu_args, gpu_env = _gpu_args(runtime, gpu_spec)
+    run_args = list(get_container_run_args(import_name, runtime))
+    extra_run_args = os.environ.get("HIP_CARGO_RUN_ARGS")
+    if extra_run_args:
+        run_args.extend(shlex.split(extra_run_args))
+
+    # Forward host CUDA_VISIBLE_DEVICES into the container; an explicit device
+    # spec (apptainer/singularity) takes precedence.
+    run_env = dict(cred_env)
+    host_cvd = os.environ.get("CUDA_VISIBLE_DEVICES")
+    if host_cvd is not None:
+        run_env.setdefault("CUDA_VISIBLE_DEVICES", host_cvd)
+    run_env.update(gpu_env)
+
     if always_pull_images:
         _pull_image(runtime, image)
 
-    cmd = _build_container_cmd(runtime, image, mounts, cwd, cli_args, cred_env=cred_env, cred_mounts=cred_mounts)
+    cmd = _build_container_cmd(
+        runtime,
+        image,
+        mounts,
+        cwd,
+        cli_args,
+        cred_env=run_env,
+        cred_mounts=cred_mounts,
+        gpu_args=gpu_args,
+        run_args=run_args,
+    )
 
     print(f"Falling back to container execution ({runtime})")
     print(f"  Image: {image}")
     print(f"  Command: {' '.join(cli_args)}")
+    print(f"  Full command: {shlex.join(_redact_cmd_for_display(cmd))}")
     subprocess.run(cmd, check=True)
 
 
@@ -595,6 +626,115 @@ def _build_argv_with_native_backend() -> list[str]:
     return args
 
 
+def _gpu_available() -> bool:
+    """Return True if a GPU is plausibly present on the host."""
+    return shutil.which("nvidia-smi") is not None or os.path.exists("/dev/nvidia0")
+
+
+def _toolkit_available() -> bool:
+    """Return True if the NVIDIA container toolkit is plausibly installed."""
+    return shutil.which("nvidia-ctk") is not None or shutil.which("nvidia-container-runtime") is not None
+
+
+def _resolve_gpu_request(gpu_setting: bool | str, runtime: str) -> str | None:
+    """Resolve the effective GPU spec for a runtime.
+
+    Precedence: the ``HIP_CARGO_GPUS`` env var overrides ``gpu_setting``.
+
+    Returns:
+        ``None`` for no GPU, ``"all"`` to request all devices, or a raw
+        device-spec string (the runtime's native syntax).
+    """
+    raw: bool | str | None = os.environ.get("HIP_CARGO_GPUS")
+    if raw is None:
+        raw = gpu_setting
+
+    if raw is True:
+        token = "all"
+    elif raw is False or raw is None:
+        token = "none"
+    else:
+        token = str(raw).strip()
+
+    low = token.lower()
+    if low in ("", "none", "false", "0"):
+        return None
+    if low in ("all", "true"):
+        return "all"
+    if low == "auto":
+        if not _gpu_available():
+            return None
+        if runtime in ("docker", "podman") and not _toolkit_available():
+            return None
+        return "all"
+    return token  # explicit device spec, in the runtime's native syntax
+
+
+def _docker_gpu_spec(spec: str) -> str:
+    """Normalise a GPU spec for docker's ``--gpus``.
+
+    A bare comma-separated index list (e.g. ``"0,1"``) is not a valid
+    ``--gpus`` value, so wrap it in docker's ``device=`` form — this lets the
+    same bare-index spec work on docker as on apptainer/singularity. ``"all"``,
+    a single integer (which docker reads as a GPU *count*, not an index), and an
+    already-``device=``-prefixed spec pass through unchanged.
+    """
+    if spec.startswith("device="):
+        return spec
+    parts = spec.split(",")
+    if len(parts) > 1 and all(p.strip().isdigit() for p in parts):
+        return f"device={spec}"
+    return spec
+
+
+def _gpu_args(runtime: str, gpu_spec: str | None) -> tuple[list[str], dict[str, str]]:
+    """Map a resolved GPU spec to runtime flags and any extra env.
+
+    Args:
+        runtime: Container runtime name.
+        gpu_spec: ``None`` (no GPU), ``"all"``, or a device-spec string.
+
+    Returns:
+        ``(flags, env)`` where ``flags`` are inserted after the run/exec
+        subcommand and ``env`` is merged into the forwarded environment
+        (used to translate device specs for apptainer/singularity).
+    """
+    if gpu_spec is None:
+        return [], {}
+    if runtime == "docker":
+        return ["--gpus", _docker_gpu_spec(gpu_spec)], {}
+    if runtime == "podman":
+        return ["--device", f"nvidia.com/gpu={gpu_spec}"], {}
+    if runtime in ("apptainer", "singularity"):
+        env: dict[str, str] = {}
+        if gpu_spec != "all":
+            # --nv selects all visible devices; narrow via CUDA_VISIBLE_DEVICES.
+            env["CUDA_VISIBLE_DEVICES"] = gpu_spec.removeprefix("device=")
+        return ["--nv"], env
+    return [], {}
+
+
+def _redact_cmd_for_display(cmd: list[str]) -> list[str]:
+    """Return a copy of ``cmd`` with forwarded credential env values masked.
+
+    The assembled command embeds forwarded env vars as ``-e VAR=value`` (docker/
+    podman) or ``--env VAR=value`` (apptainer/singularity). Credential values
+    (AWS/GCS/Azure secrets) must never be printed to stdout or CI logs, so mask
+    the value of any key in the credential set. Non-credential env (e.g.
+    ``CUDA_VISIBLE_DEVICES``) and all flags are left untouched.
+    """
+    sensitive = {var for vars_ in _CREDENTIAL_ENV_VARS.values() for var in vars_}
+    redacted: list[str] = []
+    for i, tok in enumerate(cmd):
+        if i > 0 and cmd[i - 1] in ("-e", "--env") and "=" in tok:
+            key = tok.split("=", 1)[0]
+            if key in sensitive:
+                redacted.append(f"{key}=<redacted>")
+                continue
+        redacted.append(tok)
+    return redacted
+
+
 def _build_container_cmd(
     runtime: str,
     image: str,
@@ -603,6 +743,8 @@ def _build_container_cmd(
     cli_args: list[str],
     cred_env: dict[str, str] | None = None,
     cred_mounts: dict[str, bool] | None = None,
+    gpu_args: list[str] | None = None,
+    run_args: list[str] | None = None,
 ) -> list[str]:
     """Assemble the full container execution command.
 
@@ -614,13 +756,17 @@ def _build_container_cmd(
         cli_args: The CLI command + arguments to run inside the container.
         cred_env: Optional env vars to forward into the container (e.g. cloud creds).
         cred_mounts: Optional read-only credential mounts merged with ``mounts``.
+        gpu_args: Optional GPU-passthrough flags, inserted after the run/exec subcommand.
+        run_args: Optional extra runtime args, inserted after ``gpu_args``.
     """
     cred_env = cred_env or {}
     cred_mounts = cred_mounts or {}
+    gpu_args = gpu_args or []
+    run_args = run_args or []
     all_mounts = {**mounts, **cred_mounts}
 
     if runtime in ("apptainer", "singularity"):
-        cmd = [runtime, "exec", "--pwd", cwd]
+        cmd = [runtime, "exec", "--pwd", cwd, *gpu_args, *run_args]
         for path, rw in sorted(all_mounts.items()):
             mode = "rw" if rw else "ro"
             cmd.extend(["--bind", f"{path}:{path}:{mode}"])
@@ -633,7 +779,7 @@ def _build_container_cmd(
     else:  # docker, podman
         # Run as current user so output files have correct ownership
         uid_gid = f"{os.getuid()}:{os.getgid()}"
-        cmd = [runtime, "run", "--rm", "--user", uid_gid, "-w", cwd]
+        cmd = [runtime, "run", "--rm", "--user", uid_gid, "-w", cwd, *gpu_args, *run_args]
         for path, rw in sorted(all_mounts.items()):
             mode = "rw" if rw else "ro"
             cmd.extend(["-v", f"{path}:{path}:{mode}"])

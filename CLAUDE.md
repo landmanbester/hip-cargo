@@ -26,7 +26,7 @@ uv run ruff format . && uv run ruff check . --fix
 hip-cargo/
 ├── src/hip_cargo/
 │   ├── __init__.py           # Exports decorators, list types, and parsers
-│   ├── _container_image.py   # Container image URL (single source of truth)
+│   ├── _container_image.py   # Container image URL + optional GPU/RUN_ARGS_* (single source of truth)
 │   ├── cabs/                 # Generated cab definitions (YAML)
 │   │   ├── __init__.py
 │   │   ├── generate_cabs.yml
@@ -59,7 +59,7 @@ hip-cargo/
 │   └── utils/                # Shared utilities
 │       ├── __init__.py
 │       ├── cab_to_function.py   # Generate function from cab YAML
-│       ├── config.py            # Container image URL from _container_image.py
+│       ├── config.py            # Container image URL + GPU/RUN_ARGS readers from _container_image.py
 │       ├── decorators.py        # @stimela_cab, @stimela_output
 │       ├── introspector.py      # Extract metadata from functions
 │       ├── runner.py            # Container fallback execution
