@@ -3,7 +3,7 @@
 Read this when editing `tests/**/*.py` or `.github/workflows/*.yml` files.
 
 ## 1. Test Infrastructure & Execution
-* All tests must use `tempfile.TemporaryDirectory()` for isolated temporary file handling.
+* Tests must isolate temporary files using pytest's `tmp_path` / `tmp_path_factory` fixtures (preferred) or `tempfile.TemporaryDirectory()`.
 * No test artifacts should ever be written to the repository directory.
 * Tests must automatically clean up after themselves.
 * Comment preservation is a core feature and must be tested through multiple roundtrip scenarios.

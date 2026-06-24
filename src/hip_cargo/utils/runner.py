@@ -98,7 +98,7 @@ def run_in_container(
     print(f"Falling back to container execution ({runtime})")
     print(f"  Image: {image}")
     print(f"  Command: {' '.join(cli_args)}")
-    print(f"  Full command: {shlex.join(cmd)}")
+    print(f"  Full command: {shlex.join(_redact_cmd_for_display(cmd))}")
     subprocess.run(cmd, check=True)
 
 
@@ -695,6 +695,27 @@ def _gpu_args(runtime: str, gpu_spec: str | None) -> tuple[list[str], dict[str, 
             env["CUDA_VISIBLE_DEVICES"] = gpu_spec.removeprefix("device=")
         return ["--nv"], env
     return [], {}
+
+
+def _redact_cmd_for_display(cmd: list[str]) -> list[str]:
+    """Return a copy of ``cmd`` with forwarded credential env values masked.
+
+    The assembled command embeds forwarded env vars as ``-e VAR=value`` (docker/
+    podman) or ``--env VAR=value`` (apptainer/singularity). Credential values
+    (AWS/GCS/Azure secrets) must never be printed to stdout or CI logs, so mask
+    the value of any key in the credential set. Non-credential env (e.g.
+    ``CUDA_VISIBLE_DEVICES``) and all flags are left untouched.
+    """
+    sensitive = {var for vars_ in _CREDENTIAL_ENV_VARS.values() for var in vars_}
+    redacted: list[str] = []
+    for i, tok in enumerate(cmd):
+        if i > 0 and cmd[i - 1] in ("-e", "--env") and "=" in tok:
+            key = tok.split("=", 1)[0]
+            if key in sensitive:
+                redacted.append(f"{key}=<redacted>")
+                continue
+        redacted.append(tok)
+    return redacted
 
 
 def _build_container_cmd(

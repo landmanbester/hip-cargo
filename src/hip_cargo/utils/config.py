@@ -83,8 +83,20 @@ def get_container_run_args(import_name: str, runtime: str) -> list[str]:
 
     Returns:
         A list of extra arguments, or an empty list if none are declared.
+
+    Raises:
+        TypeError: If the declared ``RUN_ARGS_<RUNTIME>`` is not a list/tuple
+            (e.g. a bare string), which would otherwise be silently split into
+            characters and produce a broken container command.
     """
     mod = _load_container_image_module(import_name)
     if mod is None:
         return []
-    return list(getattr(mod, f"RUN_ARGS_{runtime.upper()}", []))
+    const_name = f"RUN_ARGS_{runtime.upper()}"
+    value = getattr(mod, const_name, [])
+    if not isinstance(value, (list, tuple)):
+        raise TypeError(
+            f"{const_name} in {import_name}._container_image must be a list of strings, "
+            f"got {type(value).__name__}: {value!r}"
+        )
+    return list(value)

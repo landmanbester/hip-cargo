@@ -1147,6 +1147,33 @@ class TestRunInContainerGpu:
         assert "--gpus all" in out
 
     @pytest.mark.unit
+    def test_full_command_redacts_forwarded_credentials(self, tmp_path, monkeypatch, capsys):
+        from hip_cargo.utils import runner
+
+        func = self._make_func()
+        input_file = tmp_path / "data.ms"
+        input_file.touch()
+
+        monkeypatch.setattr(runner, "get_container_gpu", lambda import_name: True)
+        monkeypatch.setattr(runner, "get_container_run_args", lambda import_name, rt: [])
+        # Force a forwarded AWS secret into the command.
+        monkeypatch.setattr(
+            runner, "_build_credential_env", lambda protocols, env: {"AWS_SECRET_ACCESS_KEY": "supersecret"}
+        )
+        with (
+            patch("hip_cargo.utils.runner._detect_runtime", return_value="docker"),
+            patch("hip_cargo.utils.runner.subprocess.run"),
+            patch("hip_cargo.utils.runner.sys") as mock_sys,
+        ):
+            mock_sys.argv = ["/usr/bin/test-cmd", "--input-file", str(input_file)]
+            runner.run_in_container(func, {"input_file": input_file}, image="img:v1", backend="docker")
+
+        out = capsys.readouterr().out
+        assert "supersecret" not in out
+        assert "AWS_SECRET_ACCESS_KEY=<redacted>" in out
+        assert "--gpus all" in out  # non-secret flags still visible
+
+    @pytest.mark.unit
     def test_run_args_env_override_appends(self, tmp_path, monkeypatch):
         from hip_cargo.utils import runner
 

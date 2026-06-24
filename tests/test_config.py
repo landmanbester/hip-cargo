@@ -79,3 +79,16 @@ class TestGetContainerRunArgs:
         assert get_container_run_args("fakeargpkg", "apptainer") == ["--ipc=host"]
         # A backend with no constant declared falls back to [].
         assert get_container_run_args("fakeargpkg", "docker") == []
+
+    @pytest.mark.unit
+    def test_string_run_args_raises_typeerror(self, monkeypatch):
+        import sys
+        import types
+
+        mod = types.ModuleType("badargpkg._container_image")
+        mod.CONTAINER_IMAGE = "ghcr.io/x/badargpkg:latest"
+        mod.RUN_ARGS_DOCKER = "--ipc=host"  # mistake: a bare string, not a list
+        monkeypatch.setitem(sys.modules, "badargpkg._container_image", mod)
+        monkeypatch.setitem(sys.modules, "badargpkg", types.ModuleType("badargpkg"))
+        with pytest.raises(TypeError, match="RUN_ARGS_DOCKER"):
+            get_container_run_args("badargpkg", "docker")
