@@ -996,6 +996,16 @@ class TestGpuArgs:
         assert _gpu_args("docker", "device=0,1") == (["--gpus", "device=0,1"], {})
 
     @pytest.mark.unit
+    def test_docker_bare_index_list_normalised_to_device_form(self):
+        # A bare "0,1" is invalid for docker --gpus; it gets the device= prefix.
+        assert _gpu_args("docker", "0,1") == (["--gpus", "device=0,1"], {})
+
+    @pytest.mark.unit
+    def test_docker_single_integer_is_count_not_index(self):
+        # A single integer is a GPU *count* for docker; leave it untouched.
+        assert _gpu_args("docker", "2") == (["--gpus", "2"], {})
+
+    @pytest.mark.unit
     def test_podman_cdi_all(self):
         assert _gpu_args("podman", "all") == (["--device", "nvidia.com/gpu=all"], {})
 

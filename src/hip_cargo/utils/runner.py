@@ -670,6 +670,23 @@ def _resolve_gpu_request(gpu_setting: bool | str, runtime: str) -> str | None:
     return token  # explicit device spec, in the runtime's native syntax
 
 
+def _docker_gpu_spec(spec: str) -> str:
+    """Normalise a GPU spec for docker's ``--gpus``.
+
+    A bare comma-separated index list (e.g. ``"0,1"``) is not a valid
+    ``--gpus`` value, so wrap it in docker's ``device=`` form — this lets the
+    same bare-index spec work on docker as on apptainer/singularity. ``"all"``,
+    a single integer (which docker reads as a GPU *count*, not an index), and an
+    already-``device=``-prefixed spec pass through unchanged.
+    """
+    if spec.startswith("device="):
+        return spec
+    parts = spec.split(",")
+    if len(parts) > 1 and all(p.strip().isdigit() for p in parts):
+        return f"device={spec}"
+    return spec
+
+
 def _gpu_args(runtime: str, gpu_spec: str | None) -> tuple[list[str], dict[str, str]]:
     """Map a resolved GPU spec to runtime flags and any extra env.
 
@@ -685,7 +702,7 @@ def _gpu_args(runtime: str, gpu_spec: str | None) -> tuple[list[str], dict[str, 
     if gpu_spec is None:
         return [], {}
     if runtime == "docker":
-        return ["--gpus", gpu_spec], {}
+        return ["--gpus", _docker_gpu_spec(gpu_spec)], {}
     if runtime == "podman":
         return ["--device", f"nvidia.com/gpu={gpu_spec}"], {}
     if runtime in ("apptainer", "singularity"):
