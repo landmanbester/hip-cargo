@@ -1125,6 +1125,28 @@ class TestRunInContainerGpu:
         assert cmd[cmd.index("--gpus") + 1] == "all"
 
     @pytest.mark.unit
+    def test_full_container_command_is_printed(self, tmp_path, monkeypatch, capsys):
+        from hip_cargo.utils import runner
+
+        func = self._make_func()
+        input_file = tmp_path / "data.ms"
+        input_file.touch()
+
+        monkeypatch.setattr(runner, "get_container_gpu", lambda import_name: True)
+        monkeypatch.setattr(runner, "get_container_run_args", lambda import_name, rt: [])
+        with (
+            patch("hip_cargo.utils.runner._detect_runtime", return_value="docker"),
+            patch("hip_cargo.utils.runner.subprocess.run"),
+            patch("hip_cargo.utils.runner.sys") as mock_sys,
+        ):
+            mock_sys.argv = ["/usr/bin/test-cmd", "--input-file", str(input_file)]
+            runner.run_in_container(func, {"input_file": input_file}, image="img:v1", backend="docker")
+
+        out = capsys.readouterr().out
+        assert "Full command:" in out
+        assert "--gpus all" in out
+
+    @pytest.mark.unit
     def test_run_args_env_override_appends(self, tmp_path, monkeypatch):
         from hip_cargo.utils import runner
 

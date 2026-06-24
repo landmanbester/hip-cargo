@@ -98,6 +98,7 @@ def run_in_container(
     print(f"Falling back to container execution ({runtime})")
     print(f"  Image: {image}")
     print(f"  Command: {' '.join(cli_args)}")
+    print(f"  Full command: {shlex.join(cmd)}")
     subprocess.run(cmd, check=True)
 
 
