@@ -2,6 +2,7 @@
 
 import tempfile
 from pathlib import Path
+from typing import Annotated
 
 import libcst as cst
 import yaml
@@ -323,6 +324,218 @@ def test_listfloat(
         python_code = gen_file.read_text()
         assert "ListFloat" in python_code
         assert "parse_list_float" in python_code
+
+
+# --- Issue #82: list defaults must be consistent in both directions ---
+
+
+def test_parse_list_int_accepts_list_default():
+    """Typer applies the parser to defaults, so an already-parsed list passes through."""
+    assert parse_list_int([1, 2, 3]) == [1, 2, 3]
+
+
+def test_parse_list_float_accepts_list_default():
+    assert parse_list_float([1.5, 2.5]) == [1.5, 2.5]
+
+
+def test_parse_list_str_accepts_list_default():
+    """parse_list_str must not touch a list default (no split/strip)."""
+    default = ["a", "b ", "c*"]
+    assert parse_list_str(default) == ["a", "b ", "c*"]
+
+
+def test_introspector_liststr_string_default_becomes_list():
+    """A comma-separated string default renders as a proper list in the cab YAML."""
+    code = """
+from typing import Annotated
+import typer
+from hip_cargo.utils.types import ListStr, parse_list_str
+
+def foo(
+    names: Annotated[
+        ListStr,
+        typer.Option(parser=parse_list_str, help="Names"),
+    ] = "a,b,c",
+):
+    pass
+"""
+    cst_tree = cst.parse_module(code)
+    cst_param = cst_tree.body[-1].params.params[0]
+
+    _, input_def = extract_input_libcst(cst_param)
+
+    assert input_def["dtype"] == "List[str]"
+    assert input_def["default"] == ["a", "b", "c"]
+
+
+def test_introspector_listint_string_default_becomes_list():
+    """String defaults for ListInt are coerced to a list of ints."""
+    code = """
+from typing import Annotated
+import typer
+from hip_cargo.utils.types import ListInt, parse_list_int
+
+def foo(
+    indices: Annotated[
+        ListInt,
+        typer.Option(parser=parse_list_int, help="Indices"),
+    ] = "0, 1, 2",
+):
+    pass
+"""
+    cst_tree = cst.parse_module(code)
+    cst_param = cst_tree.body[-1].params.params[0]
+
+    _, input_def = extract_input_libcst(cst_param)
+
+    assert input_def["dtype"] == "List[int]"
+    assert input_def["default"] == [0, 1, 2]
+
+
+def test_introspector_listfloat_list_default_preserved():
+    """An actual list default is preserved as-is in the cab YAML."""
+    code = """
+from typing import Annotated
+import typer
+from hip_cargo.utils.types import ListFloat, parse_list_float
+
+def foo(
+    weights: Annotated[
+        ListFloat,
+        typer.Option(parser=parse_list_float, help="Weights"),
+    ] = [1.0, 2.0],
+):
+    pass
+"""
+    cst_tree = cst.parse_module(code)
+    cst_param = cst_tree.body[-1].params.params[0]
+
+    _, input_def = extract_input_libcst(cst_param)
+
+    assert input_def["dtype"] == "List[float]"
+    assert input_def["default"] == [1.0, 2.0]
+
+
+def test_generate_parameter_signature_liststr_list_default():
+    """List defaults in cab YAML render as Python list literals, not joined strings."""
+    param_def = {
+        "dtype": "List[str]",
+        "info": "Names",
+        "default": ["a", "b", "c"],
+    }
+    sig = generate_parameter_signature("names", param_def)
+
+    assert '] = ["a", "b", "c"],' in sig
+    assert "a,b,c" not in sig
+
+
+def test_generate_parameter_signature_listint_list_default():
+    param_def = {
+        "dtype": "List[int]",
+        "info": "Indices",
+        "default": [1, 2, 3],
+    }
+    sig = generate_parameter_signature("indices", param_def)
+
+    assert "] = [1, 2, 3]," in sig
+
+
+def test_generate_parameter_signature_legacy_string_default_becomes_list():
+    """A legacy comma-separated string default in cab YAML is normalized to a list."""
+    param_def = {
+        "dtype": "List[float]",
+        "info": "Weights",
+        "default": "1.0,2.0",
+    }
+    sig = generate_parameter_signature("weights", param_def)
+
+    assert "] = [1.0, 2.0]," in sig
+
+
+def test_roundtrip_liststr_default_consistency(tmp_path):
+    """CLI (string default) -> YAML (list default) -> CLI (list default) -> YAML is stable.
+
+    Reproduces the exact scenario from issue #82.
+    """
+    cli_dir = tmp_path / "src" / "test_pkg" / "cli"
+    cli_dir.mkdir(parents=True)
+    test_file = cli_dir / "test_listdefault.py"
+
+    test_code = '''from typing import Annotated
+
+import typer
+
+from hip_cargo.utils.decorators import stimela_cab
+from hip_cargo.utils.types import ListStr, parse_list_str
+
+
+@stimela_cab(
+    name="test_listdefault",
+    info="Test list defaults.",
+)
+def test_listdefault(
+    opt: Annotated[
+        ListStr,
+        typer.Option(parser=parse_list_str, help="Options"),
+    ] = "a,b,c",
+):
+    """Test command."""
+    pass
+'''
+    test_file.write_text(test_code)
+
+    # Step 1: CLI -> YAML. The string default must become a list.
+    generate_cabs([test_file], output_dir=tmp_path)
+    cab_file = tmp_path / "test_listdefault.yml"
+    data = yaml.safe_load(cab_file.read_text())
+    param = data["cabs"]["test_listdefault"]["inputs"]["opt"]
+    assert param["dtype"] == "List[str]"
+    assert param["default"] == ["a", "b", "c"]
+
+    # Step 2: YAML -> CLI. The default must be a list literal, not "a,b,c".
+    gen_dir = tmp_path / "regen" / "src" / "test_pkg" / "cli"
+    gen_dir.mkdir(parents=True)
+    gen_file = gen_dir / "test_listdefault.py"
+    generate_function(cab_file=cab_file, output_file=gen_file, config_file=Path("pyproject.toml"))
+    python_code = gen_file.read_text()
+    assert '= ["a", "b", "c"],' in python_code
+    assert '"a,b,c"' not in python_code
+
+    # Step 3: regenerated CLI -> YAML must be stable.
+    regen_out = tmp_path / "regen"
+    generate_cabs([gen_file], output_dir=regen_out)
+    data2 = yaml.safe_load((regen_out / "test_listdefault.yml").read_text())
+    param2 = data2["cabs"]["test_listdefault"]["inputs"]["opt"]
+    assert param2["default"] == ["a", "b", "c"]
+
+
+def test_list_default_parses_at_runtime():
+    """A generated-style signature with a list default works under typer."""
+    import typer
+    from typer.testing import CliRunner
+
+    from hip_cargo.utils.types import ListStr
+
+    app = typer.Typer()
+
+    @app.command()
+    def func(
+        opt: Annotated[
+            ListStr,
+            typer.Option(parser=parse_list_str),
+        ] = ["a", "b", "c"],
+    ):
+        print(f"opt={opt}")
+
+    runner = CliRunner()
+
+    result = runner.invoke(app, [])
+    assert result.exit_code == 0, result.output
+    assert "opt=['a', 'b', 'c']" in result.output
+
+    result = runner.invoke(app, ["--opt", "x, y"])
+    assert result.exit_code == 0, result.output
+    assert "opt=['x', 'y']" in result.output
 
 
 def test_generate_function_body_container_fallback_image():

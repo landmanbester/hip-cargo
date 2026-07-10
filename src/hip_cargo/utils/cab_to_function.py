@@ -26,6 +26,13 @@ CUSTOM_LIST_TYPES = {
     "ListStr": "List[str]",
 }
 
+# Element types for the comma-separated ListType dtypes
+LIST_DTYPE_ELEMENT_TYPES = {
+    "List[int]": int,
+    "List[float]": float,
+    "List[str]": str,
+}
+
 
 def extract_trailing_comment(text: str) -> tuple[str, str]:
     """
@@ -322,9 +329,11 @@ def generate_parameter_signature(
     list_type_name = STIMELA_DTYPE_TO_LIST_TYPE.get(lookup_dtype)
     if list_type_name:
         py_type = f"{list_type_name} | None" if is_optional else list_type_name
-        # Convert list defaults to comma-separated strings (ListType takes a string at CLI level)
-        if isinstance(default, list):
-            default = ",".join(str(v) for v in default)
+        # Normalize legacy comma-separated string defaults to lists so the
+        # generated signature carries a real list default (issue #82)
+        if isinstance(default, str):
+            element_type = LIST_DTYPE_ELEMENT_TYPES[lookup_dtype]
+            default = [element_type(x.strip()) for x in default.split(",")]
     else:
         # Determine Python type normally
         py_type = stimela_dtype_to_python_type(dtype, preserve_custom=True)
@@ -372,6 +381,8 @@ def generate_parameter_signature(
                     pass
             # Regular string
             return f'"{val}"'
+        elif isinstance(val, list):
+            return "[" + ", ".join(format_default(v) for v in val) + "]"
         else:
             return str(val)
 
