@@ -10,11 +10,27 @@ from libcst import matchers
 from upath import UPath
 
 from hip_cargo.utils.spec import CommandSpec, ModuleSpec, ParamSpec
+from hip_cargo.utils.types import LIST_DTYPE_PARSERS
 
 MS = NewType("MS", UPath)
 Directory = NewType("Directory", UPath)
 File = NewType("File", UPath)
 URI = NewType("URI", UPath)
+
+
+def _normalize_list_default(dtype: str, default: Any) -> Any:
+    """Coerce a comma-separated string default into a list for List dtypes.
+
+    Stimela validates defaults against the declared dtype, so a ``ListStr``
+    param with default ``"a,b,c"`` must render as ``[a, b, c]`` in the cab
+    YAML rather than the raw string (issue #82). Non-list dtypes and
+    already-list defaults are returned unchanged.
+    """
+    lookup = dtype[len("Optional[") : -1] if dtype.startswith("Optional[") and dtype.endswith("]") else dtype
+    parser = LIST_DTYPE_PARSERS.get(lookup)
+    if parser is None or not isinstance(default, str):
+        return default
+    return parser(default)
 
 
 def unwrap_optional_libcst(annotation_node: cst.CSTNode) -> cst.CSTNode:
@@ -305,7 +321,7 @@ def param_spec_to_cab_input(spec: ParamSpec) -> tuple[str, dict[str, Any]]:
             input_def["policies"]["repeat"] = "list"
     else:
         if spec.default is not None:
-            input_def["default"] = spec.default
+            input_def["default"] = _normalize_list_default(dtype, spec.default)
         if dtype == "list" or dtype == "List":
             input_def["policies"] = {}
             input_def["policies"]["repeat"] = "list"
