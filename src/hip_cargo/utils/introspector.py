@@ -10,18 +10,12 @@ from libcst import matchers
 from upath import UPath
 
 from hip_cargo.utils.spec import CommandSpec, ModuleSpec, ParamSpec
+from hip_cargo.utils.types import LIST_DTYPE_PARSERS
 
 MS = NewType("MS", UPath)
 Directory = NewType("Directory", UPath)
 File = NewType("File", UPath)
 URI = NewType("URI", UPath)
-
-# Element types for the comma-separated ListType dtypes
-LIST_DTYPE_ELEMENT_TYPES = {
-    "List[int]": int,
-    "List[float]": float,
-    "List[str]": str,
-}
 
 
 def _normalize_list_default(dtype: str, default: Any) -> Any:
@@ -33,10 +27,10 @@ def _normalize_list_default(dtype: str, default: Any) -> Any:
     already-list defaults are returned unchanged.
     """
     lookup = dtype[len("Optional[") : -1] if dtype.startswith("Optional[") and dtype.endswith("]") else dtype
-    element_type = LIST_DTYPE_ELEMENT_TYPES.get(lookup)
-    if element_type is None or not isinstance(default, str):
+    parser = LIST_DTYPE_PARSERS.get(lookup)
+    if parser is None or not isinstance(default, str):
         return default
-    return [element_type(x.strip()) for x in default.split(",")]
+    return parser(default)
 
 
 def unwrap_optional_libcst(annotation_node: cst.CSTNode) -> cst.CSTNode:

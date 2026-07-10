@@ -43,3 +43,13 @@ def parse_list_str(value: str | list[str]) -> list[str]:
 def parse_upath(value: str) -> UPath:
     """Parse a CLI string into a universal Path (local or remote URI)."""
     return UPath(value)
+
+
+# Map stimela List dtypes to their comma-separated-string parsers. Shared by
+# cab generation (introspector) and function generation (cab_to_function) so
+# whitespace and element-casting semantics cannot drift between the two paths.
+LIST_DTYPE_PARSERS = {
+    "List[int]": parse_list_int,
+    "List[float]": parse_list_float,
+    "List[str]": parse_list_str,
+}
