@@ -19,6 +19,7 @@ class EventType(StrEnum):
 
     STARTED = "started"
     PROGRESS = "progress"
+    DIAGNOSTIC = "diagnostic"
     LOG = "log"
     ARTIFACT = "artifact"
     METRIC = "metric"

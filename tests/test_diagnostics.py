@@ -12,6 +12,8 @@ from hip_cargo.utils.diagnostics import (
     consume_diagnostic_annotations,
     diagnostics_delta,
 )
+from hip_cargo.utils.progress import EventType, NullBackend, ProgressEvent, set_backend
+from hip_cargo.utils.progress_context import track_progress
 
 STDLIB_KEYS = {
     "wall_s",
@@ -68,3 +70,70 @@ def test_annotations_merge_and_clear_on_consume():
     got = consume_diagnostic_annotations()
     assert got == {"import_s": 1.5, "memory_mode": "greedy", "requested": {"num_cpus": 2}}
     assert consume_diagnostic_annotations() == {}
+
+
+class ListBackend:
+    def __init__(self) -> None:
+        self.events: list[ProgressEvent] = []
+
+    def emit(self, event: ProgressEvent) -> None:
+        self.events.append(event)
+
+    def close(self) -> None:
+        pass
+
+
+@pytest.fixture(autouse=True)
+def _reset_backend():
+    set_backend(NullBackend())
+    yield
+    set_backend(NullBackend())
+
+
+def test_diagnostic_event_type_exists():
+    assert EventType.DIAGNOSTIC == "diagnostic"
+
+
+def test_track_progress_emits_diagnostic_on_success():
+    backend = ListBackend()
+    set_backend(backend)
+    with track_progress("w", job_id="j") as tracker:
+        tracker.step()
+    types = [e.event_type for e in backend.events]
+    assert types == [EventType.STARTED, EventType.PROGRESS, EventType.COMPLETED, EventType.DIAGNOSTIC]
+    payload = backend.events[-1].extra["diagnostics"]
+    assert STDLIB_KEYS <= set(payload)
+
+
+def test_track_progress_emits_diagnostic_on_failure():
+    backend = ListBackend()
+    set_backend(backend)
+    with pytest.raises(ValueError):
+        with track_progress("w", job_id="j"):
+            raise ValueError("boom")
+    types = [e.event_type for e in backend.events]
+    assert types == [EventType.STARTED, EventType.FAILED, EventType.DIAGNOSTIC]
+
+
+def test_track_progress_diagnostics_opt_out():
+    backend = ListBackend()
+    set_backend(backend)
+    with track_progress("w", job_id="j", diagnostics=False):
+        pass
+    assert [e.event_type for e in backend.events] == [EventType.STARTED, EventType.COMPLETED]
+
+
+def test_annotations_merge_into_diagnostic_payload():
+    backend = ListBackend()
+    set_backend(backend)
+    annotate_diagnostics(import_s=2.0, requested={"num_cpus": 4}, memory_mode="greedy")
+    with track_progress("w", job_id="j"):
+        pass
+    payload = backend.events[-1].extra["diagnostics"]
+    assert payload["import_s"] == 2.0
+    assert payload["requested"] == {"num_cpus": 4}
+    assert payload["memory_mode"] == "greedy"
+    # consumed: a second block has no annotations
+    with track_progress("w2", job_id="j"):
+        pass
+    assert "import_s" not in backend.events[-1].extra["diagnostics"]

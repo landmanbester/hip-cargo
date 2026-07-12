@@ -4,6 +4,7 @@ from upath import UPath
 
 from hip_cargo.utils.config import get_container_image
 from hip_cargo.utils.decorators import stimela_cab, stimela_output
+from hip_cargo.utils.diagnostics import annotate_diagnostics
 from hip_cargo.utils.metadata import StimelaMeta
 from hip_cargo.utils.progress import EventType, ProgressEvent
 from hip_cargo.utils.progress_context import track_progress
@@ -25,6 +26,7 @@ __all__ = [
     "EventType",
     "ProgressEvent",
     "track_progress",
+    "annotate_diagnostics",
     "StimelaMeta",
     "ListInt",
     "ListFloat",

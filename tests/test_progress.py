@@ -95,6 +95,7 @@ def test_track_progress_happy_path():
         EventType.PROGRESS,
         EventType.METRIC,
         EventType.COMPLETED,
+        EventType.DIAGNOSTIC,
     ]
     # Step counter increments
     assert backend.events[1].current_step == 1
@@ -116,7 +117,7 @@ def test_track_progress_failure_path():
             raise ValueError("boom")
 
     types = [e.event_type for e in backend.events]
-    assert types == [EventType.STARTED, EventType.PROGRESS, EventType.FAILED]
+    assert types == [EventType.STARTED, EventType.PROGRESS, EventType.FAILED, EventType.DIAGNOSTIC]
     assert backend.events[2].message == "boom"
 
 

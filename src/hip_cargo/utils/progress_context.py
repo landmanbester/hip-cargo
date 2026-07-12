@@ -4,6 +4,12 @@ import uuid
 from collections.abc import Iterator
 from contextlib import contextmanager
 
+from hip_cargo.utils.diagnostics import (
+    ResourceSnapshot,
+    capture_snapshot,
+    consume_diagnostic_annotations,
+    diagnostics_delta,
+)
 from hip_cargo.utils.progress import EventType, ProgressEvent, emit
 
 
@@ -70,6 +76,7 @@ def track_progress(
     total_steps: int | None = None,
     job_id: str | None = None,
     pipeline_run_id: str | None = None,
+    diagnostics: bool = True,
 ) -> Iterator[ProgressTracker]:
     """Context manager that emits STARTED/COMPLETED/FAILED events around a block.
 
@@ -78,6 +85,7 @@ def track_progress(
         total_steps: Total iterations expected, if known.
         job_id: Unique job identifier. Auto-generated if not provided.
         pipeline_run_id: Pipeline run ID for grouping steps in a pipeline run.
+        diagnostics: Emit one DIAGNOSTIC event (resource deltas) on exit.
 
     Yields:
         A ProgressTracker for emitting progress, metric, artifact, and log events.
@@ -87,11 +95,25 @@ def track_progress(
 
     tracker = ProgressTracker(job_id, worker_name, total_steps, pipeline_run_id)
 
+    entry = capture_snapshot() if diagnostics else None
     emit(tracker._make_event(EventType.STARTED))
     try:
         yield tracker
     except Exception as exc:
         emit(tracker._make_event(EventType.FAILED, message=str(exc)))
+        if entry is not None:
+            _emit_diagnostics(tracker, entry)
         raise
     else:
         emit(tracker._make_event(EventType.COMPLETED))
+        if entry is not None:
+            _emit_diagnostics(tracker, entry)
+
+
+def _emit_diagnostics(tracker: ProgressTracker, entry: ResourceSnapshot) -> None:
+    """Emit a DIAGNOSTIC event with the delta since entry plus any annotations."""
+    payload = diagnostics_delta(entry, capture_snapshot())
+    payload.update(consume_diagnostic_annotations())
+    event = tracker._make_event(EventType.DIAGNOSTIC)
+    event.extra["diagnostics"] = payload
+    emit(event)
