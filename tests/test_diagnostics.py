@@ -137,3 +137,25 @@ def test_annotations_merge_into_diagnostic_payload():
     with track_progress("w2", job_id="j"):
         pass
     assert "import_s" not in backend.events[-1].extra["diagnostics"]
+
+
+def test_sampler_reports_sampled_peak():
+    psutil = pytest.importorskip("psutil")  # noqa: F841
+    from hip_cargo.utils.diagnostics import start_sampler
+
+    sampler = start_sampler(interval=0.01)
+    assert sampler is not None
+    time.sleep(0.05)
+    result = sampler.stop()
+    assert result["sampled"] is True
+    assert result["peak_rss_mb"] > 0
+
+
+def test_track_progress_payload_marks_sampled_tier():
+    pytest.importorskip("psutil")
+    backend = ListBackend()
+    set_backend(backend)
+    with track_progress("w", job_id="j"):
+        time.sleep(0.02)
+    payload = backend.events[-1].extra["diagnostics"]
+    assert payload.get("sampled") is True

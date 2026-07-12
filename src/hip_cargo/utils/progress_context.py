@@ -6,9 +6,11 @@ from contextlib import contextmanager
 
 from hip_cargo.utils.diagnostics import (
     ResourceSnapshot,
+    _Sampler,
     capture_snapshot,
     consume_diagnostic_annotations,
     diagnostics_delta,
+    start_sampler,
 )
 from hip_cargo.utils.progress import EventType, ProgressEvent, emit
 
@@ -96,23 +98,26 @@ def track_progress(
     tracker = ProgressTracker(job_id, worker_name, total_steps, pipeline_run_id)
 
     entry = capture_snapshot() if diagnostics else None
+    sampler = start_sampler() if diagnostics else None
     emit(tracker._make_event(EventType.STARTED))
     try:
         yield tracker
     except Exception as exc:
         emit(tracker._make_event(EventType.FAILED, message=str(exc)))
         if entry is not None:
-            _emit_diagnostics(tracker, entry)
+            _emit_diagnostics(tracker, entry, sampler)
         raise
     else:
         emit(tracker._make_event(EventType.COMPLETED))
         if entry is not None:
-            _emit_diagnostics(tracker, entry)
+            _emit_diagnostics(tracker, entry, sampler)
 
 
-def _emit_diagnostics(tracker: ProgressTracker, entry: ResourceSnapshot) -> None:
+def _emit_diagnostics(tracker: ProgressTracker, entry: ResourceSnapshot, sampler: _Sampler | None) -> None:
     """Emit a DIAGNOSTIC event with the delta since entry plus any annotations."""
     payload = diagnostics_delta(entry, capture_snapshot())
+    if sampler is not None:
+        payload.update(sampler.stop())
     payload.update(consume_diagnostic_annotations())
     event = tracker._make_event(EventType.DIAGNOSTIC)
     event.extra["diagnostics"] = payload

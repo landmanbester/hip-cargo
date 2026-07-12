@@ -17,6 +17,7 @@ import os
 import resource
 import socket
 import sys
+import threading
 import time
 from dataclasses import dataclass
 from typing import Any
@@ -96,3 +97,54 @@ def consume_diagnostic_annotations() -> dict[str, Any]:
 def clear_diagnostic_annotations() -> None:
     """Drop any stashed annotations (e.g. between tests or tasks)."""
     _annotations.clear()
+
+
+class _Sampler:
+    """Background RSS sampler backed by psutil (optional enrichment tier)."""
+
+    def __init__(self, interval: float) -> None:
+        import psutil
+
+        self._proc = psutil.Process()
+        self._interval = interval
+        self._stop_event = threading.Event()
+        self._peak_rss = self._proc.memory_info().rss
+        try:
+            self._io_entry = self._proc.io_counters()
+        except (AttributeError, NotImplementedError, psutil.AccessDenied):
+            self._io_entry = None
+        self._thread = threading.Thread(target=self._run, daemon=True)
+        self._thread.start()
+
+    def _run(self) -> None:
+        while not self._stop_event.wait(self._interval):
+            try:
+                self._peak_rss = max(self._peak_rss, self._proc.memory_info().rss)
+            except Exception:
+                return
+
+    def stop(self) -> dict[str, Any]:
+        """Stop sampling and return the enrichment fields."""
+        self._stop_event.set()
+        self._thread.join(timeout=self._interval * 4)
+        result: dict[str, Any] = {
+            "peak_rss_mb": self._peak_rss / (1024.0 * 1024.0),
+            "sampled": True,
+        }
+        if self._io_entry is not None:
+            try:
+                io_exit = self._proc.io_counters()
+                result["read_mb"] = (io_exit.read_bytes - self._io_entry.read_bytes) / (1024.0 * 1024.0)
+                result["write_mb"] = (io_exit.write_bytes - self._io_entry.write_bytes) / (1024.0 * 1024.0)
+            except Exception:
+                pass
+        return result
+
+
+def start_sampler(interval: float = 0.5) -> "_Sampler | None":
+    """Start the psutil enrichment sampler, or return None when unavailable."""
+    try:
+        import psutil  # noqa: F401
+    except ImportError:
+        return None
+    return _Sampler(interval)
