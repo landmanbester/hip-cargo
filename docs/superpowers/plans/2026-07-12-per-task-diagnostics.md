@@ -30,7 +30,7 @@
 **Interfaces:**
 - Produces: `ResourceSnapshot` (frozen dataclass), `capture_snapshot() -> ResourceSnapshot`, `diagnostics_delta(entry: ResourceSnapshot, exit_: ResourceSnapshot) -> dict[str, Any]`, `annotate_diagnostics(**fields: Any) -> None`, `consume_diagnostic_annotations() -> dict[str, Any]`, `clear_diagnostic_annotations() -> None`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 # tests/test_diagnostics.py
@@ -106,12 +106,12 @@ def test_annotations_merge_and_clear_on_consume():
     assert consume_diagnostic_annotations() == {}
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `uv run --extra monitoring python -m pytest tests/test_diagnostics.py -v`
 Expected: FAIL — `ModuleNotFoundError: No module named 'hip_cargo.utils.diagnostics'`
 
-- [ ] **Step 3: Write the implementation**
+- [x] **Step 3: Write the implementation**
 
 ```python
 # src/hip_cargo/utils/diagnostics.py
@@ -215,12 +215,12 @@ def clear_diagnostic_annotations() -> None:
     _annotations.clear()
 ```
 
-- [ ] **Step 4: Run tests to verify they pass**
+- [x] **Step 4: Run tests to verify they pass**
 
 Run: `uv run --extra monitoring python -m pytest tests/test_diagnostics.py -v`
 Expected: 4 passed
 
-- [ ] **Step 5: Lint and commit**
+- [x] **Step 5: Lint and commit**
 
 ```bash
 uv run ruff format . && uv run ruff check . --fix
@@ -244,7 +244,7 @@ git commit -m "feat: add stdlib per-task diagnostics capture layer"
 - Consumes: Task 1's `capture_snapshot`, `diagnostics_delta`, `consume_diagnostic_annotations`.
 - Produces: `EventType.DIAGNOSTIC = "diagnostic"`; `track_progress(worker_name, total_steps=None, job_id=None, pipeline_run_id=None, diagnostics=True)` emits one DIAGNOSTIC event after COMPLETED/FAILED with payload at `event.extra["diagnostics"]`.
 
-- [ ] **Step 1: Write the failing tests** (append to `tests/test_diagnostics.py`)
+- [x] **Step 1: Write the failing tests** (append to `tests/test_diagnostics.py`)
 
 ```python
 from hip_cargo.utils.progress import EventType, NullBackend, ProgressEvent, set_backend
@@ -318,12 +318,12 @@ def test_annotations_merge_into_diagnostic_payload():
     assert "import_s" not in backend.events[-1].extra["diagnostics"]
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `uv run --extra monitoring python -m pytest tests/test_diagnostics.py -v`
 Expected: new tests FAIL (`AttributeError: DIAGNOSTIC` / unexpected event lists); Task 1 tests still PASS.
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 In `src/hip_cargo/utils/progress.py`, add to `EventType`:
 
@@ -396,12 +396,12 @@ from hip_cargo.utils.diagnostics import (
 
 Check `src/hip_cargo/__init__.py`: if `track_progress` is re-exported there, add `annotate_diagnostics` to the same export block (lazy or direct, matching the existing pattern); otherwise skip.
 
-- [ ] **Step 4: Run the full fast test suite**
+- [x] **Step 4: Run the full fast test suite**
 
 Run: `uv run --extra monitoring python -m pytest tests/test_diagnostics.py tests/test_progress.py -v`
 Expected: all pass (existing `test_progress.py` event-sequence assertions may need the trailing DIAGNOSTIC added — if any fail on the new event, update those assertions; the Autonomy Rule in `.claude/rules/testing-and-ci.md` covers this).
 
-- [ ] **Step 5: Lint and commit**
+- [x] **Step 5: Lint and commit**
 
 ```bash
 uv run ruff format . && uv run ruff check . --fix
@@ -421,7 +421,7 @@ git commit -m "feat: emit DIAGNOSTIC event from track_progress"
 **Interfaces:**
 - Produces: `start_sampler(interval: float = 0.5) -> _Sampler | None` (None when psutil is missing) and `_Sampler.stop() -> dict[str, Any]` returning `{"peak_rss_mb": float, "read_mb": float, "write_mb": float, "sampled": True}` (io fields omitted when the platform lacks `io_counters`). `track_progress` merges the sampler dict over the stdlib delta (sampled peak wins).
 
-- [ ] **Step 1: Write the failing tests** (append to `tests/test_diagnostics.py`)
+- [x] **Step 1: Write the failing tests** (append to `tests/test_diagnostics.py`)
 
 ```python
 from hip_cargo.utils.diagnostics import start_sampler
@@ -449,12 +449,12 @@ def test_track_progress_payload_marks_sampled_tier():
 
 (`importorskip` keeps the suite green when psutil is absent — the stdlib tier is the fallback under test elsewhere.)
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `uv run --extra monitoring python -m pytest tests/test_diagnostics.py -v -k sampler`
 Expected: FAIL — `ImportError: cannot import name 'start_sampler'`
 
-- [ ] **Step 3: Implement** (append to `src/hip_cargo/utils/diagnostics.py`)
+- [x] **Step 3: Implement** (append to `src/hip_cargo/utils/diagnostics.py`)
 
 ```python
 import threading
@@ -533,12 +533,12 @@ def _emit_diagnostics(tracker: ProgressTracker, entry: ResourceSnapshot, sampler
 
 (import `start_sampler` and `_Sampler` from `hip_cargo.utils.diagnostics`).
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 Run: `uv run --extra monitoring python -m pytest tests/test_diagnostics.py -v`
 Expected: all pass (sampler tests skip if psutil absent)
 
-- [ ] **Step 5: Lint and commit**
+- [x] **Step 5: Lint and commit**
 
 ```bash
 uv run ruff format . && uv run ruff check . --fix
@@ -559,7 +559,7 @@ git commit -m "feat: optional psutil sampling tier for diagnostics"
 - Consumes: serialised event dicts as stored by `ProgressAggregator.push_event` (i.e. `ProgressEvent.to_dict()` output).
 - Produces: `build_diagnostics_report(job_id: str, events: list[dict]) -> dict` returning `{"job_id", "pipeline_run_id", "tasks": [...], "pipeline": {"wall_s", "cpu_core_seconds"}}`; `ProgressAggregator.get_diagnostics(job_id) -> dict` delegating to it. Each task record = DIAGNOSTIC payload + `{"step": worker_name, "queue_lag_s": float | None, "cpu_utilisation": float | None}`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```python
 # tests/test_diagnostics_report.py
@@ -635,12 +635,12 @@ def test_report_empty_when_no_diagnostics():
     assert report["tasks"] == []
 ```
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `uv run --extra monitoring python -m pytest tests/test_diagnostics_report.py -v`
 Expected: FAIL — module not found
 
-- [ ] **Step 3: Implement**
+- [x] **Step 3: Implement**
 
 ```python
 # src/hip_cargo/monitoring/diagnostics_report.py
@@ -752,12 +752,12 @@ In `src/hip_cargo/monitoring/ray_backend.py`, add to `ProgressAggregator` (after
         return build_diagnostics_report(job_id, self._events.get(job_id, []))
 ```
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 Run: `uv run --extra monitoring python -m pytest tests/test_diagnostics_report.py tests/test_ray_backend.py -v -m "not slow"`
 Expected: report tests pass; ray_backend fast tests unaffected
 
-- [ ] **Step 5: Add a real-Ray round-trip test** (append to `tests/test_ray_backend.py`, following the file's existing `@pytest.mark.slow` fixture pattern for a ray-backed aggregator — reuse its ray fixture/actor setup)
+- [x] **Step 5: Add a real-Ray round-trip test** (append to `tests/test_ray_backend.py`, following the file's existing `@pytest.mark.slow` fixture pattern for a ray-backed aggregator — reuse its ray fixture/actor setup)
 
 ```python
 @pytest.mark.slow
@@ -791,7 +791,7 @@ def test_get_diagnostics_round_trip(ray_cluster):  # match the file's existing f
 Run: `uv run --extra monitoring python -m pytest tests/test_ray_backend.py -v -m slow -k diagnostics`
 Expected: PASS
 
-- [ ] **Step 6: Lint and commit**
+- [x] **Step 6: Lint and commit**
 
 ```bash
 uv run ruff format . && uv run ruff check . --fix
@@ -811,7 +811,7 @@ git commit -m "feat: diagnostics report join and aggregator method"
 - Consumes: `ProgressAggregator.get_diagnostics(job_id) -> dict` (Task 4).
 - Produces: `GET /api/progress/{job_id}/diagnostics` → 200 with the report, 404 when `tasks` is empty, 503 when the aggregator is unreachable (via the existing `_agg_call`).
 
-- [ ] **Step 1: Write the failing tests** (append to `tests/test_server.py`; extend `FakeAggregator.__init__` with `self.get_diagnostics = _RemoteMethod(self._get_diagnostics)` and)
+- [x] **Step 1: Write the failing tests** (append to `tests/test_server.py`; extend `FakeAggregator.__init__` with `self.get_diagnostics = _RemoteMethod(self._get_diagnostics)` and)
 
 ```python
     def _get_diagnostics(self, job_id):
@@ -844,12 +844,12 @@ def test_get_diagnostics_404_when_empty():
 
 (match the file's existing `_create_test_app` usage — adjust argument names to the actual helper signature if they differ.)
 
-- [ ] **Step 2: Run tests to verify they fail**
+- [x] **Step 2: Run tests to verify they fail**
 
 Run: `uv run --extra monitoring python -m pytest tests/test_server.py -v -k diagnostics`
 Expected: FAIL — 404 for both (route missing) and/or AttributeError on FakeAggregator
 
-- [ ] **Step 3: Implement** (in `create_app`, after the `get_dag` route)
+- [x] **Step 3: Implement** (in `create_app`, after the `get_dag` route)
 
 ```python
     @app.get("/api/progress/{job_id}/diagnostics")
@@ -860,12 +860,12 @@ Expected: FAIL — 404 for both (route missing) and/or AttributeError on FakeAgg
         return report
 ```
 
-- [ ] **Step 4: Run the server test file**
+- [x] **Step 4: Run the server test file**
 
 Run: `uv run --extra monitoring python -m pytest tests/test_server.py -v`
 Expected: all pass
 
-- [ ] **Step 5: Lint and commit**
+- [x] **Step 5: Lint and commit**
 
 ```bash
 uv run ruff format . && uv run ruff check . --fix
@@ -884,23 +884,23 @@ git commit -m "feat: serve per-task diagnostics report endpoint"
 
 **Interfaces:** none (docs + verification).
 
-- [ ] **Step 1: Run the full fast suite**
+- [x] **Step 1: Run the full fast suite**
 
 Run: `uv run --extra monitoring python -m pytest -m "not slow" -q`
 Expected: all pass, no regressions
 
-- [ ] **Step 2: Run the slow (Ray) suite**
+- [x] **Step 2: Run the slow (Ray) suite**
 
 Run: `uv run --extra monitoring python -m pytest -m slow -q`
 Expected: all pass (real local Ray cluster; DIAGNOSTIC events flow through aggregator unchanged — they are ordinary events)
 
-- [ ] **Step 3: Docs flip**
+- [x] **Step 3: Docs flip**
 
 - In `docs/hip-cargo-monitoring-design-doc.md` §3.7: change "Designed but not implemented; full design in…" to "Implemented (see `utils/diagnostics.py`, `monitoring/diagnostics_report.py`); design in…" and adjust the API-reference row from "(planned, §3.7)" to "Per-task resource breakdown (§3.7)".
 - In the spec: change `**Status:** Draft — pending review …` to `**Status:** Implemented on apis (2026-07-12)`.
 - In `CLAUDE.md`: add `diagnostics.py` under `utils/` and `diagnostics_report.py` under `monitoring/` in the file inventory.
 
-- [ ] **Step 4: Lint and commit**
+- [x] **Step 4: Lint and commit**
 
 ```bash
 uv run ruff format . && uv run ruff check . --fix
@@ -919,7 +919,7 @@ git commit -m "docs: mark per-task diagnostics implemented"
 **Interfaces:**
 - Consumes: `hip_cargo.utils.diagnostics.annotate_diagnostics` (Task 1/2) and `GET /api/progress/{job_id}/diagnostics` (Task 5). stokify resolves the local editable hip-cargo, now on `apis` with these changes.
 
-- [ ] **Step 1: Annotate each task wrapper**
+- [x] **Step 1: Annotate each task wrapper**
 
 In `tasks.py`, inside each `@ray.remote` task body, after `_activate_backend()` and around the lazy import (shown for `init_task`; mirror for `process_task` with `{"num_cpus": 2}` and `image_task` with `{"num_cpus": 2}`, matching each decorator's `num_cpus`):
 
@@ -943,7 +943,7 @@ In `tasks.py`, inside each `@ray.remote` task body, after `_activate_backend()` 
 
 (the annotations merge into the DIAGNOSTIC event the core function's `track_progress` emits.)
 
-- [ ] **Step 2: Extend demo.py**
+- [x] **Step 2: Extend demo.py**
 
 After the residual-metric section (around line 186), add a diagnostics section that queries the new endpoint, prints a table, and appends to `failures` when the contract is not met:
 
@@ -996,18 +996,18 @@ After the residual-metric section (around line 186), add a diagnostics section t
 Also update the final PASS line to mention diagnostics:
 `" RESULT: PASS — events, metrics, DAG, and per-task diagnostics flow through the monitoring API."`
 
-- [ ] **Step 3: Run the self-verifying demo end-to-end**
+- [x] **Step 3: Run the self-verifying demo end-to-end**
 
 ```bash
 cd /home/bester/software/stokify && uv sync --extra full && uv run --extra full python demo.py --memory-mode greedy
 ```
 Expected: `RESULT: PASS` including the printed per-task diagnostics table with three rows (init/process/image), non-null `queue_lag_s` and `cpu_utilisation`.
 
-- [ ] **Step 4: Run stokify's fast tests (regression check only)**
+- [x] **Step 4: Run stokify's fast tests (regression check only)**
 
 ```bash
 cd /home/bester/software/stokify && uv run --extra full python -m pytest -m "not slow" -q
 ```
 Expected: no new failures relative to the pre-change state (record the before state first: run this command once *before* Step 1).
 
-- [ ] **Step 5: DO NOT COMMIT** — leave stokify changes in the working tree (the repo carries the user's uncommitted work-in-progress). Report the changed files in the final summary instead.
+- [x] **Step 5: DO NOT COMMIT** — leave stokify changes in the working tree (the repo carries the user's uncommitted work-in-progress). Report the changed files in the final summary instead.
