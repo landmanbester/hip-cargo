@@ -492,9 +492,10 @@ replace this with a native Python pipeline runner that:
 
 ---
 
-### 3.7 Per-Task Diagnostics (New Feature)
+### 3.7 Per-Task Diagnostics (Implemented)
 
-Designed but not implemented; full design in the transpile RFC §5.10 and
+Implemented (`utils/diagnostics.py`, `monitoring/diagnostics_report.py`);
+full design in the transpile RFC §5.10 and
 `docs/superpowers/specs/2026-07-12-per-task-diagnostics-design.md`. The goal
 is the diagnostic breakdown an optimising agent needs: what each task
 actually consumed versus what it requested. Stimela profiles too coarsely
@@ -548,7 +549,7 @@ query parameter.
 | GET    | /api/progress/{id}/events?since=0       | Incremental event fetch   |
 | GET    | /api/progress/{id}/metrics/{name}       | Metric time series        |
 | GET    | /api/progress/{id}/dag                  | Pipeline DAG structure    |
-| GET    | /api/progress/{id}/diagnostics          | Per-task resource breakdown (planned, §3.7) |
+| GET    | /api/progress/{id}/diagnostics          | Per-task resource breakdown (§3.7) |
 | WS     | /ws/progress/{id}                       | Real-time event stream    |
 
 ### Recipes and Commands

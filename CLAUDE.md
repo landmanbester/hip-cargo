@@ -61,6 +61,7 @@ hip-cargo/
 │   │   ├── __init__.py
 │   │   ├── cab_resolver.py      # Resolve _include to cab schemas
 │   │   ├── config.py            # MonitorSettings (pydantic-settings, HIPCARGO_ prefix)
+│   │   ├── diagnostics_report.py # Join DIAGNOSTIC events into per-task report
 │   │   ├── dispatcher.py        # Centralised WebSocket event fan-out
 │   │   ├── ray_backend.py       # ProgressAggregator actor + RayProgressBackend
 │   │   ├── recipe_discovery.py  # Find recipe YAML files in project
@@ -71,6 +72,7 @@ hip-cargo/
 │       ├── cab_to_function.py   # Generate function from cab YAML
 │       ├── config.py            # Container image URL + GPU/RUN_ARGS readers from _container_image.py
 │       ├── decorators.py        # @stimela_cab, @stimela_output
+│       ├── diagnostics.py       # Per-task resource capture (getrusage + optional psutil)
 │       ├── introspector.py      # Extract metadata from functions
 │       ├── progress.py          # ProgressEvent, EventType, ProgressBackend protocol
 │       ├── progress_context.py  # track_progress() context manager

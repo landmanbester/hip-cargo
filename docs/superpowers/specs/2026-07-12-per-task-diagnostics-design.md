@@ -1,7 +1,7 @@
 # Per-task diagnostics for agent-driven pipeline optimisation — Design
 
 **Date:** 2026-07-12
-**Status:** Draft — pending review (docs-first; implementation to follow as a separate plan)
+**Status:** Implemented on `apis` (2026-07-12); pynvml GPU tier deferred
 **Branch context:** `apis` (monitoring substrate), demonstrated via `stokify`
 
 ## Problem
