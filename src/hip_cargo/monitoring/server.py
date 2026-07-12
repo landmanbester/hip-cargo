@@ -223,6 +223,13 @@ def create_app(settings: MonitorSettings | None = None) -> FastAPI:
             raise HTTPException(status_code=404, detail=f"No DAG data for job '{job_id}'")
         return dag
 
+    @app.get("/api/progress/{job_id}/diagnostics")
+    async def get_diagnostics(job_id: str):
+        report = await _agg_call("get_diagnostics", job_id)
+        if not report or not report.get("tasks"):
+            raise HTTPException(status_code=404, detail=f"No diagnostics data for job '{job_id}'")
+        return report
+
     # --- Recipes ---
 
     @app.get("/api/recipes")

@@ -56,6 +56,7 @@ class FakeAggregator:
         self.get_all_jobs = _RemoteMethod(self._get_all_jobs)
         self.get_metrics_history = _RemoteMethod(self._get_metrics_history)
         self.get_pipeline_dag = _RemoteMethod(self._get_pipeline_dag)
+        self.get_diagnostics = _RemoteMethod(self._get_diagnostics)
 
     def _get_latest(self, job_id):
         return self._data.get("latest", {}).get(job_id)
@@ -71,6 +72,11 @@ class FakeAggregator:
 
     def _get_pipeline_dag(self, job_id):
         return self._data.get("dags", {}).get(job_id)
+
+    def _get_diagnostics(self, job_id):
+        return self._data.get("diagnostics", {}).get(
+            job_id, {"job_id": job_id, "pipeline_run_id": None, "tasks": [], "pipeline": {}}
+        )
 
 
 # --- Fixtures ---
@@ -306,4 +312,25 @@ def test_submit_pipeline_missing_recipe(client):
 def test_submit_pipeline_unknown_recipe(client):
     """Pipeline submission returns 404 for unknown recipe."""
     resp = client.post("/api/pipelines/submit", json={"recipe": "nonexistent"})
+    assert resp.status_code == 404
+
+
+def test_get_diagnostics_returns_report():
+    report = {
+        "job_id": "job-1",
+        "pipeline_run_id": "run1",
+        "tasks": [{"step": "init", "wall_s": 1.0, "queue_lag_s": 0.1, "cpu_utilisation": 0.9}],
+        "pipeline": {"wall_s": 1.5, "cpu_core_seconds": 3.6},
+    }
+    app = _create_test_app(aggregator_data={"diagnostics": {"job-1": report}})
+    with TestClient(app) as client:
+        resp = client.get("/api/progress/job-1/diagnostics")
+    assert resp.status_code == 200
+    assert resp.json() == report
+
+
+def test_get_diagnostics_404_when_empty():
+    app = _create_test_app()
+    with TestClient(app) as client:
+        resp = client.get("/api/progress/nope/diagnostics")
     assert resp.status_code == 404
