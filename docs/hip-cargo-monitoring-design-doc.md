@@ -492,6 +492,38 @@ replace this with a native Python pipeline runner that:
 
 ---
 
+### 3.7 Per-Task Diagnostics (New Feature)
+
+Designed but not implemented; full design in the transpile RFC §5.10 and
+`docs/superpowers/specs/2026-07-12-per-task-diagnostics-design.md`. The goal
+is the diagnostic breakdown an optimising agent needs: what each task
+actually consumed versus what it requested. Stimela profiles too coarsely
+for this, and Ray's Dashboard/state API do not attribute in-process
+consumption to hip-cargo's job/step vocabulary.
+
+- **Capture:** stdlib-only `ResourceSnapshot` (`time.perf_counter` +
+  `resource.getrusage(RUSAGE_SELF)`) at entry/exit of `track_progress(...)`;
+  the delta (wall, user/system CPU, peak RSS, block I/O) is emitted as one
+  new `DIAGNOSTIC` event with the payload in `extra["diagnostics"]`. No
+  `ProgressEvent` schema change; `NullBackend` keeps it zero-overhead.
+  Transpiled `tasks.py` wrappers additionally record `import_s` (container
+  cold-start).
+- **Optional tiers:** `psutil` (sampled true in-task peak RSS, I/O bytes)
+  and `pynvml` (GPU memory/utilisation) when importable; never required.
+- **Serving:** `ProgressAggregator.get_diagnostics(job_id)` joins the
+  in-worker deltas with the step timeline (`queue_lag_s` from
+  `STEP_STARTED` → worker `STARTED`) and the declared per-step resource
+  requests; served at `GET /api/progress/{id}/diagnostics` with stable,
+  unit-suffixed field names and derived utilisation ratios.
+- **Caveats:** `ru_maxrss` is a process high-water mark under Ray worker
+  reuse (both `rss_entry_mb` and `peak_rss_mb` are reported so consumers can
+  detect a stale peak); child-process consumption is not attributed; this is
+  step-level diagnostics, not line-level profiling.
+
+This complements §3.3 rather than replacing it: `ray.util.metrics` export
+targets the Prometheus/Grafana time-series view, while diagnostics serve the
+per-task requested-vs-used join as queryable JSON.
+
 ## 4. API Reference (Current State)
 
 All endpoints are under `/api/`. Authentication via `Authorization: Bearer <token>`
@@ -516,6 +548,7 @@ query parameter.
 | GET    | /api/progress/{id}/events?since=0       | Incremental event fetch   |
 | GET    | /api/progress/{id}/metrics/{name}       | Metric time series        |
 | GET    | /api/progress/{id}/dag                  | Pipeline DAG structure    |
+| GET    | /api/progress/{id}/diagnostics          | Per-task resource breakdown (planned, §3.7) |
 | WS     | /ws/progress/{id}                       | Real-time event stream    |
 
 ### Recipes and Commands
