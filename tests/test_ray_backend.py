@@ -180,3 +180,35 @@ def test_incremental_get_events(ray_context):
     assert len(subset) == 5
     assert subset[0]["current_step"] == 5
     assert subset[-1]["current_step"] == 9
+
+
+@pytest.mark.slow
+def test_get_diagnostics_round_trip(ray_context):
+    """DIAGNOSTIC events pushed via the backend surface in get_diagnostics."""
+    from hip_cargo.utils.diagnostics import annotate_diagnostics
+    from hip_cargo.utils.progress import NullBackend, set_backend
+    from hip_cargo.utils.progress_context import track_progress
+
+    agg = ProgressAggregator.remote(1000)
+    set_backend(RayProgressBackend(agg))
+    try:
+        annotate_diagnostics(requested={"num_cpus": 1}, memory_mode="greedy")
+        with track_progress("stepA", job_id="diagjob"):
+            pass
+
+        deadline = time.time() + 10
+        report = {"tasks": []}
+        while time.time() < deadline:
+            report = ray.get(agg.get_diagnostics.remote("diagjob"))
+            if report["tasks"]:
+                break
+            time.sleep(0.2)
+    finally:
+        set_backend(NullBackend())
+
+    assert len(report["tasks"]) == 1
+    task = report["tasks"][0]
+    assert task["step"] == "stepA"
+    assert task["requested"] == {"num_cpus": 1}
+    assert task["memory_mode"] == "greedy"
+    assert task["cpu_utilisation"] is not None

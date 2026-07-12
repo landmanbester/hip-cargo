@@ -99,6 +99,19 @@ class ProgressAggregator:
             if e.get("event_type") == "metric" and e.get("metric_name") == metric_name
         ]
 
+    def get_diagnostics(self, job_id: str) -> dict:
+        """Get the per-task diagnostics report for a job.
+
+        Args:
+            job_id: The job/pipeline run to query.
+
+        Returns:
+            The joined diagnostics report (see build_diagnostics_report).
+        """
+        from hip_cargo.monitoring.diagnostics_report import build_diagnostics_report
+
+        return build_diagnostics_report(job_id, self._events.get(job_id, []))
+
     def get_pipeline_dag(self, job_id: str) -> dict | None:
         """Get the DAG structure from a pipeline_started event.
 
