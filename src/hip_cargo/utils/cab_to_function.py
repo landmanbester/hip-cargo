@@ -2,6 +2,8 @@
 
 from typing import Any, Optional
 
+from hip_cargo.utils.types import LIST_DTYPE_PARSERS
+
 # Custom Stimela types that need NewType declarations
 CUSTOM_STIMELA_TYPES = {"File", "Directory", "MS", "URI"}
 
@@ -322,9 +324,10 @@ def generate_parameter_signature(
     list_type_name = STIMELA_DTYPE_TO_LIST_TYPE.get(lookup_dtype)
     if list_type_name:
         py_type = f"{list_type_name} | None" if is_optional else list_type_name
-        # Convert list defaults to comma-separated strings (ListType takes a string at CLI level)
-        if isinstance(default, list):
-            default = ",".join(str(v) for v in default)
+        # Normalize legacy comma-separated string defaults to lists so the
+        # generated signature carries a real list default (issue #82)
+        if isinstance(default, str):
+            default = LIST_DTYPE_PARSERS[lookup_dtype](default)
     else:
         # Determine Python type normally
         py_type = stimela_dtype_to_python_type(dtype, preserve_custom=True)
@@ -372,6 +375,8 @@ def generate_parameter_signature(
                     pass
             # Regular string
             return f'"{val}"'
+        elif isinstance(val, list):
+            return "[" + ", ".join(format_default(v) for v in val) + "]"
         else:
             return str(val)
 
