@@ -20,6 +20,11 @@ pip install hip-cargo
 
 See the [Development](#development) section for instructions on how to set up the development environment and make contributions.
 
+> **Deep reference:** implemented behaviour is documented in the in-repo
+> [LLM wiki](docs/wiki/index.md) — plain-markdown pages with per-page
+> `last_verified_commit` stamps, written for agents and humans alike. This
+> README stays a human quickstart; the wiki is the canonical detail layer.
+
 ## Key Principles
 
 1. **Separate CLI from implementation**: Keep CLI modules lightweight with lazy imports. Keep them all in the `src/mypackage/cli` directory and define the CLI for each command in a separate file. Construct the main Typer app in `src/mypackage/cli/__init__.py` and register commands there.
@@ -505,8 +510,9 @@ paths keep their existing mount-driven semantics.
 - Project scaffolding with `hip-cargo init` including CI/CD, containerisation, and onboarding
 - Container fallback execution with automatic volume mount resolution from type hints
 - Support for apptainer, singularity, docker, and podman backends
-- Runtime image resolution from `[tool.hip-cargo]` config in `pyproject.toml` — no image metadata in source code
+- Runtime image resolution from the package's `_container_image.py` module — no CWD dependency, single source of truth
 - **Pipeline monitoring**: Real-time progress tracking for distributed pipelines running on Ray clusters
+- **Per-task diagnostics**: requested-vs-used resource breakdown per pipeline step, served as JSON for humans and optimising agents
 - **Recipe parsing**: Extract DAG structure from stimela recipe YAML files for visualization
 - **Cab resolution**: Resolve `_include` entries in recipes to full parameter schemas
 
@@ -584,6 +590,7 @@ Key endpoints:
 | `GET /api/progress/{job_id}/events?since=0` | Incremental event polling |
 | `GET /api/progress/{job_id}/metrics/{name}` | Metric time series |
 | `GET /api/progress/{job_id}/dag` | Pipeline DAG structure |
+| `GET /api/progress/{job_id}/diagnostics` | Per-task resource breakdown (requested vs used) |
 | `GET /api/recipes` | Discover recipe files |
 | `GET /api/recipes/{name}` | Parse recipe DAG |
 | `GET /api/commands` | Discover project cabs |
@@ -603,6 +610,30 @@ All settings can be provided via environment variables with the `HIPCARGO_` pref
 | `HIPCARGO_RAY_DASHBOARD_URL` | `http://localhost:8265` | Ray Dashboard URL |
 | `HIPCARGO_RECIPES_DIR` | `None` | Override recipe discovery directory |
 | `HIPCARGO_CLI_MODULE` | `None` | Dotted path to CLI module for cab discovery |
+
+### Per-Task Diagnostics
+
+Every `track_progress(...)` block also records what the task actually
+consumed (two `getrusage` syscalls — free when monitoring is off). The server
+joins this with each step's declared resource request:
+
+```bash
+curl http://localhost:8321/api/progress/run-001/diagnostics
+```
+
+```json
+{"tasks": [{"step": "process", "wall_s": 41.3, "cpu_utilisation": 0.93,
+            "peak_rss_mb": 6120, "queue_lag_s": 0.8, "import_s": 2.1,
+            "requested": {"num_cpus": 4}, "...": "..."}],
+ "pipeline": {"wall_s": 97.4, "cpu_core_seconds": 512.7}}
+```
+
+Use it to spot over-provisioned steps (`cpu_utilisation` well below 1, peak
+RSS far under the memory request), scheduling waits (`queue_lag_s`), and
+container cold-start costs (`import_s`). Installing `psutil` upgrades peak-RSS
+to a true in-task sample. Full schema, caveats, and an optimisation playbook:
+[docs/wiki/diagnostics.md](docs/wiki/diagnostics.md) and
+[docs/wiki/optimising-pipelines.md](docs/wiki/optimising-pipelines.md).
 
 ### Recipe Parsing
 

@@ -1,5 +1,9 @@
 # hip-cargo Monitoring System — Design Document
 
+> **Note (2026-07-13):** this is a design/rationale document. The maintained
+> reference for implemented behaviour is the LLM wiki (`docs/wiki/index.md`);
+> where the two disagree, trust the wiki.
+
 **Date:** 17 May 2026
 **Branch:** `apis` on `github.com/landmanbester/hip-cargo`
 **Status:** Backend complete, frontend pending redesign
@@ -495,8 +499,7 @@ replace this with a native Python pipeline runner that:
 ### 3.7 Per-Task Diagnostics (Implemented)
 
 Implemented (`utils/diagnostics.py`, `monitoring/diagnostics_report.py`);
-full design in the transpile RFC §5.10 and
-`docs/superpowers/specs/2026-07-12-per-task-diagnostics-design.md`. The goal
+current reference: `docs/wiki/diagnostics.md`; rationale: transpile RFC §5.10. The goal
 is the diagnostic breakdown an optimising agent needs: what each task
 actually consumed versus what it requested. Stimela profiles too coarsely
 for this, and Ray's Dashboard/state API do not attribute in-process

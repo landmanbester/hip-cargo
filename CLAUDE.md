@@ -6,6 +6,24 @@
 
 *Note: Detailed domain logic, Python standards, and CI/CD rules have been modularized into the `.claude/rules/` directory for progressive disclosure.*
 
+## LLM Wiki (canonical implementation reference)
+
+Deep reference documentation lives in `docs/wiki/` (start at
+`docs/wiki/index.md`). Each page's frontmatter carries a
+`last_verified_commit` stamp — the commit its claims were last checked
+against.
+
+* **Read the relevant wiki page before working in a subsystem** (monitoring,
+  diagnostics, container execution, remote URIs).
+* **Update-as-you-touch rule:** if a change you make invalidates or extends a
+  wiki page, update that page and refresh its `last_verified_commit`
+  (`git rev-parse --short HEAD`) and `timestamp` in the same session, and add
+  a line to `docs/wiki/log.md`.
+* Specs and plans (e.g. under `docs/superpowers/`) are ephemeral process
+  artifacts: fine to write during development, but they must **not** be
+  retained as documentation — fold durable facts into the wiki and delete
+  them before the work is merged.
+
 ## Core Dependencies
 
 * Minimize external dependencies.
