@@ -7,6 +7,14 @@ timestamp: 2026-07-13
 
 # Wiki changelog
 
+## 2026-07-13 — transpile v1 (verified at `ca92c9c`)
+
+- New page `transpile.md`: `hip-cargo transpile` v1 — restricted-grammar
+  validation with named refusals, data-edge inference, static `_inmem`
+  detection (LibCST, no imports), tasks/runner/cli codegen.
+- Index updated. Deferred items (per-step resources, `image_uri`,
+  loops/nesting, packaging) tracked on the page.
+
 ## 2026-07-13 — bundle created (verified at `a1b714a`)
 
 - Initial pages: `progress-protocol.md`, `diagnostics.md`,

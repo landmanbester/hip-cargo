@@ -32,6 +32,7 @@ a page, update the page and refresh its stamp **in the same session**.
 | [diagnostics.md](diagnostics.md) | Per-task resource capture, DIAGNOSTIC payload schema, report join, `/diagnostics` endpoint | Consuming or emitting per-task resource data |
 | [monitoring-api.md](monitoring-api.md) | REST + WebSocket endpoint reference, `MonitorSettings` config | Calling the monitoring server |
 | [optimising-pipelines.md](optimising-pipelines.md) | How an agent turns requested-vs-used numbers into optimisation actions | Asked to tune/optimise a pipeline |
+| [transpile.md](transpile.md) | `hip-cargo transpile` grammar, in-memory contract, codegen shape, deferred items | Working on or consuming the transpiler |
 | [container-execution.md](container-execution.md) | Image tag lifecycle, container fallback, GPU passthrough, per-backend run-args | Touching runner/execution or `_container_image.py` |
 | [remote-uris.md](remote-uris.md) | UPath path types, remote URI handling, credential forwarding, fsspec extras | Touching path types or object-store support |
 | [log.md](log.md) | Chronological wiki changelog | Checking what changed and when |
