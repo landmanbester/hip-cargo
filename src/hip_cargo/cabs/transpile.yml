@@ -1,0 +1,32 @@
+cabs:
+  transpile:
+    flavour: python
+    command: hip_cargo.core.transpile.transpile
+    name: transpile
+    info:
+      Transpile a restricted-subset stimela recipe into a Ray runner package.
+    image: ghcr.io/landmanbester/hip-cargo:apis
+    inputs:
+      recipe:
+        info:
+          Recipe YAML file to transpile.
+          The cab package referenced by its _include entries must be importable (a lightweight install suffices).
+        dtype: File
+        required: true
+        policies:
+          positional: true
+        metadata:
+          rich_help_panel: Inputs
+      package:
+        info:
+          Dotted import path of the emitted package.
+          Defaults to <cab root package>.<output dir name>, e.g.
+          stokify.transpiled.
+        dtype: Optional[str]
+    outputs:
+      output-dir:
+        dtype: Directory
+        info:
+          Directory the generated package is written into.
+        metadata:
+          rich_help_panel: Outputs

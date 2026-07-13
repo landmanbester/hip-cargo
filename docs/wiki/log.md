@@ -7,13 +7,17 @@ timestamp: 2026-07-13
 
 # Wiki changelog
 
-## 2026-07-13 — transpile v1 (verified at `ca92c9c`)
+## 2026-07-13 — transpile v1 (verified at `ebbd1fb`)
 
 - New page `transpile.md`: `hip-cargo transpile` v1 — restricted-grammar
   validation with named refusals, data-edge inference, static `_inmem`
   detection (LibCST, no imports), tasks/runner/cli codegen.
 - Index updated. Deferred items (per-step resources, `image_uri`,
   loops/nesting, packaging) tracked on the page.
+- Live proof landed on stokify branch `transpile` (commit `a761616`):
+  committed `src/stokify/transpiled/`, `stokify transpiled run`,
+  `demo.py --transpiled` (RESULT: PASS), structural + e2e tests.
+- Ephemeral transpile spec/plan folded here and deleted (per CLAUDE.md rule).
 
 ## 2026-07-13 — bundle created (verified at `a1b714a`)
 

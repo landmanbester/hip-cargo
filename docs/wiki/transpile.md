@@ -4,7 +4,7 @@ title: hip-cargo transpile
 description: Recipe-to-Ray-package transpiler — grammar, in-memory contract, CLI usage, and current limitations.
 tags: [transpile, codegen, ray, recipes]
 timestamp: 2026-07-13
-last_verified_commit: ca92c9c
+last_verified_commit: ebbd1fb
 ---
 
 # `hip-cargo transpile`

@@ -823,11 +823,25 @@ def transpile_recipe(recipe_path, output_dir, out_package: str | None = None) ->
     Raises:
         TranspileRefusedError: When the recipe falls outside the restricted subset.
     """
+    from pathlib import Path
+
     from hip_cargo.monitoring.recipe_parser import parse_recipe
+    from hip_cargo.utils.config import find_pyproject_toml
 
     dag = parse_recipe(recipe_path, resolve_cabs=True)
     errors = validate_recipe(dag)
     if errors:
         raise TranspileRefusedError(errors)
-    spec = build_recipe_spec(dag, source=str(recipe_path))
+
+    # Record the recipe path project-relative so the generated header (and
+    # therefore idempotence) does not depend on how the path was spelled.
+    resolved = Path(recipe_path).resolve()
+    source = str(resolved)
+    config_file = find_pyproject_toml(Path(output_dir).resolve())
+    if config_file is not None:
+        try:
+            source = str(resolved.relative_to(config_file.parent))
+        except ValueError:
+            pass
+    spec = build_recipe_spec(dag, source=source)
     return write_package(spec, output_dir, out_package)
