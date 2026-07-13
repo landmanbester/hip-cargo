@@ -1,0 +1,17 @@
+_include:
+  - (fakepkg.cabs)alpha.yml
+
+demo:
+  name: demo
+  inputs:
+    base-dir:
+      dtype: Directory
+      required: true
+  steps:
+    first:
+      cab: alpha
+      for_loop:
+        var: band
+        over: [0, 1, 2]
+      params:
+        output: '{recipe.base-dir}/a.zarr'

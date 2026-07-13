@@ -1,0 +1,15 @@
+_include:
+  - (fakepkg.cabs)alpha.yml
+
+demo:
+  name: demo
+  inputs:
+    base-dir:
+      dtype: Directory
+      required: true
+  steps:
+    first:
+      cab: alpha
+      params:
+        output: '{recipe.no-such-input}/a.zarr'
+        n-items: =recipe.also-missing

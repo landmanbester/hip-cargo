@@ -76,6 +76,7 @@ class RecipeStep:
     params: list[StepParam] = field(default_factory=list)
     order: int = 0
     cab_schema: dict | None = None  # full cab parameter schema, if resolved
+    extra_keys: list[str] = field(default_factory=list)  # step keys beyond cab/info/params (for_loop, recipe, ...)
 
 
 @dataclass
@@ -210,6 +211,7 @@ def parse_recipe(recipe_path: str | Path, resolve_cabs: bool = True) -> RecipeDA
                 info=step_def.get("info", ""),
                 params=params,
                 order=order,
+                extra_keys=[k for k in step_def if k not in ("cab", "info", "params")],
             )
         )
 

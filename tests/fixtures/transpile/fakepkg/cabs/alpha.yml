@@ -1,0 +1,18 @@
+cabs:
+  alpha:
+    flavour: python
+    command: fakepkg.core.alpha.alpha
+    name: alpha
+    info: Produce a small dataset.
+    inputs:
+      memory-mode:
+        choices: [greedy, conservative]
+        default: greedy
+      n-items:
+        dtype: int
+        default: 3
+    outputs:
+      output:
+        dtype: Directory
+        required: true
+        mkdir: true

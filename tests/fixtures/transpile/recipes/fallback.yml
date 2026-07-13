@@ -1,0 +1,25 @@
+_include:
+  - (fakepkg.cabs)alpha.yml
+  - (fakepkg.cabs)delta.yml
+
+demo:
+  name: demo
+  info: Second step has no _inmem sibling -> disk fallback.
+  inputs:
+    base-dir:
+      dtype: Directory
+      required: true
+    scale:
+      dtype: int
+      default: 2
+  steps:
+    first:
+      cab: alpha
+      params:
+        output: '{recipe.base-dir}/a.zarr'
+    second:
+      cab: delta
+      params:
+        input-data: '{recipe.base-dir}/a.zarr'
+        output: '{recipe.base-dir}/d.zarr'
+        scale: =recipe.scale
