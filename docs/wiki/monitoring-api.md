@@ -30,7 +30,7 @@ Source: `src/hip_cargo/monitoring/server.py` (`create_app`), `config.py`
 | GET | `/api/recipes` | Discovered recipe files |
 | GET | `/api/recipes/{name}` | Parsed recipe DAG (`recipe_parser.py`) |
 | GET | `/api/commands` | Project cab schemas (`cab_resolver.py`) |
-| POST | `/api/pipelines/submit` | Submit via Ray Jobs (known-fragile placeholder; RFC proposes replacing it) |
+| POST | `/api/pipelines/submit` | **501 — disabled.** Built a `stimela run` shell entrypoint from params (injection surface); removed. Submit via the transpiled package's own CLI (RFC §9.6) |
 | WS | `/ws/progress/{id}` | Live event stream + heartbeats |
 
 Error semantics: all `/api/progress/*` routes return **503** when the

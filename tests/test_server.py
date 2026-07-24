@@ -281,42 +281,20 @@ def test_jobs_ray_unreachable():
         assert resp.status_code == 503
 
 
-def test_submit_pipeline(client):
-    """POST /api/pipelines/submit returns submission_id and entrypoint."""
+def test_submit_pipeline_disabled(client):
+    """POST /api/pipelines/submit is an unimplemented placeholder (501).
+
+    The endpoint previously built a `stimela run ...` shell entrypoint from
+    request params (an injection surface); it is now disabled in favour of the
+    transpiled package's own CLI submitting to Ray directly (RFC §9.6). No
+    request body should reach any command-construction path.
+    """
     resp = client.post(
         "/api/pipelines/submit",
-        json={"recipe": "sara", "params": {"niter": 10, "overwrite": True}},
+        json={"recipe": "sara", "params": {"niter": 10, "evil": "; rm -rf ~"}},
     )
-    assert resp.status_code == 200
-    data = resp.json()
-    assert data["submission_id"] == "raysubmit_test_123"
-    assert "stimela run" in data["entrypoint"]
-    assert "gosara" in data["entrypoint"]
-    assert "niter=10" in data["entrypoint"]
-    assert "overwrite=true" in data["entrypoint"]
-
-
-def test_submit_pipeline_list_params(client):
-    """Pipeline submission handles list params with comma-separated values."""
-    resp = client.post(
-        "/api/pipelines/submit",
-        json={"recipe": "sara", "params": {"ms": ["/data/a.ms", "/data/b.ms"]}},
-    )
-    assert resp.status_code == 200
-    data = resp.json()
-    assert "ms=/data/a.ms,/data/b.ms" in data["entrypoint"]
-
-
-def test_submit_pipeline_missing_recipe(client):
-    """Pipeline submission returns 400 when recipe field is missing."""
-    resp = client.post("/api/pipelines/submit", json={"params": {}})
-    assert resp.status_code == 400
-
-
-def test_submit_pipeline_unknown_recipe(client):
-    """Pipeline submission returns 404 for unknown recipe."""
-    resp = client.post("/api/pipelines/submit", json={"recipe": "nonexistent"})
-    assert resp.status_code == 404
+    assert resp.status_code == 501
+    assert "not implemented" in resp.json()["detail"].lower()
 
 
 def test_get_diagnostics_returns_report():

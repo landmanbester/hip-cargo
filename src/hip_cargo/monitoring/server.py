@@ -263,53 +263,19 @@ def create_app(settings: MonitorSettings | None = None) -> FastAPI:
 
     @app.post("/api/pipelines/submit")
     async def submit_pipeline(body: dict):
-        from hip_cargo.monitoring.recipe_discovery import find_recipe
-        from hip_cargo.monitoring.recipe_parser import parse_recipe
-
-        recipe_name = body.get("recipe")
-        if not recipe_name:
-            raise HTTPException(status_code=400, detail="'recipe' field is required")
-
-        try:
-            recipe_path = find_recipe(recipe_name, settings.recipes_dir)
-        except FileNotFoundError:
-            raise HTTPException(status_code=404, detail=f"Recipe '{recipe_name}' not found")
-
-        dag = parse_recipe(recipe_path, resolve_cabs=False)
-        params = body.get("params", {})
-
-        # Build stimela entrypoint command with proper quoting
-        param_parts = []
-        for k, v in params.items():
-            if isinstance(v, list):
-                param_parts.append(f"{k}={','.join(str(item) for item in v)}")
-            elif isinstance(v, bool):
-                param_parts.append(f"{k}={'true' if v else 'false'}")
-            else:
-                str_val = str(v)
-                if " " in str_val:
-                    str_val = f"'{str_val}'"
-                param_parts.append(f"{k}={str_val}")
-
-        param_args = " ".join(param_parts)
-        entrypoint = f"stimela run {recipe_path} {dag.recipe_key} {param_args}".strip()
-
-        runtime_env = body.get("ray_runtime_env", {})
-        metadata = body.get("metadata", {})
-        metadata.setdefault("recipe", recipe_name)
-        metadata.setdefault("project", "hip-cargo")
-
-        try:
-            submission_id = await _run_sync(
-                app.state.job_client.submit_job,
-                entrypoint=entrypoint,
-                runtime_env=runtime_env or None,
-                metadata=metadata,
-            )
-        except Exception as exc:
-            raise HTTPException(status_code=503, detail=f"Failed to submit job: {exc}")
-
-        return {"submission_id": submission_id, "entrypoint": entrypoint}
+        # Disabled: the original implementation assembled a `stimela run ...`
+        # shell entrypoint from request parameters, an injection surface. The
+        # RFC (§9.6) replaces recipe launch with the transpiled package's own
+        # CLI submitting via JobSubmissionClient directly, so this placeholder
+        # is intentionally unimplemented rather than shipped with a broken
+        # quoting scheme. Submit through the transpiled driver instead.
+        raise HTTPException(
+            status_code=501,
+            detail=(
+                "Pipeline submission via this endpoint is not implemented. Run the transpiled "
+                "package's CLI (e.g. `<pkg> run --monitor`), which submits to Ray directly."
+            ),
+        )
 
     # --- WebSocket ---
 
