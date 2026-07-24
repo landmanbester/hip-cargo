@@ -57,12 +57,22 @@ def run_pipeline(
 
     _emit(EventType.STEP_STARTED, job_id, "first", extra={"step_index": 0})
     ref_first = tasks.first_task.remote(memory_mode, job_id, base_dir, monitor)
-    ray.wait([ref_first])
+    try:
+        ray.get(tasks._check.remote([ref_first]))
+    except Exception as exc:
+        _emit(EventType.STEP_FAILED, job_id, "first", message=str(exc), extra={"step_index": 0})
+        _emit(EventType.FAILED, job_id, "demo", message="step 'first' failed")
+        raise
     _emit(EventType.STEP_COMPLETED, job_id, "first", extra={"step_index": 0})
 
     _emit(EventType.STEP_STARTED, job_id, "second", extra={"step_index": 1})
     ref_second = tasks.second_task.remote(ref_first, memory_mode, job_id, base_dir, monitor, factor=factor)
-    ray.wait([ref_second])
+    try:
+        ray.get(tasks._check.remote([ref_second]))
+    except Exception as exc:
+        _emit(EventType.STEP_FAILED, job_id, "second", message=str(exc), extra={"step_index": 1})
+        _emit(EventType.FAILED, job_id, "demo", message="step 'second' failed")
+        raise
     _emit(EventType.STEP_COMPLETED, job_id, "second", extra={"step_index": 1})
 
     _emit(EventType.COMPLETED, job_id, "demo", message="pipeline complete")

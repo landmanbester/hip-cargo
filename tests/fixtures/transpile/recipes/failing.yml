@@ -1,0 +1,22 @@
+_include:
+  - (fakepkg.cabs)alpha.yml
+  - (fakepkg.cabs)omega.yml
+
+demo:
+  name: demo
+  info: Second step always fails (failure-path fixture).
+  inputs:
+    base-dir:
+      dtype: Directory
+      required: true
+      mkdir: true
+  steps:
+    first:
+      cab: alpha
+      params:
+        output: '{recipe.base-dir}/a.zarr'
+    second:
+      cab: omega
+      params:
+        input-data: '{recipe.base-dir}/a.zarr'
+        output: '{recipe.base-dir}/o.zarr'

@@ -599,6 +599,18 @@ def render_tasks(spec: RecipeSpec) -> str:
         "    from hip_cargo.utils.progress import set_backend",
         "",
         "    set_backend(RayProgressBackend(get_or_create_aggregator()))",
+        "",
+        "",
+        "@ray.remote(num_cpus=0)",
+        "def _check(ref_holder: list) -> bool:",
+        '    """Surface a step\'s error without materialising its dataset on the driver.',
+        "",
+        "    The ObjectRef arrives unresolved inside a list; ray.get here re-raises a",
+        "    failed step's exception, while a successful dataset deserialises in this",
+        "    zero-cpu worker (plasma-local), never in the lightweight driver.",
+        '    """',
+        "    ray.get(ref_holder[0])",
+        "    return True",
     ]
 
     for step in spec.steps:
@@ -741,7 +753,12 @@ def render_runner(spec: RecipeSpec, out_package: str) -> str:
             "",
             f'    _emit(EventType.STEP_STARTED, job_id, {step.name!r}, extra={{"step_index": {index}}})',
             f"    {ref} = tasks.{_task_name(step)}.remote({', '.join(args)})",
-            f"    ray.wait([{ref}])",
+            "    try:",
+            f"        ray.get(tasks._check.remote([{ref}]))",
+            "    except Exception as exc:",
+            f'        _emit(EventType.STEP_FAILED, job_id, {step.name!r}, message=str(exc), extra={{"step_index": {index}}})',  # noqa: E501
+            f'        _emit(EventType.FAILED, job_id, {spec.name!r}, message=f"step {step.name!r} failed")',
+            "        raise",
             f'    _emit(EventType.STEP_COMPLETED, job_id, {step.name!r}, extra={{"step_index": {index}}})',
         ]
         prev_ref = ref

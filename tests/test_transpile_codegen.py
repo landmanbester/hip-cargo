@@ -130,3 +130,93 @@ def test_hostile_strings_emitted_inert(tmp_path):
     spec.loader.exec_module(mod)  # would execute injected code if escaping failed
     default = inspect.signature(mod.run).parameters["payload"].default
     assert default == hostile_default
+
+
+@pytest.mark.slow
+def test_generated_pipeline_executes_on_ray(tmp_path):
+    """The emitted package actually runs on a local Ray cluster."""
+    ray = pytest.importorskip("ray")
+    from hip_cargo.utils.progress import NullBackend, ProgressEvent, set_backend
+
+    class ListBackend:
+        def __init__(self):
+            self.events: list[ProgressEvent] = []
+
+        def emit(self, event):
+            self.events.append(event)
+
+        def close(self):
+            pass
+
+    out = tmp_path / "genpkg"
+    transpile_recipe(RECIPES / "linear_ok.yml", out, out_package="genpkg")
+    sys.path.insert(0, str(tmp_path))
+    backend = ListBackend()
+    try:
+        ray.init(
+            num_cpus=2,
+            ignore_reinit_error=True,
+            runtime_env={"env_vars": {"PYTHONPATH": f"{FIXTURES}:{tmp_path}"}},
+        )
+        import genpkg.runner as runner
+
+        set_backend(backend)
+        job_id, final_ref = runner.run_pipeline(base_dir=str(tmp_path / "work"), factor=3.0)
+        assert ray.get(tasks_check(ray, final_ref, out)) is True
+        types = [e.event_type for e in backend.events]
+        assert types.count("step_completed") == 2
+        assert types[-1] == "completed"
+    finally:
+        set_backend(NullBackend())
+        sys.path.remove(str(tmp_path))
+        ray.shutdown()
+
+
+def tasks_check(ray, ref, out):
+    """Resolve the final ref through the generated probe (driver stays light)."""
+    import importlib
+
+    tasks = importlib.import_module("genpkg.tasks")
+    return tasks._check.remote([ref])
+
+
+@pytest.mark.slow
+def test_generated_pipeline_surfaces_step_failure(tmp_path):
+    """A crashing step emits STEP_FAILED + FAILED and raises (no silent exit 0)."""
+    ray = pytest.importorskip("ray")
+    from hip_cargo.utils.progress import NullBackend, ProgressEvent, set_backend
+
+    class ListBackend:
+        def __init__(self):
+            self.events: list[ProgressEvent] = []
+
+        def emit(self, event):
+            self.events.append(event)
+
+        def close(self):
+            pass
+
+    out = tmp_path / "failpkg"
+    transpile_recipe(RECIPES / "failing.yml", out, out_package="failpkg")
+    sys.path.insert(0, str(tmp_path))
+    backend = ListBackend()
+    try:
+        ray.init(
+            num_cpus=2,
+            ignore_reinit_error=True,
+            runtime_env={"env_vars": {"PYTHONPATH": f"{FIXTURES}:{tmp_path}"}},
+        )
+        import failpkg.runner as runner
+
+        set_backend(backend)
+        with pytest.raises(Exception, match="omega always fails"):
+            runner.run_pipeline(base_dir=str(tmp_path / "work"))
+        types = [e.event_type for e in backend.events]
+        assert "step_failed" in types
+        assert types[-1] == "failed"
+        failed = next(e for e in backend.events if e.event_type == "step_failed")
+        assert failed.worker_name == "second"
+    finally:
+        set_backend(NullBackend())
+        sys.path.remove(str(tmp_path))
+        ray.shutdown()
