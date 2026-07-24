@@ -5,6 +5,7 @@ description = "Tools for generating Stimela cab definitions from Python function
 readme = "README.md"
 requires-python = ">=3.10"
 license = "MIT"
+license-files = ["LICENSE"]
 authors = [
     { name = "landmanbester", email = "lbester@sarao.ac.za" }
 ]
