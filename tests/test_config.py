@@ -4,8 +4,14 @@ from pathlib import Path
 
 import pytest
 
-from hip_cargo.monitoring.config import MonitorSettings
-from hip_cargo.utils.config import get_container_gpu, get_container_image, get_container_run_args
+pytest.importorskip("pydantic_settings", reason="monitoring extra is Python 3.11+")
+
+from hip_cargo.monitoring.config import MonitorSettings  # noqa: E402
+from hip_cargo.utils.config import (  # noqa: E402  # noqa: E402
+    get_container_gpu,
+    get_container_image,
+    get_container_run_args,
+)
 
 
 def test_defaults():

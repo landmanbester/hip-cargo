@@ -10,8 +10,18 @@ is no cross-worker contention.
 
 import time
 from dataclasses import asdict, dataclass, field
-from enum import StrEnum
 from typing import Any, Protocol, runtime_checkable
+
+try:  # Python 3.11+
+    from enum import StrEnum
+except ImportError:  # Python 3.10: stand-in with identical str()/format() behaviour
+    from enum import Enum
+
+    class StrEnum(str, Enum):  # type: ignore[no-redef]
+        def __str__(self) -> str:
+            return str(self.value)
+
+        __format__ = str.__format__
 
 
 class EventType(StrEnum):

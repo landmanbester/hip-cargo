@@ -34,12 +34,15 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# The monitoring stack (Ray + FastAPI) is a Python 3.11+ feature. On 3.10 the
+# markers resolve to nothing: the lightweight install still imports and runs,
+# and heavy execution goes through the containerised backend instead.
 monitoring = [
-    "fastapi>=0.115.0",
-    "uvicorn[standard]>=0.30.0",
-    "websockets>=13.0",
-    "pydantic-settings>=2.0.0",
-    "ray[default]>=2.40.0",
+    "fastapi>=0.115.0; python_version >= '3.11'",
+    "uvicorn[standard]>=0.30.0; python_version >= '3.11'",
+    "websockets>=13.0; python_version >= '3.11'",
+    "pydantic-settings>=2.0.0; python_version >= '3.11'",
+    "ray[default]>=2.40.0; python_version >= '3.11'",
 ]
 s3 = ["s3fs>=2024.10.0"]
 gcs = ["gcsfs>=2024.10.0"]

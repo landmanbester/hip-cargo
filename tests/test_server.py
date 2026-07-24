@@ -8,11 +8,15 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 import pytest
-from fastapi.testclient import TestClient
 
-from hip_cargo.monitoring.config import MonitorSettings
-from hip_cargo.monitoring.server import create_app
-from tests.mocks import FailingJobClient, FakeJobClient
+pytest.importorskip("fastapi", reason="monitoring extra is Python 3.11+")
+pytest.importorskip("pydantic_settings", reason="monitoring extra is Python 3.11+")
+
+from fastapi.testclient import TestClient  # noqa: E402
+
+from hip_cargo.monitoring.config import MonitorSettings  # noqa: E402
+from hip_cargo.monitoring.server import create_app  # noqa: E402
+from tests.mocks import FailingJobClient, FakeJobClient  # noqa: E402
 
 FIXTURES = Path(__file__).parent / "fixtures"
 

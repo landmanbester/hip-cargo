@@ -5,7 +5,9 @@ import concurrent.futures
 
 import pytest
 
-from hip_cargo.monitoring.dispatcher import EventDispatcher
+pytest.importorskip("pytest_asyncio", reason="monitoring-dev group is Python 3.11+ tooling")
+
+from hip_cargo.monitoring.dispatcher import EventDispatcher  # noqa: E402
 
 # --- Fake aggregator for dispatcher tests ---
 
