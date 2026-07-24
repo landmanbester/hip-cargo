@@ -1,1 +1,1 @@
-CONTAINER_IMAGE = "ghcr.io/landmanbester/hip-cargo:apis"
+CONTAINER_IMAGE = "ghcr.io/landmanbester/hip-cargo:latest"

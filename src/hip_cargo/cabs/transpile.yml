@@ -5,7 +5,7 @@ cabs:
     name: transpile
     info:
       Transpile a restricted-subset stimela recipe into a Ray runner package.
-    image: ghcr.io/landmanbester/hip-cargo:apis
+    image: ghcr.io/landmanbester/hip-cargo:latest
     inputs:
       recipe:
         info:
