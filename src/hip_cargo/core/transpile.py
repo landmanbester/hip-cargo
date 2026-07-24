@@ -845,3 +845,24 @@ def transpile_recipe(recipe_path, output_dir, out_package: str | None = None) ->
             pass
     spec = build_recipe_spec(dag, source=source)
     return write_package(spec, output_dir, out_package)
+
+
+def transpile(recipe, output_dir, package: str | None = None) -> None:
+    """Cab entry point (`hip_cargo.core.transpile.transpile`).
+
+    Thin wrapper over `transpile_recipe` whose signature matches the cab's
+    declared inputs (recipe, output-dir, package).
+
+    Args:
+        recipe: Recipe YAML path.
+        output_dir: Directory the generated package is written into.
+        package: Dotted import path override for the emitted package.
+
+    Raises:
+        TranspileRefusedError: When the recipe falls outside the restricted subset.
+    """
+    written = transpile_recipe(recipe, output_dir, out_package=package)
+    for path in written:
+        print(f"wrote {path}")
+    if not written:
+        print("output already up to date")

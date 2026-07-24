@@ -34,18 +34,12 @@ def monitor(
     ] = None,
 ):
     """Launch the hip-cargo monitoring dashboard."""
-    import uvicorn
+    from hip_cargo.core.monitor import monitor as monitor_core
 
-    from hip_cargo.monitoring.config import MonitorSettings
-    from hip_cargo.monitoring.server import create_app
-
-    settings = MonitorSettings(
-        host=host,
+    monitor_core(
         port=port,
+        host=host,
         ray_address=ray_address,
         ray_dashboard_url=ray_dashboard_url,
         auth_token=auth_token,
     )
-
-    app = create_app(settings)
-    uvicorn.run(app, host=settings.host, port=settings.port)
