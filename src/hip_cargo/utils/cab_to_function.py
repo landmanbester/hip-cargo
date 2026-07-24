@@ -292,6 +292,15 @@ def format_stimela_meta_call(meta: dict[str, Any], indent_level: int = 0) -> str
     return "\n".join(lines)
 
 
+def _escape_help(text: str) -> str:
+    """Escape a help/info fragment for emission inside a double-quoted literal.
+
+    Backslashes must be escaped before quotes, and raw control characters
+    would otherwise break out of the generated string literal.
+    """
+    return text.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t")
+
+
 def generate_parameter_signature(
     param_name: str, param_def: dict[str, Any], policies: Optional[dict[str, Any]] = None
 ) -> str:
@@ -346,7 +355,7 @@ def generate_parameter_signature(
     if choices:
         uses_literal = True
         # Format choices for Literal
-        choices_formatted = ", ".join(f'"{c}"' if isinstance(c, str) else str(c) for c in choices)
+        choices_formatted = ", ".join(repr(c) if isinstance(c, str) else str(c) for c in choices)
         py_type = f"Literal[{choices_formatted}]"
         needs_parser = False  # Literal types don't need parser
 
@@ -373,8 +382,8 @@ def generate_parameter_signature(
                 except (ValueError, TypeError):
                     # Not a valid number, treat as string
                     pass
-            # Regular string
-            return f'"{val}"'
+            # Regular string — repr escapes quotes/backslashes/newlines safely
+            return repr(val)
         elif isinstance(val, list):
             return "[" + ", ".join(format_default(v) for v in val) + "]"
         else:
@@ -414,7 +423,7 @@ def generate_parameter_signature(
         # Split info by newlines and quote each sentence
         info_lines = info.split("\n")
         # Escape quotes in each line
-        info_lines_escaped = [line.replace('"', '\\"') for line in info_lines]
+        info_lines_escaped = [_escape_help(line) for line in info_lines]
 
         # First line starts with help=
         # Add space at end of each line except the last for proper concatenation
@@ -435,7 +444,7 @@ def generate_parameter_signature(
                 lines_out.append(f'            help="{info_lines_escaped[0]}",')
     else:
         # Single-line help text
-        info_escaped = info.replace('"', '\\"')
+        info_escaped = _escape_help(info)
         if trailing_comment:
             lines_out.append(f'            help="{info_escaped}",{trailing_comment}')
         else:

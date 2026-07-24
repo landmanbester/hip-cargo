@@ -90,3 +90,43 @@ def test_refused_recipe_raises_with_all_errors(tmp_path):
         transpile_recipe(RECIPES / "formula.yml", tmp_path / "x")
     assert "formula-dsl" in str(exc.value)
     assert not (tmp_path / "x").exists()
+
+
+def test_hostile_strings_emitted_inert(tmp_path):
+    """Injection attempt in defaults/info must survive as plain data, not code."""
+    import importlib.util
+    import inspect
+
+    import yaml
+
+    hostile_default = '", __import__("os").system("echo pwned"), "'
+    hostile_info = 'quotes " and \\ backslash {braces} \n newline'
+    recipe = {
+        "_include": ["(fakepkg.cabs)alpha.yml"],
+        "demo": {
+            "name": "demo",
+            "inputs": {
+                "base-dir": {"dtype": "Directory", "required": True, "mkdir": True},
+                "payload": {"dtype": "str", "default": hostile_default, "info": hostile_info},
+            },
+            "steps": {
+                "first": {"cab": "alpha", "params": {"output": "{recipe.base-dir}/a.zarr"}},
+            },
+        },
+    }
+    recipe_path = tmp_path / "hostile.yml"
+    recipe_path.write_text(yaml.safe_dump(recipe))
+
+    out = tmp_path / "transpiled"
+    transpile_recipe(recipe_path, out, out_package="fakepkg.transpiled")
+
+    import py_compile
+
+    for module in out.glob("*.py"):
+        py_compile.compile(str(module), doraise=True)
+
+    spec = importlib.util.spec_from_file_location("hostile_cli", out / "cli.py")
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)  # would execute injected code if escaping failed
+    default = inspect.signature(mod.run).parameters["payload"].default
+    assert default == hostile_default

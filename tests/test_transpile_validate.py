@@ -79,3 +79,63 @@ def test_errors_are_collected_not_first_fail(tmp_path):
     dag = parse_recipe(recipe, resolve_cabs=True)
     errors = validate_recipe(dag)
     assert sorted(e.feature for e in errors) == ["for_loop", "formula-dsl"]
+
+
+def _mutate_linear(tmp_path, replacements):
+    recipe = tmp_path / "mutated.yml"
+    text = (RECIPES / "linear_ok.yml").read_text()
+    for old, new in replacements:
+        assert old in text
+        text = text.replace(old, new)
+    recipe.write_text(text)
+    dag = parse_recipe(recipe, resolve_cabs=True)
+    return validate_recipe(dag)
+
+
+def test_unsafe_step_name_refused(tmp_path):
+    errors = _mutate_linear(tmp_path, [("    first:", '    "ev!l; name":')])
+    assert "unsafe-name" in [e.feature for e in errors]
+
+
+def test_keyword_step_name_refused(tmp_path):
+    errors = _mutate_linear(tmp_path, [("    first:", "    class:")])
+    assert "unsafe-name" in [e.feature for e in errors]
+
+
+def test_hyphen_underscore_collision_refused(tmp_path):
+    errors = _mutate_linear(
+        tmp_path,
+        [
+            (
+                "    factor:\n      dtype: float\n      default: 2.0",
+                "    my-x:\n      dtype: float\n      default: 2.0\n    my_x:\n      dtype: float\n      default: 3.0",
+            )
+        ],
+    )
+    assert "name-collision" in [e.feature for e in errors]
+
+
+def test_reserved_input_name_refused(tmp_path):
+    errors = _mutate_linear(
+        tmp_path,
+        [
+            (
+                "    factor:\n      dtype: float\n      default: 2.0",
+                "    monitor:\n      dtype: bool\n      default: false",
+            )
+        ],
+    )
+    assert "reserved-name" in [e.feature for e in errors]
+
+
+def test_unsupported_default_type_refused(tmp_path):
+    errors = _mutate_linear(
+        tmp_path,
+        [
+            (
+                "    factor:\n      dtype: float\n      default: 2.0",
+                "    when:\n      dtype: str\n      default: 2026-01-01",
+            )
+        ],
+    )
+    assert "unsupported-default" in [e.feature for e in errors]

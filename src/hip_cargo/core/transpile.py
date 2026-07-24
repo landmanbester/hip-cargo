@@ -7,6 +7,7 @@ this module never imports the wrapped science package — in-memory siblings are
 detected statically via `importlib.util.find_spec` + a LibCST source scan.
 """
 
+import keyword
 import re
 from dataclasses import dataclass, replace
 
@@ -16,6 +17,10 @@ _INTERP_REF_RE = re.compile(r"\{recipe\.([\w-]+)\}")
 _PURE_REF_RE = re.compile(r"^recipe\.([\w-]+)$")
 _IMPORT_PATH_RE = re.compile(r"^[A-Za-z_][\w]*(\.[A-Za-z_][\w]*)+$")
 _PATH_DTYPES = {"File", "Directory", "MS", "URI"}
+_SAFE_NAME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9_-]*$")
+# Sanitised recipe-input names that would shadow generated driver params/locals.
+_RESERVED_INPUT_NAMES = {"monitor", "job_id", "ray_address", "tasks", "ray", "uuid", "os", "dataset", "work_dir"}
+_SAFE_DEFAULT_TYPES = (str, int, float, bool, type(None))
 
 
 @dataclass(frozen=True)
@@ -59,7 +64,62 @@ def validate_recipe(dag: RecipeDAG) -> list[TranspileError]:
     errors: list[TranspileError] = []
     input_names = {i.name for i in dag.inputs}
 
+    def check_name(kind: str, name: str, location: str) -> None:
+        """Names become Python identifiers, docstrings, and event payloads in
+        emitted source; restrict them to a charset that cannot break out."""
+        if not _SAFE_NAME_RE.match(name or ""):
+            errors.append(
+                TranspileError(
+                    feature="unsafe-name",
+                    location=location,
+                    message=f"{kind} name {name!r} must match [A-Za-z][A-Za-z0-9_-]* to be transpiled",
+                )
+            )
+        elif keyword.iskeyword(sanitize(name)):
+            errors.append(
+                TranspileError(
+                    feature="unsafe-name",
+                    location=location,
+                    message=f"{kind} name {name!r} sanitises to the Python keyword '{sanitize(name)}'",
+                )
+            )
+
+    check_name("recipe", dag.recipe_key, "recipe block")
+    check_name("recipe", dag.name, "recipe name")
+
+    seen_inputs: dict[str, str] = {}
     for inp in dag.inputs:
+        loc = f"input '{inp.name}'"
+        check_name("input", inp.name, loc)
+        py = sanitize(inp.name)
+        if py in seen_inputs:
+            errors.append(
+                TranspileError(
+                    feature="name-collision",
+                    location=loc,
+                    message=f"sanitises to '{py}', colliding with input '{seen_inputs[py]}'",
+                )
+            )
+        seen_inputs[py] = inp.name
+        if py in _RESERVED_INPUT_NAMES:
+            errors.append(
+                TranspileError(
+                    feature="reserved-name",
+                    location=loc,
+                    message=f"'{py}' collides with a generated driver parameter or runner local",
+                )
+            )
+        if not isinstance(inp.default, _SAFE_DEFAULT_TYPES):
+            errors.append(
+                TranspileError(
+                    feature="unsupported-default",
+                    location=loc,
+                    message=(
+                        f"default {inp.default!r} of type {type(inp.default).__name__} cannot be "
+                        "emitted as a literal; use str/int/float/bool (quote YAML dates/times)"
+                    ),
+                )
+            )
         if inp.aliases:
             errors.append(
                 TranspileError(
@@ -73,8 +133,22 @@ def validate_recipe(dag: RecipeDAG) -> list[TranspileError]:
                 )
             )
 
+    seen_steps: dict[str, str] = {}
     for step in dag.steps:
         loc_step = f"step '{step.name}'"
+        check_name("step", step.name, loc_step)
+        py_step = sanitize(step.name)
+        if py_step in seen_steps:
+            errors.append(
+                TranspileError(
+                    feature="name-collision",
+                    location=loc_step,
+                    message=f"sanitises to '{py_step}', colliding with step '{seen_steps[py_step]}'",
+                )
+            )
+        seen_steps[py_step] = step.name
+        for param in step.params:
+            check_name("parameter", param.name, f"{loc_step}, param '{param.name}'")
         for key in step.extra_keys:
             errors.append(
                 TranspileError(
@@ -271,10 +345,15 @@ def lower_interpolation(value: str) -> str:
     """
     if not _INTERP_REF_RE.search(value):
         return repr(value)
-    lowered = value.replace("{", "{{").replace("}", "}}")
+    # Escape everything that could break out of (or corrupt) the emitted
+    # f-string literal BEFORE brace-doubling and ref substitution.
+    lowered = (
+        value.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t")
+    )
+    lowered = lowered.replace("{", "{{").replace("}", "}}")
     for ref in set(_INTERP_REF_RE.findall(value)):
         lowered = lowered.replace(f"{{{{recipe.{ref}}}}}", f"{{{sanitize(ref)}}}")
-    return 'f"' + lowered.replace('"', '\\"') + '"'
+    return 'f"' + lowered + '"'
 
 
 def _classify_binding(param) -> Binding:
