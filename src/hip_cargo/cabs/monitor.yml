@@ -5,7 +5,7 @@ cabs:
     name: monitor
     info:
       Launch the monitoring dashboard for the current project.
-    image: ghcr.io/landmanbester/hip-cargo:latest
+    image: ghcr.io/landmanbester/hip-cargo:0.3.0
     inputs:
       port:
         info:
