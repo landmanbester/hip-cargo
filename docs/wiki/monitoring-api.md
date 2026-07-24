@@ -3,16 +3,36 @@ type: reference
 title: Monitoring API
 description: REST + WebSocket endpoint reference and MonitorSettings configuration.
 tags: [monitoring, api, fastapi, config]
-timestamp: 2026-07-13
-last_verified_commit: a1b714a
+timestamp: 2026-07-24
+last_verified_commit: 50f3eea
 ---
 
 # Monitoring API
 
 Source: `src/hip_cargo/monitoring/server.py` (`create_app`), `config.py`
 (`MonitorSettings`), `dispatcher.py` (`EventDispatcher`). Requires
-`hip-cargo[monitoring]`. Launch: `hip-cargo monitor --port 8321`, or
-`create_app(MonitorSettings(...))` programmatically. Swagger UI at `/docs`.
+`hip-cargo[monitoring]`, which is a **Python 3.11+ feature** (on 3.10 the extra
+resolves to nothing and heavy work runs via the containerised backend). Launch:
+`hip-cargo monitor --port 8321`, or `create_app(MonitorSettings(...))`
+programmatically. Swagger UI at `/docs`.
+
+## Known limitations (tracked as issues; pre-thinning)
+
+The lifecycle/aggregation layer duplicates capabilities Ray already exposes and
+carries defects an owner has chosen to fold into a later Ray-native thinning
+(see `docs/review-artifacts/wheel-review.md`) rather than patch piecemeal:
+
+- **`hip-cargo monitor` pins no Ray namespace**, while a transpiled runner uses
+  `ray.init(namespace=<package>)`, so the detached `progress_aggregator` actor
+  is scoped differently and the server does not see the run. Workaround: launch
+  the server in the run's namespace (the stokify demo ships its own launcher).
+- **Ring-buffer trim invalidates `since=` cursors**: once a job exceeds
+  `max_events_per_job` (default 1000) and the oldest half is dropped, absolute
+  indices shift and `/events?since=N` (and the WebSocket, which shares the
+  cursor) silently skip or repeat events.
+- **The WebSocket closes on the first worker-level `completed`**, so for a
+  multi-step pipeline it drops later steps and their DIAGNOSTIC events. REST
+  polling (`/events`, the authoritative path) is unaffected.
 
 ## Endpoints
 

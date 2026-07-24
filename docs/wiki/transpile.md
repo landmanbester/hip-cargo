@@ -3,8 +3,8 @@ type: reference
 title: hip-cargo transpile
 description: Recipe-to-Ray-package transpiler — grammar, in-memory contract, CLI usage, and current limitations.
 tags: [transpile, codegen, ray, recipes]
-timestamp: 2026-07-13
-last_verified_commit: ebbd1fb
+timestamp: 2026-07-24
+last_verified_commit: 50f3eea
 ---
 
 # `hip-cargo transpile`
@@ -62,6 +62,25 @@ are not rewritten.
 | Non-python cab flavours | refused: `non-python-cab` |
 | Unknown `recipe.*` refs; unbound required cab inputs | refused: `unknown-ref` / `unbound-required` |
 | Multiple upstream producers for one step | refused: `multiple-upstreams` (linear v1) |
+| Recipe/step/input/param name outside `[A-Za-z][A-Za-z0-9_-]*`, or one that sanitises to a Python keyword | refused: `unsafe-name` |
+| Two names colliding after `-`→`_` sanitisation (e.g. `n-x` and `n_x`) | refused: `name-collision` |
+| Input name reserved by the generated driver/runner (`monitor`, `job-id`, `ray-address`, `tasks`, `ray`, `uuid`, `os`, `dataset`, `work-dir`) | refused: `reserved-name` |
+| Input default not a `str`/`int`/`float`/`bool`/null literal (e.g. an unquoted YAML date) | refused: `unsupported-default` |
+
+Names and default/choice values are emitted through `repr()` and control-char /
+backslash escaping, so a recipe string can never break out of the literal it is
+placed in; the charset and keyword refusals above are belt-and-braces on top.
+
+## Failure semantics
+
+A crashing step does **not** silently succeed. Generated `tasks.py` carries a
+zero-cpu `_check` remote that resolves a step's `ObjectRef` inside a worker
+(plasma-local — the driver still never materialises the dataset); generated
+`runner.py` wraps each submission so a failure emits `STEP_FAILED` (worker =
+the step name) followed by a pipeline-level `FAILED`, then re-raises. The CLI
+therefore exits non-zero on a crashed pipeline rather than emitting
+`STEP_COMPLETED`/`COMPLETED` and exiting 0. Two slow tests execute the
+generated pipeline on a real Ray cluster (success and failure paths).
 
 ## The v1 in-memory contract
 

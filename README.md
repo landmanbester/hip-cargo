@@ -522,13 +522,17 @@ hip-cargo includes a monitoring layer for tracking distributed pipeline executio
 
 ### Installation
 
-The monitoring dependencies are optional:
+The monitoring dependencies are optional and are a **Python 3.11+ feature**:
 
 ```bash
 pip install hip-cargo[monitoring]
 ```
 
-This installs FastAPI, uvicorn, Ray, pydantic-settings, and websockets.
+This installs FastAPI, uvicorn, Ray, pydantic-settings, and websockets. On
+Python 3.10 the `monitoring` extra resolves to nothing (its requirements are
+marked `python_version >= '3.11'`): the lightweight package still installs,
+imports, and generates cabs, and heavy work runs through the containerised
+backend (whose image ships a compatible Python with the full stack).
 
 ### Architecture
 
