@@ -1,0 +1,17 @@
+cabs:
+  delta:
+    flavour: python
+    command: fakepkg.core.delta.delta
+    name: delta
+    info: Scale the dataset (no inmem sibling).
+    inputs:
+      input-data:
+        dtype: Directory
+        required: true
+      scale:
+        dtype: int
+        required: true
+    outputs:
+      output:
+        dtype: Directory
+        required: true

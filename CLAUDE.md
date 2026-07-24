@@ -6,6 +6,24 @@
 
 *Note: Detailed domain logic, Python standards, and CI/CD rules have been modularized into the `.claude/rules/` directory for progressive disclosure.*
 
+## LLM Wiki (canonical implementation reference)
+
+Deep reference documentation lives in `docs/wiki/` (start at
+`docs/wiki/index.md`). Each page's frontmatter carries a
+`last_verified_commit` stamp — the commit its claims were last checked
+against.
+
+* **Read the relevant wiki page before working in a subsystem** (monitoring,
+  diagnostics, container execution, remote URIs).
+* **Update-as-you-touch rule:** if a change you make invalidates or extends a
+  wiki page, update that page and refresh its `last_verified_commit`
+  (`git rev-parse --short HEAD`) and `timestamp` in the same session, and add
+  a line to `docs/wiki/log.md`.
+* Specs and plans (e.g. under `docs/superpowers/`) are ephemeral process
+  artifacts: fine to write during development, but they must **not** be
+  retained as documentation — fold durable facts into the wiki and delete
+  them before the work is merged.
+
 ## Core Dependencies
 
 * Minimize external dependencies.
@@ -36,7 +54,8 @@ hip-cargo/
 │   │   ├── __init__.py       # Main Typer app, registers commands
 │   │   ├── generate_cabs.py
 │   │   ├── generate_function.py
-│   │   └── init.py           # hip-cargo init command
+│   │   ├── init.py           # hip-cargo init command
+│   │   └── monitor.py        # hip-cargo monitor command (needs monitoring extra)
 │   ├── core/                 # Core implementations (lazy-loaded)
 │   │   ├── __init__.py
 │   │   ├── generate_cabs.py
@@ -56,15 +75,31 @@ hip-cargo/
 │   │   ├── tbump.toml
 │   │   ├── licenses/         # MIT, Apache-2.0, BSD-3-Clause
 │   │   └── workflows/        # GitHub Actions workflow templates
+│   ├── monitoring/           # Pipeline monitoring (optional, needs hip-cargo[monitoring])
+│   │   ├── __init__.py
+│   │   ├── cab_resolver.py      # Resolve _include to cab schemas
+│   │   ├── config.py            # MonitorSettings (pydantic-settings, HIPCARGO_ prefix)
+│   │   ├── diagnostics_report.py # Join DIAGNOSTIC events into per-task report
+│   │   ├── dispatcher.py        # Centralised WebSocket event fan-out
+│   │   ├── ray_backend.py       # ProgressAggregator actor + RayProgressBackend
+│   │   ├── recipe_discovery.py  # Find recipe YAML files in project
+│   │   ├── recipe_parser.py     # Parse stimela recipe DAG structure
+│   │   └── server.py            # FastAPI app (REST + WebSocket)
 │   └── utils/                # Shared utilities
 │       ├── __init__.py
 │       ├── cab_to_function.py   # Generate function from cab YAML
 │       ├── config.py            # Container image URL + GPU/RUN_ARGS readers from _container_image.py
 │       ├── decorators.py        # @stimela_cab, @stimela_output
+│       ├── diagnostics.py       # Per-task resource capture (getrusage + optional psutil)
 │       ├── introspector.py      # Extract metadata from functions
+│       ├── progress.py          # ProgressEvent, EventType, ProgressBackend protocol
+│       ├── progress_context.py  # track_progress() context manager
 │       ├── runner.py            # Container fallback execution
 │       ├── yaml_comments.py     # YAML comment extraction/preservation
 │       └── types.py             # ListInt, ListFloat, ListStr NewTypes + parsers
 ├── tests/
+│   ├── mocks.py              # Shared test mocks (FakeJobClient, etc.)
+│   └── fixtures/
+│       └── sara.yml           # pfb-imaging SARA recipe fixture
 └── pyproject.toml
 ```

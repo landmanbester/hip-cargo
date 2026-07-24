@@ -48,3 +48,4 @@ Thumbs.db
 
 # AI
 .claude-work/
+.claude/workflows/

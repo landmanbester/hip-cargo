@@ -31,7 +31,7 @@ jobs:
 
       - name: Set up Python
         if: env.SKIP_CHECKS != 'true'
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v7
         with:
           python-version: "3.10"
 
@@ -65,6 +65,8 @@ jobs:
     runs-on: ubuntu-latest
     env:
       SKIP_CHECKS: 'false'
+      # Without this, uv obeys .python-version (3.11) and the matrix is cosmetic.
+      UV_PYTHON: ${{ matrix.python-version }}
     strategy:
       fail-fast: false
       matrix:
@@ -88,7 +90,7 @@ jobs:
 
       - name: Set up Python ${{ matrix.python-version }}
         if: env.SKIP_CHECKS != 'true'
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@v7
         with:
           python-version: ${{ matrix.python-version }}
 
@@ -108,7 +110,7 @@ jobs:
 
       - name: Install dependencies
         if: env.SKIP_CHECKS != 'true'
-        run: uv sync --group test
+        run: uv sync --group test --group monitoring-dev
 
       - name: Run tests
         if: env.SKIP_CHECKS != 'true'

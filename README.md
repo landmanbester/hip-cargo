@@ -20,6 +20,11 @@ pip install hip-cargo
 
 See the [Development](#development) section for instructions on how to set up the development environment and make contributions.
 
+> **Deep reference:** implemented behaviour is documented in the in-repo
+> [LLM wiki](docs/wiki/index.md) — plain-markdown pages with per-page
+> `last_verified_commit` stamps, written for agents and humans alike. This
+> README stays a human quickstart; the wiki is the canonical detail layer.
+
 ## Key Principles
 
 1. **Separate CLI from implementation**: Keep CLI modules lightweight with lazy imports. Keep them all in the `src/mypackage/cli` directory and define the CLI for each command in a separate file. Construct the main Typer app in `src/mypackage/cli/__init__.py` and register commands there.
@@ -505,6 +510,162 @@ paths keep their existing mount-driven semantics.
 - Project scaffolding with `hip-cargo init` including CI/CD, containerisation, and onboarding
 - Container fallback execution with automatic volume mount resolution from type hints
 - Support for apptainer, singularity, docker, and podman backends
+- Runtime image resolution from the package's `_container_image.py` module — no CWD dependency, single source of truth
+- **Pipeline monitoring**: Real-time progress tracking for distributed pipelines running on Ray clusters
+- **Per-task diagnostics**: requested-vs-used resource breakdown per pipeline step, served as JSON for humans and optimising agents
+- **Recipe parsing**: Extract DAG structure from stimela recipe YAML files for visualization
+- **Cab resolution**: Resolve `_include` entries in recipes to full parameter schemas
+
+## Pipeline Monitoring
+
+hip-cargo includes a monitoring layer for tracking distributed pipeline execution on Ray clusters. This is useful for radio astronomy imaging pipelines (e.g. SARA deconvolution) where long-running distributed workers need real-time progress visibility.
+
+### Installation
+
+The monitoring dependencies are optional and are a **Python 3.11+ feature**:
+
+```bash
+pip install hip-cargo[monitoring]
+```
+
+This installs FastAPI, uvicorn, Ray, pydantic-settings, and websockets. On
+Python 3.10 the `monitoring` extra resolves to nothing (its requirements are
+marked `python_version >= '3.11'`): the lightweight package still installs,
+imports, and generates cabs, and heavy work runs through the containerised
+backend (whose image ships a compatible Python with the full stack).
+
+### Architecture
+
+The monitoring system has three layers:
+
+1. **Progress Protocol** (`hip_cargo.utils.progress`) — stdlib-only dataclasses and protocols. Workers emit `ProgressEvent` objects through a pluggable backend. Zero overhead when monitoring is disabled (uses `NullBackend`).
+
+2. **Ray Aggregator** (`hip_cargo.monitoring.ray_backend`) — A detached Ray actor (`ProgressAggregator`) collects events from all workers via fire-and-forget calls. The actor survives worker restarts.
+
+3. **FastAPI Server** (`hip_cargo.monitoring.server`) — Queries the aggregator and the Ray Jobs SDK. Serves REST endpoints and WebSocket streams. A centralised `EventDispatcher` polls the aggregator once per interval and fans out to all connected WebSocket clients.
+
+### Quick Start
+
+```python
+from hip_cargo import track_progress, EventType, ProgressEvent
+from hip_cargo.utils.progress import set_backend, emit
+
+# 1. In your pipeline driver, set up the Ray backend
+from hip_cargo.monitoring.ray_backend import RayProgressBackend, get_or_create_aggregator
+import ray
+
+ray.init()
+aggregator = get_or_create_aggregator()
+set_backend(RayProgressBackend(aggregator))
+
+# 2. In your workers, emit progress events
+with track_progress("sara", total_steps=15, job_id="run-001") as tracker:
+    for cycle in range(15):
+        # ... do work ...
+        tracker.step(f"Major cycle {cycle + 1}")
+        tracker.metric("peak_residual", compute_residual())
+        tracker.artifact("/data/model.fits", artifact_type="fits")
+
+# 3. Launch the monitoring dashboard
+# From the CLI:
+#   hip-cargo monitor --port 8321
+```
+
+### REST API
+
+Launch the server with `hip-cargo monitor` or programmatically:
+
+```python
+from hip_cargo.monitoring.server import create_app
+from hip_cargo.monitoring.config import MonitorSettings
+
+app = create_app(MonitorSettings(port=8321))
+```
+
+Key endpoints:
+
+| Endpoint | Description |
+|----------|-------------|
+| `GET /api/jobs` | List all Ray jobs, enriched with progress data |
+| `GET /api/jobs/{job_id}` | Job details with latest progress |
+| `GET /api/jobs/{job_id}/logs` | Job logs |
+| `POST /api/jobs/{job_id}/stop` | Stop a running job |
+| `GET /api/progress/{job_id}` | Latest progress event |
+| `GET /api/progress/{job_id}/events?since=0` | Incremental event polling |
+| `GET /api/progress/{job_id}/metrics/{name}` | Metric time series |
+| `GET /api/progress/{job_id}/dag` | Pipeline DAG structure |
+| `GET /api/progress/{job_id}/diagnostics` | Per-task resource breakdown (requested vs used) |
+| `GET /api/recipes` | Discover recipe files |
+| `GET /api/recipes/{name}` | Parse recipe DAG |
+| `GET /api/commands` | Discover project cabs |
+| `POST /api/pipelines/submit` | Submit a pipeline via Ray Jobs |
+| `WS /ws/progress/{job_id}` | Real-time event stream |
+
+### Configuration
+
+All settings can be provided via environment variables with the `HIPCARGO_` prefix or a `.env` file:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `HIPCARGO_AUTH_TOKEN` | `None` | Bearer token for API authentication |
+| `HIPCARGO_PORT` | `8321` | Server port |
+| `HIPCARGO_HOST` | `0.0.0.0` | Server host |
+| `HIPCARGO_RAY_ADDRESS` | `None` | Ray cluster address (auto-detect) |
+| `HIPCARGO_RAY_DASHBOARD_URL` | `http://localhost:8265` | Ray Dashboard URL |
+| `HIPCARGO_RECIPES_DIR` | `None` | Override recipe discovery directory |
+| `HIPCARGO_CLI_MODULE` | `None` | Dotted path to CLI module for cab discovery |
+
+### Per-Task Diagnostics
+
+Every `track_progress(...)` block also records what the task actually
+consumed (two `getrusage` syscalls — free when monitoring is off). The server
+joins this with each step's declared resource request:
+
+```bash
+curl http://localhost:8321/api/progress/run-001/diagnostics
+```
+
+```json
+{"tasks": [{"step": "process", "wall_s": 41.3, "cpu_utilisation": 0.93,
+            "peak_rss_mb": 6120, "queue_lag_s": 0.8, "import_s": 2.1,
+            "requested": {"num_cpus": 4}, "...": "..."}],
+ "pipeline": {"wall_s": 97.4, "cpu_core_seconds": 512.7}}
+```
+
+Use it to spot over-provisioned steps (`cpu_utilisation` well below 1, peak
+RSS far under the memory request), scheduling waits (`queue_lag_s`), and
+container cold-start costs (`import_s`). Installing `psutil` upgrades peak-RSS
+to a true in-task sample. Full schema, caveats, and an optimisation playbook:
+[docs/wiki/diagnostics.md](docs/wiki/diagnostics.md) and
+[docs/wiki/optimising-pipelines.md](docs/wiki/optimising-pipelines.md).
+
+### Recipe Parsing
+
+The recipe parser extracts DAG structure from stimela recipe YAML files:
+
+```python
+from hip_cargo.monitoring.recipe_parser import parse_recipe
+
+dag = parse_recipe("recipes/sara.yml")
+print(dag.step_names())     # ['initialize', 'gridimage', 'saradeconv', ...]
+print(dag.edges)            # [('initialize', 'gridimage'), ...]
+print(len(dag.inputs))      # 36 recipe-level parameters
+```
+
+When cab packages are installed, `parse_recipe(path, resolve_cabs=True)` also resolves `_include` entries to full parameter schemas, attaching them to each step.
+
+### Cab Resolution
+
+The cab resolver parses cab YAML files to extract parameter schemas — replacing the need to inspect live Python code:
+
+```python
+from hip_cargo.monitoring.cab_resolver import resolve_include, parse_cab_yaml
+
+path = resolve_include("(pfb_imaging.cabs)sara.yml")
+schema = parse_cab_yaml(path)
+print(schema.inputs.keys())   # parameter names
+print(schema.outputs.keys())  # output parameter names
+```
 - Runtime image resolution from `_container_image.py` via dynamic module import — no CWD dependency
 - Optional GPU passthrough (`--gpus` / podman CDI / `--nv`) and per-backend extra run-args, declared per package in `_container_image.py` (`GPU`, `RUN_ARGS_*`), with `HIP_CARGO_GPUS` / `HIP_CARGO_RUN_ARGS` env overrides
 

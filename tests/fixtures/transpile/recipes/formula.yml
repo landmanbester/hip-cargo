@@ -1,0 +1,15 @@
+_include:
+  - (fakepkg.cabs)alpha.yml
+
+demo:
+  name: demo
+  inputs:
+    base-dir:
+      dtype: Directory
+      required: true
+  steps:
+    first:
+      cab: alpha
+      params:
+        output: '{recipe.base-dir}/a.zarr'
+        n-items: =IF(recipe.base-dir, 3, 5)

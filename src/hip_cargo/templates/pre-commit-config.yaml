@@ -6,6 +6,10 @@
 # Simply run `git add -u && git commit` again. The second attempt will succeed
 # because the files are already correctly formatted/updated.
 
+# Wire both stages so a plain `pre-commit install` installs the commit-msg hook
+# too (used by the conventional-pre-commit hook when --auto-changelog is on).
+default_install_hook_types: [pre-commit, commit-msg]
+
 repos:
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.13.2

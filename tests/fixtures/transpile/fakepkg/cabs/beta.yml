@@ -1,0 +1,21 @@
+cabs:
+  beta:
+    flavour: python
+    command: fakepkg.core.beta.beta
+    name: beta
+    info: Transform the dataset.
+    inputs:
+      input-data:
+        dtype: Directory
+        required: true
+      memory-mode:
+        choices: [greedy, conservative]
+        default: greedy
+      factor:
+        dtype: float
+        default: 2.0
+    outputs:
+      output:
+        dtype: Directory
+        required: true
+        mkdir: true

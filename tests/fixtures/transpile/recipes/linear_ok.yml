@@ -1,0 +1,31 @@
+_include:
+  - (fakepkg.cabs)alpha.yml
+  - (fakepkg.cabs)beta.yml
+
+demo:
+  name: demo
+  info: Minimal valid linear recipe.
+  inputs:
+    base-dir:
+      dtype: Directory
+      required: true
+      mkdir: true
+    memory-mode:
+      dtype: str
+      default: greedy
+    factor:
+      dtype: float
+      default: 2.0
+  steps:
+    first:
+      cab: alpha
+      params:
+        output: '{recipe.base-dir}/a.zarr'
+        memory-mode: =recipe.memory-mode
+    second:
+      cab: beta
+      params:
+        input-data: '{recipe.base-dir}/a.zarr'
+        output: '{recipe.base-dir}/b.zarr'
+        memory-mode: =recipe.memory-mode
+        factor: =recipe.factor

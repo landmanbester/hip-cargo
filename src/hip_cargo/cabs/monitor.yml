@@ -1,0 +1,32 @@
+cabs:
+  monitor:
+    flavour: python
+    command: hip_cargo.core.monitor.monitor
+    name: monitor
+    info:
+      Launch the monitoring dashboard for the current project.
+    image: ghcr.io/landmanbester/hip-cargo:apis
+    inputs:
+      port:
+        info:
+          Port to serve the dashboard on.
+        dtype: int
+        default: 8321
+      host:
+        info:
+          Host to bind to.
+        default: 0.0.0.0
+      ray-address:
+        info:
+          Ray cluster address.
+          Defaults to auto-detect.
+        dtype: Optional[str]
+      ray-dashboard-url:
+        info:
+          URL of the Ray Dashboard.
+        default: http://localhost:8265
+      auth-token:
+        info:
+          Bearer token for API authentication.
+        dtype: Optional[str]
+    outputs: {}

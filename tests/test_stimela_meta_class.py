@@ -107,22 +107,28 @@ def test_repr():
 def test_regression_python_310_optional_wrap():
     """Annotated with StimelaMeta metadata must hash cleanly.
 
-    Regression test for Python 3.10's ``get_type_hints`` wrapping ``Annotated``
-    whose default is ``None`` in ``Optional[...]``. Any metadata item that is
-    unhashable (plain dict) blows up during Union deduplication. StimelaMeta
-    is hashable, so this must succeed on all supported Pythons.
+    Python 3.10's ``get_type_hints`` wraps an ``Annotated`` whose default is
+    ``None`` in ``Optional[...]``; Union deduplication then hashes the
+    Annotated metadata, so any unhashable item (a plain dict) blows up.
+    StimelaMeta is hashable, so ``get_type_hints`` must succeed on all
+    supported Pythons — but on 3.10 the returned annotation is the Optional
+    wrapper (origin ``Union``), while 3.11+ returns the bare ``Annotated``.
     """
+    from typing import Union
 
     def f(x: Annotated[str, "info", StimelaMeta(skip=True)] = None) -> None:
         pass
 
-    hints = get_type_hints(f, include_extras=True)
+    hints = get_type_hints(f, include_extras=True)  # must not raise
     annotation = hints["x"]
-    # Must be Annotated and hashable
-    assert get_origin(annotation) is Annotated
     assert hash(annotation) is not None
+    if get_origin(annotation) is Union:  # Python 3.10 Optional wrapping
+        annotated = next(a for a in get_args(annotation) if get_origin(a) is Annotated)
+    else:
+        annotated = annotation
+        assert get_origin(annotated) is Annotated
     # StimelaMeta survives in __metadata__
-    metas = get_args(annotation)[1:]
+    metas = get_args(annotated)[1:]
     assert any(isinstance(m, StimelaMeta) for m in metas)
 
 

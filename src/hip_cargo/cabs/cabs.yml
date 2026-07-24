@@ -1,0 +1,15 @@
+cabs:
+  hip.genfunc:
+    _include: generate_function.yml::cabs.generate_function
+
+  hip.gencabs:
+    _include: generate_cabs.yml::cabs.generate_cabs
+
+  hip.genschemas:
+    _include: generate_schemas.yml::cabs.generate_schemas
+
+  hip.init:
+    _include: init.yml::cabs.init
+
+  hip.monitor:
+    _include: monitor.yml::cabs.monitor

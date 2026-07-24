@@ -171,7 +171,7 @@ def _resolve_mounts(func: typing.Callable, params: dict[str, typing.Any]) -> dic
     # Extract stimela metadata from Annotated type hints
     stimela_meta = _extract_stimela_meta_from_hints(func)
 
-    hints = typing.get_type_hints(func, include_extras=True)
+    hints = _hints_with_extras(func)
     mounts: dict[str, bool] = {}
 
     def add_mount(path: str, readwrite: bool) -> None:
@@ -301,6 +301,21 @@ def _resolve_implicit_output_mounts(
             add_mount(str(target), False)
 
 
+def _hints_with_extras(func: typing.Callable) -> dict[str, typing.Any]:
+    """Annotated-preserving type hints for a CLI function.
+
+    ``typing.get_type_hints`` on Python 3.10 wraps any ``Annotated`` parameter
+    whose default is ``None`` in ``Optional[...]``; Union deduplication then
+    hashes the Annotated metadata, which crashes on the documented plain-dict
+    ``{"stimela": {...}}`` form. ``inspect.get_annotations(eval_str=True)``
+    resolves string annotations without that wrapping on all supported
+    Pythons.
+    """
+    import inspect
+
+    return inspect.get_annotations(func, eval_str=True)
+
+
 def _extract_stimela_meta_from_hints(func: typing.Callable) -> dict[str, typing.Mapping]:
     """Extract stimela metadata from a function's Annotated type hints.
 
@@ -312,7 +327,7 @@ def _extract_stimela_meta_from_hints(func: typing.Callable) -> dict[str, typing.
         Dict mapping parameter names to their stimela metadata mappings.
     """
     result: dict[str, typing.Mapping] = {}
-    hints = typing.get_type_hints(func, include_extras=True)
+    hints = _hints_with_extras(func)
     for param_name, hint in hints.items():
         origin = typing.get_origin(hint)
         if origin is not typing.Annotated:
@@ -411,7 +426,7 @@ def _is_remote_upath(value: typing.Any) -> bool:
 
 def _collect_remote_protocols(func: typing.Callable, params: dict[str, typing.Any]) -> set[str]:
     """Scan path-typed params and implicit outputs, return non-local protocols in use."""
-    hints = typing.get_type_hints(func, include_extras=True)
+    hints = _hints_with_extras(func)
     protocols: set[str] = set()
     for name, value in params.items():
         if value is None:

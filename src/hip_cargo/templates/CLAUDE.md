@@ -6,66 +6,24 @@ Stimela cab definitions are generated automatically from the CLI source. Cabs
 let the same commands be invoked from Stimela recipes and from `<CLI_COMMAND>`
 on the command line interchangeably.
 
-When working in this repo, treat the patterns below as load-bearing — they are
-what makes the round-trip between CLI source, generated cabs, and container
-fallback work. If you find yourself wanting to deviate, stop and check
+When working in this repo, treat the patterns in the rules below as load-bearing
+— they are what makes the round-trip between CLI source, generated cabs, and
+container fallback work. If you find yourself wanting to deviate, stop and check
 [hip-cargo's own docs](https://github.com/landmanbester/hip-cargo) first.
 
----
+*Note: Detailed architecture/domain logic, Python standards, and testing/CI
+rules have been modularized into the `.claude/rules/` directory for progressive
+disclosure. Read the relevant file before editing the matching files.*
 
-## 1. Package Layout
-
-```
-<PROJECT_NAME>/
-├── src/<PACKAGE_NAME>/
-│   ├── __init__.py
-│   ├── _container_image.py    # CONTAINER_IMAGE — single source of truth for the image tag
-│   ├── cli/                   # Lightweight Typer wrappers. THIS is what generate-cabs parses.
-│   │   ├── __init__.py        # Builds the Typer `app` and registers subcommands
-│   │   └── onboard.py         # One file per subcommand (delete onboard once setup is done)
-│   ├── core/                  # Real implementations. Heavy deps live here.
-│   │   ├── __init__.py
-│   │   └── onboard.py         # Mirrors cli/onboard.py — same function name, no decorators
-│   └── cabs/                  # AUTO-GENERATED Stimela YAMLs. Do NOT hand-edit.
-│       ├── __init__.py
-│       └── onboard.yml
-├── tests/
-│   ├── test_install.py
-│   └── test_roundtrip.py      # Guards the CLI → cab → CLI round-trip
-├── Dockerfile                 # Builds the image referenced by _container_image.py
-├── pyproject.toml
-├── tbump.toml                 # Release tooling — updates _container_image.py + cabs
-├── .pre-commit-config.yaml    # Runs generate-cabs on every commit
-└── .github/workflows/
-    ├── ci.yml
-    ├── publish.yml             # PyPI on tag push
-    ├── publish-container.yml   # ghcr.io on tag + every push to <DEFAULT_BRANCH>
-    └── update-cabs.yml         # Regenerates cabs on merge to <DEFAULT_BRANCH>
-```
-
-### Role of each directory
-
-| Directory | What lives there | What does NOT live there |
-|---|---|---|
-| `cli/` | Thin Typer wrappers with `@stimela_cab` (and optional `@stimela_output`). One file per command. **Imports from `core/` must be lazy** (inside the function body). | Heavy imports at module top. Business logic. NumPy / pandas / domain libs. |
-| `core/` | The actual implementation. Type-hinted function with the same name as the CLI wrapper, but **no Typer / hip-cargo decorators**. Free to import anything. | Typer. `@stimela_cab`. UI concerns. `typer.Exit(...)`. |
-| `cabs/` | Generated `<command>.yml` files. Committed to source control. Loaded by Stimela. | Anything you wrote by hand. Drift from `cli/*.py`. |
-
-### Adding a new command
-
-1. Create `src/<PACKAGE_NAME>/cli/<name>.py` with a `@stimela_cab`-decorated
-   Typer function. Lazily import the core implementation inside the function.
-2. Create `src/<PACKAGE_NAME>/core/<name>.py` with the real implementation —
-   same function name, no decorators, free to import heavy deps.
-3. Register the new command in `src/<PACKAGE_NAME>/cli/__init__.py` (next to
-   the existing `onboard` registration; mirror its pattern).
-4. Commit. The pre-commit hook regenerates `src/<PACKAGE_NAME>/cabs/<name>.yml`
-   automatically.
-
-**Never** create files under `cabs/` by hand. They are derived artefacts.
+| Rule file | Read it when editing |
+|---|---|
+| `.claude/rules/architecture.md` | `src/<PACKAGE_NAME>/**` — package layout, install modes, container fallback, cab generation. |
+| `.claude/rules/python-standards.md` | any `**/*.py` — type hints, lazy imports, Typer syntax, hip-cargo types. |
+| `.claude/rules/testing-and-ci.md` | `tests/**` or `.github/workflows/**` — round-trip tests, dev workflow, commits. |
 
 ---
 
+## Where to Go Deeper
 ## 2. Lightweight vs Full Installation
 
 This package supports two install modes. The split is what makes the

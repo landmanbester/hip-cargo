@@ -20,10 +20,14 @@ from hip_cargo.cli.generate_cabs import generate_cabs  # noqa: E402
 from hip_cargo.cli.generate_function import generate_function  # noqa: E402
 from hip_cargo.cli.generate_schemas import generate_schemas  # noqa: E402
 from hip_cargo.cli.init import init  # noqa: E402
+from hip_cargo.cli.monitor import monitor  # noqa: E402
+from hip_cargo.cli.transpile import transpile  # noqa: E402
 
 app.command(name="generate-cabs")(generate_cabs)
 app.command(name="generate-function")(generate_function)
 app.command(name="generate-schemas")(generate_schemas)
 app.command(name="init")(init)
+app.command(name="monitor")(monitor)
+app.command(name="transpile")(transpile)
 
 __all__ = ["app"]

@@ -1,0 +1,17 @@
+cabs:
+  omega:
+    flavour: python
+    command: fakepkg.core.omega.omega
+    name: omega
+    info: Always fails (failure-path fixture).
+    inputs:
+      input-data:
+        dtype: Directory
+        required: true
+      factor:
+        dtype: float
+        default: 1.0
+    outputs:
+      output:
+        dtype: Directory
+        required: true

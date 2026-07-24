@@ -425,7 +425,9 @@ def test_generate_parameter_signature_liststr_list_default():
     }
     sig = generate_parameter_signature("names", param_def)
 
-    assert '] = ["a", "b", "c"],' in sig
+    # repr-based emission (pre-ruff) uses single quotes; ruff format
+    # normalises to double quotes in the written file.
+    assert "] = ['a', 'b', 'c']," in sig
     assert "a,b,c" not in sig
 
 

@@ -2,6 +2,24 @@
 
 import importlib
 import types
+from pathlib import Path
+
+
+def find_pyproject_toml(start: Path | None = None) -> Path | None:
+    """Walk up from *start* (default: cwd) to find pyproject.toml.
+
+    Args:
+        start: Directory to start searching from (default: cwd).
+
+    Returns:
+        Path to pyproject.toml, or None if not found.
+    """
+    current = (start or Path.cwd()).resolve()
+    for parent in [current, *current.parents]:
+        candidate = parent / "pyproject.toml"
+        if candidate.is_file():
+            return candidate
+    return None
 
 
 def get_container_image(package_name: str, package_import_name: str | None = None) -> str | None:

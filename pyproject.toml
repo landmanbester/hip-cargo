@@ -33,16 +33,27 @@ dependencies = [
     "universal-pathlib>=0.2.5",
 ]
 
+[project.optional-dependencies]
+# The monitoring stack (Ray + FastAPI) is a Python 3.11+ feature. On 3.10 the
+# markers resolve to nothing: the lightweight install still imports and runs,
+# and heavy execution goes through the containerised backend instead.
+monitoring = [
+    "fastapi>=0.115.0; python_version >= '3.11'",
+    "uvicorn[standard]>=0.30.0; python_version >= '3.11'",
+    "websockets>=13.0; python_version >= '3.11'",
+    "pydantic-settings>=2.0.0; python_version >= '3.11'",
+    "ray[default]>=2.40.0; python_version >= '3.11'",
+]
+s3 = ["s3fs>=2024.10.0"]
+gcs = ["gcsfs>=2024.10.0"]
+azure = ["adlfs>=2024.7.0"]
+all = ["hip-cargo[s3,gcs,azure,monitoring]"]
+
 [project.urls]
 Homepage = "https://github.com/landmanbester/hip-cargo"
 Repository = "https://github.com/landmanbester/hip-cargo"
 "Bug Tracker" = "https://github.com/landmanbester/hip-cargo/issues"
 
-[project.optional-dependencies]
-s3 = ["s3fs>=2024.10.0"]
-gcs = ["gcsfs>=2024.10.0"]
-azure = ["adlfs>=2024.7.0"]
-all = ["hip-cargo[s3,gcs,azure]"]
 
 [project.scripts]
 hip-cargo = "hip_cargo.cli:app"
@@ -79,6 +90,8 @@ markers = [
     "integration: Integration tests",
     "slow: Tests that take more time to run",
 ]
+asyncio_mode = "strict"
+asyncio_default_fixture_loop_scope = "function"
 
 [dependency-groups]
 dev = [
@@ -89,4 +102,9 @@ dev = [
 test = [
     "pytest>=8.4.2",
     "pytest-cov>=5.0.0",
+]
+monitoring-dev = [
+    "hip-cargo[monitoring]",
+    "pytest-asyncio>=0.24.0",
+    "httpx>=0.27.0",
 ]
