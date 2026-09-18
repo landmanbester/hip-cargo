@@ -8,6 +8,17 @@ last_verified_commit: 7e1a122
 
 # Wiki changelog
 
+## 2026-09-19 — `cli-dialect.md` added (verified at `PENDING`)
+
+- New page recording the closed set of typer constructs a CLI module may use,
+  and why: the cab and the module are two renderings of one definition, so the
+  writable language is whatever a cab can express.
+- Prompted by #112 and #113 — `typer.Option` param_decls were mis-parsed into
+  `default`, and `typer.Argument` failed either as a round-trip line diff or as
+  an internal `RuntimeError`. Both are now rejected at parse time with a message
+  naming the rule.
+- `index.md` re-stamped; it was last touched by `5d56942` without one.
+
 ## 2026-09-18 — cab YAML emission documented (verified at `5d56942`)
 
 - **Added** `cab-yaml-emission.md`: how CLI source becomes cab YAML, why
