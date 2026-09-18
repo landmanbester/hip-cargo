@@ -27,6 +27,7 @@ a page, update the page and refresh its stamp **in the same session**.
 
 | Page | Covers | Read when |
 |------|--------|-----------|
+| [cab-yaml-emission.md](cab-yaml-emission.md) | Value extraction from CST, info-field formatting, the YAML-validity guard | Touching `get_cst_value`, `format_info_fields` or cab emission |
 | [container-execution.md](container-execution.md) | Image tag lifecycle, container fallback, GPU passthrough, per-backend run-args | Touching runner/execution or `_container_image.py` |
 | [remote-uris.md](remote-uris.md) | UPath path types, remote URI handling, credential forwarding, fsspec extras | Touching path types or object-store support |
 | [log.md](log.md) | Chronological wiki changelog | Checking what changed and when |

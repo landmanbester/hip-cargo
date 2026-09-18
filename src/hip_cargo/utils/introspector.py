@@ -509,6 +509,21 @@ def get_cst_value(node: cst.CSTNode) -> Any:
     elif isinstance(node, cst.Tuple):
         return tuple(get_cst_value(el.value) for el in node.elements)
 
+    # Signed numeric literals: -1 parses as UnaryOperation(Minus, Integer("1")),
+    # not as a negative Integer. Without this the fallback below would stringify
+    # it and emit `default: '-1'` under a numeric dtype.
+    elif isinstance(node, cst.UnaryOperation):
+        operand = get_cst_value(node.expression)
+        if isinstance(operand, bool) or not isinstance(operand, (int, float, complex)):
+            return cst.Module([]).code_for_node(node).strip()
+        if isinstance(node.operator, cst.Minus):
+            return -operand
+        elif isinstance(node.operator, cst.Plus):
+            return +operand
+        elif isinstance(node.operator, cst.BitInvert) and isinstance(operand, int):
+            return ~operand
+        return cst.Module([]).code_for_node(node).strip()
+
     # For complex expressions we can't evaluate, return code representation
     else:
         return cst.Module([]).code_for_node(node).strip()
@@ -708,8 +723,15 @@ def format_info_fields(yaml_str, comment_map=None):
                 content += " " + lines[i].strip()
                 cond1 = i + 1 < len(lines)
 
-            # Strip quotes (YAML adds them for strings with special chars)
-            content = content.strip().strip("'\"")
+            # Strip quotes (YAML adds them for strings with special chars).
+            # A single-quoted scalar also doubles any apostrophe inside it, so
+            # undo that too or it survives into the emitted value.
+            content = content.strip()
+            if len(content) >= 2 and content[0] == content[-1] and content[0] in "'\"":
+                quoted_with = content[0]
+                content = content[1:-1]
+                if quoted_with == "'":
+                    content = content.replace("''", "'")
 
             # Extract any trailing comment from the string itself
             # PEP 8: inline comments should have at least 2 spaces before the #
@@ -726,11 +748,17 @@ def format_info_fields(yaml_str, comment_map=None):
                 # Multi-line format for info (split at periods)
                 formatted_lines = content.replace(". ", ".\n").strip().split("\n")
                 result.append(f"{indent}{field_name}:")
+                # A colon anywhere forces quoting, or YAML reads the line as a
+                # mapping. Quote the value as a whole rather than line by line:
+                # a quoted scalar cannot be continued by unquoted lines, so
+                # per-line quoting breaks a multi-line block. A multi-line
+                # single-quoted scalar folds to the same string a plain one does.
+                if any(": " in formatted_line for formatted_line in formatted_lines):
+                    # Escape single quotes for YAML single-quoted strings
+                    formatted_lines = [formatted_line.replace("'", "''") for formatted_line in formatted_lines]
+                    formatted_lines[0] = "'" + formatted_lines[0]
+                    formatted_lines[-1] = formatted_lines[-1] + "'"
                 for j, formatted_line in enumerate(formatted_lines):
-                    # Quote lines containing colons to prevent YAML mapping interpretation
-                    if ": " in formatted_line:
-                        # Escape single quotes for YAML single-quoted strings
-                        formatted_line = "'" + formatted_line.replace("'", "''") + "'"
                     if j == len(formatted_lines) - 1 and trailing_comment:
                         # Add comment to last line as YAML comment (not string content)
                         result.append(f"{indent}  {formatted_line}  {trailing_comment}")

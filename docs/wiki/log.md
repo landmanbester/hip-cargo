@@ -8,6 +8,14 @@ last_verified_commit: 7e1a122
 
 # Wiki changelog
 
+## 2026-09-18 — cab YAML emission documented (issues #109, #110)
+
+- **Added** `cab-yaml-emission.md`: how CLI source becomes cab YAML, why
+  `get_cst_value`'s source-text fallback is a silent-corruption risk (signed
+  literals), the three invariants `format_info_fields` must preserve, and the
+  new `yaml.safe_load` guard in `generate_cabs`. Written alongside the fixes
+  for #109 and #110.
+
 ## 2026-09-18 — monitoring and transpile removed (verified at `7e1a122`)
 
 - Deleted `progress-protocol.md`, `diagnostics.md`, `monitoring-api.md`,
