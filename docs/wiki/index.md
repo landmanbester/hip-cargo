@@ -3,7 +3,7 @@ type: index
 title: hip-cargo LLM wiki
 description: Progressive-disclosure listing of the in-repo knowledge bundle.
 timestamp: 2026-09-18
-last_verified_commit: a1b714a
+last_verified_commit: 7e1a122
 ---
 
 # hip-cargo LLM wiki
