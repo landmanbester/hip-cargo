@@ -309,7 +309,10 @@ def param_spec_to_cab_input(spec: ParamSpec) -> tuple[str, dict[str, Any]]:
         dtype = _dtype_to_str_from_string(spec.dtype_str)
         if dtype != "str" and dtype != "NoneType":
             if "Literal" in dtype:
-                input_def["choices"] = ast.literal_eval(dtype.removeprefix("Literal").strip())
+                # Literal[...] | None normalises to Optional[Literal[...]]; nullability
+                # is implied by the input being neither required nor defaulted.
+                literal = dtype[9:-1] if dtype.startswith("Optional[") else dtype
+                input_def["choices"] = ast.literal_eval(literal.removeprefix("Literal").strip())
             else:
                 input_def["dtype"] = dtype
 
