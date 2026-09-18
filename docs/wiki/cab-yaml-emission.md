@@ -4,7 +4,7 @@ title: Cab YAML emission
 description: How CLI source becomes cab YAML, the two text-rewriting steps that can corrupt it, and the invariants that must hold.
 tags: [generate-cabs, yaml, introspector, libcst]
 timestamp: 2026-09-18
-last_verified_commit: PENDING
+last_verified_commit: 5d56942
 ---
 
 # Cab YAML emission

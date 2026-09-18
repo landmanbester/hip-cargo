@@ -8,7 +8,7 @@ last_verified_commit: 7e1a122
 
 # Wiki changelog
 
-## 2026-09-18 — cab YAML emission documented (issues #109, #110)
+## 2026-09-18 — cab YAML emission documented (verified at `5d56942`)
 
 - **Added** `cab-yaml-emission.md`: how CLI source becomes cab YAML, why
   `get_cst_value`'s source-text fallback is a silent-corruption risk (signed
