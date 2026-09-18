@@ -2,8 +2,8 @@
 type: index
 title: hip-cargo LLM wiki
 description: Progressive-disclosure listing of the in-repo knowledge bundle.
-timestamp: 2026-09-18
-last_verified_commit: 7e1a122
+timestamp: 2026-09-19
+last_verified_commit: 4532253
 ---
 
 # hip-cargo LLM wiki
@@ -27,6 +27,8 @@ a page, update the page and refresh its stamp **in the same session**.
 
 | Page | Covers | Read when |
 |------|--------|-----------|
+| [cab-yaml-emission.md](cab-yaml-emission.md) | Value extraction from CST, info-field formatting, the YAML-validity guard | Touching `get_cst_value`, `format_info_fields` or cab emission |
+| [cli-dialect.md](cli-dialect.md) | Which typer constructs a CLI module may use, and why the set is closed | Touching the introspector, or converting an existing CLI |
 | [container-execution.md](container-execution.md) | Image tag lifecycle, container fallback, GPU passthrough, per-backend run-args | Touching runner/execution or `_container_image.py` |
 | [remote-uris.md](remote-uris.md) | UPath path types, remote URI handling, credential forwarding, fsspec extras | Touching path types or object-store support |
 | [log.md](log.md) | Chronological wiki changelog | Checking what changed and when |

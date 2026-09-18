@@ -8,6 +8,25 @@ last_verified_commit: 7e1a122
 
 # Wiki changelog
 
+## 2026-09-19 — `cli-dialect.md` added (verified at `4532253`)
+
+- New page recording the closed set of typer constructs a CLI module may use,
+  and why: the cab and the module are two renderings of one definition, so the
+  writable language is whatever a cab can express.
+- Prompted by #112 and #113 — `typer.Option` param_decls were mis-parsed into
+  `default`, and `typer.Argument` failed either as a round-trip line diff or as
+  an internal `RuntimeError`. Both are now rejected at parse time with a message
+  naming the rule.
+- `index.md` re-stamped; it was last touched by `5d56942` without one.
+
+## 2026-09-18 — cab YAML emission documented (verified at `5d56942`)
+
+- **Added** `cab-yaml-emission.md`: how CLI source becomes cab YAML, why
+  `get_cst_value`'s source-text fallback is a silent-corruption risk (signed
+  literals), the three invariants `format_info_fields` must preserve, and the
+  new `yaml.safe_load` guard in `generate_cabs`. Written alongside the fixes
+  for #109 and #110.
+
 ## 2026-09-18 — monitoring and transpile removed (verified at `7e1a122`)
 
 - Deleted `progress-protocol.md`, `diagnostics.md`, `monitoring-api.md`,

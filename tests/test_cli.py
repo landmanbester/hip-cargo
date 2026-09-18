@@ -32,7 +32,7 @@ from hip_cargo import stimela_cab, stimela_output
 @stimela_cab(name="temp_processor", info="Temporary test processor")
 @stimela_output(name="output_file", dtype="File", info="{input_file}.processed")
 def process_temp(
-    input_file: Annotated[Path, typer.Argument(help="Input file to process")],
+    input_file: Annotated[Path, typer.Option(..., help="Input file to process")],
     threshold: Annotated[float, typer.Option(help="Processing threshold")] = 0.5,
 ):
     """

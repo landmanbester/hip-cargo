@@ -77,6 +77,17 @@ def generate_cabs(module: list[Path], image: str | None = None, output_dir: Path
             )
             yaml_content_formatted = format_info_fields(yaml_content)
 
+            # format_info_fields rewrites the dumped YAML as text, so it can in
+            # principle produce something unparseable. Fail here rather than
+            # writing a cab stimela cannot load.
+            try:
+                yaml.safe_load(yaml_content_formatted)
+            except yaml.YAMLError as exc:
+                raise ValueError(
+                    f"Generated cab YAML for '{command.name}' is not parseable. "
+                    f"This is a hip-cargo bug — please report it with the CLI module that triggered it.\n{exc}"
+                ) from exc
+
             if output_dir:
                 output_dir = Path(output_dir)
                 output_dir.mkdir(parents=True, exist_ok=True)

@@ -120,20 +120,35 @@ def parse_annotated_libcst(annotation_node: cst.CSTNode) -> tuple[cst.CSTNode, l
     return dtype_node, metadata_nodes
 
 
-def extract_typer_metadata_libcst(metadata_nodes: list[cst.CSTNode]) -> dict[str, Any]:
+def _callee_name(call: cst.Call) -> str:
+    """Name of the called function, e.g. ``Option`` for ``typer.Option(...)``."""
+    func = call.func
+    if isinstance(func, cst.Attribute):
+        return func.attr.value
+    if isinstance(func, cst.Name):
+        return func.value
+    return ""
+
+
+def extract_typer_metadata_libcst(metadata_nodes: list[cst.CSTNode], param_name: str | None = None) -> dict[str, Any]:
     """
-    Extract metadata from typer.Option(...) or typer.Argument(...) call.
+    Extract metadata from a typer.Option(...) call.
 
     Searches through metadata items to find a typer call and extracts its arguments.
+    Constructs a cab cannot express are rejected here rather than mis-parsed: a cab
+    and its CLI module are two renderings of one definition, so anything that cannot
+    survive the round trip is not part of the dialect.
 
     Args:
         metadata_nodes: List of metadata CST nodes from Annotated
+        param_name: Parameter being parsed, used to make error messages actionable
 
     Returns:
         Dict with keys from the typer call (help, default, etc.)
 
     Raises:
-        ValueError: If no typer call found
+        ValueError: If no typer call is found, if it is a ``typer.Argument``, or if
+            it carries param_decls.
     """
     # Find the typer.Option or typer.Argument call
     typer_call = None
@@ -154,11 +169,31 @@ def extract_typer_metadata_libcst(metadata_nodes: list[cst.CSTNode]) -> dict[str
     if typer_call is None:
         raise ValueError("No typer.Option() or typer.Argument() call found in metadata")
 
+    where = f"Parameter '{param_name}': " if param_name else ""
+
+    if _callee_name(typer_call) == "Argument":
+        raise ValueError(
+            f"{where}typer.Argument is not supported. A cab cannot express a positional "
+            f"CLI argument, so the CLI module could not be regenerated from it. Declare it as "
+            f"typer.Option(..., help=...) instead; the cab still records policies.positional: true."
+        )
+
     # Extract both positional and keyword arguments using get_cst_value
     metadata = {}
 
-    # First positional argument is typically the default value
+    # In Annotated style every string positional is a param_decl, never a default.
+    # Flag names are derived from the parameter name, so a cab has nowhere to record
+    # them and the round trip would silently drop them -- reject instead (#112).
     positional_args = [arg for arg in typer_call.args if arg.keyword is None]
+    decls = [value for value in (get_cst_value(arg.value) for arg in positional_args) if isinstance(value, str)]
+    if decls:
+        raise ValueError(
+            f"{where}typer.Option param_decls are not supported ({', '.join(repr(d) for d in decls)}). "
+            f"Flag names are derived from the parameter name so that a cab and its CLI module stay "
+            f"in one-to-one correspondence. Remove them."
+        )
+
+    # First positional argument is the default value
     if positional_args:
         # Use get_cst_value to handle Ellipsis, None, literals, etc.
         metadata["default"] = get_cst_value(positional_args[0].value)
@@ -197,13 +232,7 @@ def extract_stimela_metadata_libcst(metadata_nodes: list[cst.CSTNode]) -> dict[s
     for node in metadata_nodes:
         # Preferred form: StimelaMeta(...) call
         if isinstance(node, cst.Call):
-            callee_name = None
-            func = node.func
-            if isinstance(func, cst.Name):
-                callee_name = func.value
-            elif isinstance(func, cst.Attribute):
-                callee_name = func.attr.value
-            if callee_name == "StimelaMeta":
+            if _callee_name(node) == "StimelaMeta":
                 result: dict[str, Any] = {}
                 for arg in node.args:
                     if arg.keyword is not None:
@@ -232,9 +261,9 @@ def extract_param_spec(param: cst.Param) -> ParamSpec:
         A :class:`ParamSpec` describing the parameter.
 
     Raises:
-        ValueError: If the parameter has a non-``Annotated`` type annotation.
-        RuntimeError: If neither ``param.default`` nor ``typer.Option(default=...)``
-            yields a default and no required-marker (``...``) is present.
+        ValueError: If the parameter has a non-``Annotated`` type annotation, uses a
+            construct outside the dialect (``typer.Argument``, param_decls), or is
+            required without the ``...`` marker.
     """
     param_name = param.name.value
 
@@ -246,7 +275,7 @@ def extract_param_spec(param: cst.Param) -> ParamSpec:
             raise ValueError("Only Annotated types are supported")
 
         dtype_str = _cst_node_to_code(dtype_node)
-        typer_metadata = extract_typer_metadata_libcst(metadata_nodes)
+        typer_metadata = extract_typer_metadata_libcst(metadata_nodes, param_name)
         stimela_metadata = extract_stimela_metadata_libcst(metadata_nodes)
     else:
         dtype_str = "str"
@@ -260,10 +289,10 @@ def extract_param_spec(param: cst.Param) -> ParamSpec:
     elif "default" in typer_metadata:
         default = typer_metadata["default"]
     else:
-        raise RuntimeError(
-            f"Unexpected state in input definition for parameter '{param_name}': "
-            f"param.default is None and typer_metadata has no 'default' attribute. "
-            f"param.default={param.default!r}, typer_metadata={typer_metadata!r}"
+        raise ValueError(
+            f"Parameter '{param_name}': a required parameter must be declared as "
+            f"typer.Option(..., help=...) -- the ellipsis is what marks it required. "
+            f"Add it, or give the parameter a default."
         )
 
     return ParamSpec(
@@ -509,6 +538,21 @@ def get_cst_value(node: cst.CSTNode) -> Any:
     elif isinstance(node, cst.Tuple):
         return tuple(get_cst_value(el.value) for el in node.elements)
 
+    # Signed numeric literals: -1 parses as UnaryOperation(Minus, Integer("1")),
+    # not as a negative Integer. Without this the fallback below would stringify
+    # it and emit `default: '-1'` under a numeric dtype.
+    elif isinstance(node, cst.UnaryOperation):
+        operand = get_cst_value(node.expression)
+        if isinstance(operand, bool) or not isinstance(operand, (int, float, complex)):
+            return cst.Module([]).code_for_node(node).strip()
+        if isinstance(node.operator, cst.Minus):
+            return -operand
+        elif isinstance(node.operator, cst.Plus):
+            return +operand
+        elif isinstance(node.operator, cst.BitInvert) and isinstance(operand, int):
+            return ~operand
+        return cst.Module([]).code_for_node(node).strip()
+
     # For complex expressions we can't evaluate, return code representation
     else:
         return cst.Module([]).code_for_node(node).strip()
@@ -708,8 +752,15 @@ def format_info_fields(yaml_str, comment_map=None):
                 content += " " + lines[i].strip()
                 cond1 = i + 1 < len(lines)
 
-            # Strip quotes (YAML adds them for strings with special chars)
-            content = content.strip().strip("'\"")
+            # Strip quotes (YAML adds them for strings with special chars).
+            # A single-quoted scalar also doubles any apostrophe inside it, so
+            # undo that too or it survives into the emitted value.
+            content = content.strip()
+            if len(content) >= 2 and content[0] == content[-1] and content[0] in "'\"":
+                quoted_with = content[0]
+                content = content[1:-1]
+                if quoted_with == "'":
+                    content = content.replace("''", "'")
 
             # Extract any trailing comment from the string itself
             # PEP 8: inline comments should have at least 2 spaces before the #
@@ -726,11 +777,17 @@ def format_info_fields(yaml_str, comment_map=None):
                 # Multi-line format for info (split at periods)
                 formatted_lines = content.replace(". ", ".\n").strip().split("\n")
                 result.append(f"{indent}{field_name}:")
+                # A colon anywhere forces quoting, or YAML reads the line as a
+                # mapping. Quote the value as a whole rather than line by line:
+                # a quoted scalar cannot be continued by unquoted lines, so
+                # per-line quoting breaks a multi-line block. A multi-line
+                # single-quoted scalar folds to the same string a plain one does.
+                if any(": " in formatted_line for formatted_line in formatted_lines):
+                    # Escape single quotes for YAML single-quoted strings
+                    formatted_lines = [formatted_line.replace("'", "''") for formatted_line in formatted_lines]
+                    formatted_lines[0] = "'" + formatted_lines[0]
+                    formatted_lines[-1] = formatted_lines[-1] + "'"
                 for j, formatted_line in enumerate(formatted_lines):
-                    # Quote lines containing colons to prevent YAML mapping interpretation
-                    if ": " in formatted_line:
-                        # Escape single quotes for YAML single-quoted strings
-                        formatted_line = "'" + formatted_line.replace("'", "''") + "'"
                     if j == len(formatted_lines) - 1 and trailing_comment:
                         # Add comment to last line as YAML comment (not string content)
                         result.append(f"{indent}  {formatted_line}  {trailing_comment}")

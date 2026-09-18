@@ -16,7 +16,7 @@ def sample_function_annotated():
     @stimela_cab(name="test_processor_annotated", info="A test processing function")
     @stimela_output(name="output_file", dtype="File", info="{input_file}.processed", required=True)
     def process_annotated(
-        input_file: Annotated[Path, typer.Argument(help="Input File to process")],
+        input_file: Annotated[Path, typer.Option(..., help="Input File to process")],
         threshold: Annotated[float, typer.Option(0.5, help="Threshold value")] = 0.5,
     ):
         """
@@ -39,7 +39,7 @@ def multi_output_function():
     @stimela_output(name="output_file", dtype="File", info="{input_file}.processed", required=True)
     @stimela_output(name="log_file", dtype="File", info="{output_dir}/processing.log", required=False)
     def process_multi(
-        input_file: Annotated[Path, typer.Argument(help="Input File containing data")],
+        input_file: Annotated[Path, typer.Option(..., help="Input File containing data")],
         output_dir: Annotated[Path, typer.Option(help="Output Directory for results")] = Path("./output"),
     ):
         """

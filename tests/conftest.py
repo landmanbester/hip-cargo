@@ -21,7 +21,7 @@ def simple_function():
 
     @stimela_cab(name="simple_test", info="Simple test function")
     @stimela_output(name="result", dtype="File", info="Test result")
-    def simple_test_func(input_param: Annotated[str, typer.Argument(help="Input parameter")]):
+    def simple_test_func(input_param: Annotated[str, typer.Option(..., help="Input parameter")]):
         """Simple test function."""
         pass
 
@@ -34,7 +34,7 @@ def function_with_defaults():
 
     @stimela_cab(name="defaults_test", info="Function with defaults")
     def defaults_func(
-        required_arg: Annotated[str, typer.Argument(help="Required argument")],
+        required_arg: Annotated[str, typer.Option(..., help="Required argument")],
         optional_str: Annotated[str, typer.Option(help="Optional string")] = "default",
         optional_int: Annotated[int, typer.Option(help="Optional integer")] = 42,
         optional_bool: Annotated[bool, typer.Option(help="Optional boolean")] = False,
@@ -50,7 +50,7 @@ def function_no_outputs():
     """Function without any outputs."""
 
     @stimela_cab(name="no_outputs", info="Function without outputs")
-    def no_outputs_func(input_file: Annotated[Path, typer.Argument(help="Input file")]):
+    def no_outputs_func(input_file: Annotated[Path, typer.Option(..., help="Input file")]):
         """Function without outputs."""
         pass
 
