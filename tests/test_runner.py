@@ -119,6 +119,34 @@ class TestResolveMounts:
         assert mounts[str(output_dir)] is True  # read-write
 
     @pytest.mark.unit
+    def test_writable_input_mounted_readwrite(self, tmp_path):
+        """An input marked writable (e.g. an MS the cab updates in place) is mounted rw (#98)."""
+        from hip_cargo import StimelaMeta
+        from hip_cargo.utils.decorators import stimela_cab
+
+        @stimela_cab(name="test", info="test")
+        def func(ms: Annotated[MS, typer.Option(..., parser=Path, help="ms"), StimelaMeta(writable=True)]):
+            pass
+
+        ms = tmp_path / "data.ms"
+        ms.mkdir()
+        mounts = _resolve_mounts(func, {"ms": ms})
+        assert mounts[str(ms)] is True
+
+    @pytest.mark.unit
+    def test_non_writable_ms_mounted_readonly(self, tmp_path):
+        from hip_cargo.utils.decorators import stimela_cab
+
+        @stimela_cab(name="test", info="test")
+        def func(ms: Annotated[MS, typer.Option(..., parser=Path, help="ms")]):
+            pass
+
+        ms = tmp_path / "data.ms"
+        ms.mkdir()
+        mounts = _resolve_mounts(func, {"ms": ms})
+        assert mounts[str(ms)] is False
+
+    @pytest.mark.unit
     def test_write_parent_mounts_parent_rw(self, tmp_path):
         """When path_policies.write_parent is True, mount parent dir rw instead of the path itself."""
         from hip_cargo.utils.decorators import stimela_cab, stimela_output

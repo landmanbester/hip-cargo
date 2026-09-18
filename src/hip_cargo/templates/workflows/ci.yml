@@ -65,6 +65,8 @@ jobs:
     runs-on: ubuntu-latest
     env:
       SKIP_CHECKS: 'false'
+      # Without this, uv obeys .python-version (3.11) and the matrix is cosmetic.
+      UV_PYTHON: ${{ matrix.python-version }}
     strategy:
       fail-fast: false
       matrix:

@@ -3,8 +3,8 @@ type: reference
 title: Container execution and image lifecycle
 description: The _container_image.py contract, container fallback runner, GPU passthrough, per-backend run-args, and release tag mechanics.
 tags: [containers, runner, gpu, releases]
-timestamp: 2026-07-13
-last_verified_commit: a1b714a
+timestamp: 2026-09-18
+last_verified_commit: 7dae314
 ---
 
 # Container execution and image lifecycle
@@ -46,7 +46,8 @@ Generated CLI wrappers lazy-import the core function inside
 `sys.argv` and re-runs the command in the package's container. Backend
 priority: `apptainer` → `singularity` → `docker` → `podman`. Volume mounts
 resolve automatically from Path-like type hints (ro) and `@stimela_output`
-decorators (rw). Cabs with an `image` field get generated `--backend`
+decorators (rw); an input with `StimelaMeta(writable=True)` (cab
+`writable: true`, e.g. an MS updated in place) is also mounted rw. Cabs with an `image` field get generated `--backend`
 (`auto|native|apptainer|singularity|docker|podman`) and
 `--always-pull-images` params, both `{"stimela": {"skip": True}}` so they
 never reach cab YAML.

@@ -357,6 +357,8 @@ def generate_parameter_signature(
         # Format choices for Literal
         choices_formatted = ", ".join(repr(c) if isinstance(c, str) else str(c) for c in choices)
         py_type = f"Literal[{choices_formatted}]"
+        if is_optional:
+            py_type += " | None"
         needs_parser = False  # Literal types don't need parser
 
     # Format default value for Python code
@@ -521,7 +523,7 @@ def generate_parameter_signature(
         lines_out.append(f"    ] = {default_val},")
     elif not required:
         # No default provided, use None for optional
-        if " | None" not in py_type and not uses_literal:
+        if " | None" not in py_type:
             # Need to go back and fix the type
             lines_out[1] = f"        {py_type} | None,"
         lines_out.append("    ] = None,")
