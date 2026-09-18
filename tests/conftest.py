@@ -1,22 +1,12 @@
 """Shared test fixtures and configuration."""
 
-import os
+from pathlib import Path
 
-# Disable Ray's automatic uv-run runtime env propagation before ray is imported.
-# When the driver runs under `uv run`, Ray would otherwise package the project
-# directory and re-resolve deps for workers via `uv run`, but workers spawned
-# that way only get the default dependency group and lose access to ray itself.
-# The local in-process Ray used in these tests shares the driver's venv, so the
-# hook adds nothing and (in ray>=2.55) crashes on `working_dir=None`.
-os.environ.setdefault("RAY_ENABLE_UV_RUN_RUNTIME_ENV", "0")
+import pytest
+import typer
+from typing_extensions import Annotated
 
-from pathlib import Path  # noqa: E402
-
-import pytest  # noqa: E402
-import typer  # noqa: E402
-from typing_extensions import Annotated  # noqa: E402
-
-from hip_cargo import stimela_cab, stimela_output  # noqa: E402
+from hip_cargo import stimela_cab, stimela_output
 
 
 @pytest.fixture(scope="session")

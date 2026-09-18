@@ -2,10 +2,20 @@
 type: log
 title: Wiki changelog
 description: Chronological record of wiki updates.
-timestamp: 2026-07-13
+timestamp: 2026-09-18
+last_verified_commit: 7e1a122
 ---
 
 # Wiki changelog
+
+## 2026-09-18 — monitoring and transpile removed (verified at `7e1a122`)
+
+- Deleted `progress-protocol.md`, `diagnostics.md`, `monitoring-api.md`,
+  `optimising-pipelines.md`, and `transpile.md`: the monitoring stack
+  (progress protocol, Ray aggregator, FastAPI server, per-task diagnostics)
+  and `hip-cargo transpile` were removed from hip-cargo. Run state, logs and
+  dashboards are left to Ray/Prefect; any web UI belongs downstream.
+  Everything is preserved on the `wilful` branch.
 
 ## 2026-09-18 — writable inputs mounted rw (verified at `7dae314`)
 
