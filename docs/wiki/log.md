@@ -8,7 +8,7 @@ last_verified_commit: 7e1a122
 
 # Wiki changelog
 
-## 2026-09-19 — `cli-dialect.md` added (verified at `PENDING`)
+## 2026-09-19 — `cli-dialect.md` added (verified at `4532253`)
 
 - New page recording the closed set of typer constructs a CLI module may use,
   and why: the cab and the module are two renderings of one definition, so the

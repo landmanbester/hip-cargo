@@ -4,7 +4,7 @@ title: The CLI dialect
 description: Which typer constructs a CLI module may use, why the set is closed, and where the parser enforces it.
 tags: [generate-cabs, generate-function, typer, introspector, round-trip]
 timestamp: 2026-09-19
-last_verified_commit: PENDING
+last_verified_commit: 4532253
 ---
 
 # The CLI dialect
