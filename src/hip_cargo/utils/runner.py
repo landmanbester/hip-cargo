@@ -154,6 +154,7 @@ def _resolve_mounts(func: typing.Callable, params: dict[str, typing.Any]) -> dic
 
     Follows stimela's mounting conventions:
     - Input paths are mounted read-only, output paths read-write.
+    - writable: an input the cab modifies in place (e.g. an MS) is mounted read-write.
     - If a path doesn't exist, mount its parent directory instead.
     - path_policies.write_parent: mount parent directory in rw mode.
     - path_policies.access_parent: mount parent directory (in ro mode unless write_parent).
@@ -185,10 +186,9 @@ def _resolve_mounts(func: typing.Callable, params: dict[str, typing.Any]) -> dic
         if hint is None or not _is_path_type(hint):
             continue
 
-        is_output = param_name in output_meta
-
         # Gather path_policies from output decorator and/or stimela metadata dict
         meta = stimela_meta.get(param_name, {})
+        readwrite = param_name in output_meta or bool(meta.get("writable", False))
         output_def = output_meta.get(param_name, {})
         base_policies = output_def.get("path_policies") or {}
         path_policies = {**base_policies, **meta.get("path_policies", {})}
@@ -214,14 +214,14 @@ def _resolve_mounts(func: typing.Callable, params: dict[str, typing.Any]) -> dic
                 target = _resolve_mountable_ancestor(abs_path.parent)
                 add_mount(str(target), True)
             elif abs_path.is_dir():
-                add_mount(path_str, is_output)
+                add_mount(path_str, readwrite)
             elif abs_path.exists():
-                add_mount(str(abs_path.parent), is_output)
+                add_mount(str(abs_path.parent), readwrite)
             else:
                 if must_exist:
                     raise RuntimeError(f"Parameter '{param_name}': path '{abs_path}' does not exist")
                 target = _resolve_mountable_ancestor(abs_path.parent)
-                add_mount(str(target), is_output)
+                add_mount(str(target), readwrite)
 
             if access_parent and not write_parent:
                 target = _resolve_mountable_ancestor(abs_path.parent)

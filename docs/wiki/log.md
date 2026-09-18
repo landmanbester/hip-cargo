@@ -7,6 +7,11 @@ timestamp: 2026-07-13
 
 # Wiki changelog
 
+## 2026-09-18 — writable inputs mounted rw (verified at `7dae314`)
+
+- `container-execution.md`: mount resolution honours `writable: true` on
+  inputs (#98), so a cab that updates an MS in place gets an rw bind mount.
+
 ## 2026-07-24 — post-ultra-review release-blocker fixes (verified at `50f3eea`)
 
 - `transpile.md`: four new refusals in the grammar table (`unsafe-name`,
