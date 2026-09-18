@@ -1,5 +1,6 @@
 """Tests for the hip-cargo init command."""
 
+import re
 import subprocess
 import tempfile
 from pathlib import Path
@@ -61,7 +62,16 @@ def test_init_produces_clean_project():
 
         # Markdown is excluded from ruff so the aligned comments in CLAUDE.md survive (#95).
         assert 'extend-exclude = ["*.md"]' in (project_dir / "pyproject.toml").read_text()
-        assert "GPU = True                  #" in (project_dir / "CLAUDE.md").read_text()
+        assert "GPU = True                  #" in (project_dir / ".claude/rules/architecture.md").read_text()
+
+        # Every template placeholder is substituted, and hip-cargo is floored at this release.
+        from hip_cargo import __version__
+
+        for path in project_dir.rglob("*"):
+            if path.is_file() and ".git" not in path.parts and ".venv" not in path.parts:
+                leftover = re.findall(r"<[A-Z][A-Z_]+>", path.read_text(errors="ignore"))
+                assert not leftover, f"Unsubstituted placeholders in {path}: {leftover}"
+        assert f'"hip-cargo>={__version__}"' in (project_dir / "pyproject.toml").read_text()
 
         # CI matrix legs must run on their own interpreter, not .python-version (#97).
         assert "UV_PYTHON: ${{ matrix.python-version }}" in (project_dir / ".github/workflows/ci.yml").read_text()
