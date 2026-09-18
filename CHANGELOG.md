@@ -9,23 +9,33 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### CI
 
-- Restrict dependabot to security updates for python deps
+- **init**: Sync template workflow actions with hip-cargo's
+
+### Dependencies
+
+- Upgrade lockfile to clear open security alerts
+- Update uv-build requirement (#92) ([#92](https://github.com/landmanbester/hip-cargo/pull/92))
+- Bump the python-minor-patch group across 1 directory with 13 updates (#89) ([#89](https://github.com/landmanbester/hip-cargo/pull/89))
 
 ### Documentation
 
-- Add unreleased fixes to changelog
+- Update changelog
+- **init**: Drop rules duplicated in the CLAUDE.md template
 
 ### Fixed
 
-- **codegen**: Parse optional unions structurally and keep nullable choices
-- **codegen**: Round-trip optional choices as Literal[...] | None
-- **runner**: Mount writable inputs read-write in container fallback
-- **init**: Run each CI matrix leg on its own Python version
-- **init**: Exclude markdown from ruff in scaffolded projects
+- **init**: Keep the template hip-cargo floor PEP 508-valid
+- **init**: Make pyproject template valid TOML and current
+- Sprint 2026-09-18 — dependabot policy, init template, writable mounts, optional choices (#101) ([#101](https://github.com/landmanbester/hip-cargo/pull/101))
 
 ### Miscellaneous
 
+- Bump pre-commit ruff to match locked ruff 0.16.8
 - Exclude markdown from ruff format
+
+### Testing
+
+- **init**: Guard templates against drift from hip-cargo's config
 
 
 ## [0.3.0] - 2026-07-24

@@ -81,3 +81,8 @@ search = 'version = "{current_version}"'
 [[file]]
 src = "src/hip_cargo/__init__.py"
 search = '__version__ = "{current_version}"'
+
+# Scaffolded projects need the hip-cargo release that generated their code
+[[file]]
+src = "src/hip_cargo/templates/pyproject.toml"
+search = '"hip-cargo>={current_version}"'
