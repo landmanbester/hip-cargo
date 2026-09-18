@@ -22,6 +22,12 @@ def choices_demo(
             help="Processing mode.",
         ),
     ] = "fast",
+    precision: Annotated[
+        Literal["single", "double"] | None,
+        typer.Option(
+            help="Floating point precision.",
+        ),
+    ] = "double",
 ):
     """
     Fixture command exercising optional choices round-trip.
@@ -34,6 +40,7 @@ def choices_demo(
         dict(
             beam_model=beam_model,
             mode=mode,
+            precision=precision,
         ),
     )
 
@@ -44,4 +51,5 @@ def choices_demo(
     choices_demo_core(
         beam_model=beam_model,
         mode=mode,
+        precision=precision,
     )

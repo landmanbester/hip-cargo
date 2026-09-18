@@ -309,10 +309,17 @@ def param_spec_to_cab_input(spec: ParamSpec) -> tuple[str, dict[str, Any]]:
         dtype = _dtype_to_str_from_string(spec.dtype_str)
         if dtype != "str" and dtype != "NoneType":
             if "Literal" in dtype:
-                # Literal[...] | None normalises to Optional[Literal[...]]; nullability
-                # is implied by the input being neither required nor defaulted.
-                literal = dtype[9:-1] if dtype.startswith("Optional[") else dtype
-                input_def["choices"] = ast.literal_eval(literal.removeprefix("Literal").strip())
+                # Literal[...] | None normalises to Optional[Literal[...]]
+                is_optional = dtype.startswith("Optional[")
+                literal = dtype[9:-1] if is_optional else dtype
+                choices = ast.literal_eval(literal.removeprefix("Literal").strip())
+                input_def["choices"] = choices
+                # With a None default, nullability is implied by the input being neither
+                # required nor defaulted. Otherwise it must be carried by the dtype.
+                if is_optional and spec.default is not None and spec.default is not ...:
+                    choice_types = {type(c).__name__ for c in choices}
+                    elem = choice_types.pop() if len(choice_types) == 1 else "str"
+                    input_def["dtype"] = f"Optional[{elem}]"
             else:
                 input_def["dtype"] = dtype
 
@@ -363,6 +370,35 @@ def extract_input_libcst(param: cst.Param) -> tuple[str, dict[str, Any]]:
     return param_spec_to_cab_input(extract_param_spec(param))
 
 
+def _strip_top_level_none(dtype_str: str) -> tuple[str, bool]:
+    """Remove ``None`` members from a top-level ``X | None`` union.
+
+    Parsed structurally so ``None`` inside subscripts (e.g. ``Literal["a | None"]``)
+    is left untouched and spacing around ``|`` does not matter.
+
+    Args:
+        dtype_str: Source text of a type annotation.
+
+    Returns:
+        Tuple of ``(remaining_type_str, is_optional)``. A bare ``None`` returns ``("None", False)``.
+    """
+    try:
+        node = cst.parse_expression(dtype_str)
+    except cst.ParserSyntaxError:
+        return dtype_str, False
+
+    def union_members(n: cst.BaseExpression) -> list[cst.BaseExpression]:
+        if isinstance(n, cst.BinaryOperation) and isinstance(n.operator, cst.BitOr):
+            return union_members(n.left) + union_members(n.right)
+        return [n]
+
+    members = union_members(node)
+    kept = [m for m in members if not (isinstance(m, cst.Name) and m.value == "None")]
+    if len(kept) == len(members) or not kept:
+        return dtype_str, False
+    return " | ".join(_cst_node_to_code(m) for m in kept), True
+
+
 def _dtype_to_str_from_string(dtype_str: str) -> str:
     """
     Normalize a dtype string representation for stimela compatibility.
@@ -375,15 +411,7 @@ def _dtype_to_str_from_string(dtype_str: str) -> str:
     Returns:
         Normalized dtype string (e.g., "List[File]")
     """
-    # Strip whitespace
-    dtype_str = dtype_str.strip()
-
-    # Check if type is optional (X | None or None | X) before stripping
-    is_optional = " | None" in dtype_str or "| None" in dtype_str or "None |" in dtype_str or "None|" in dtype_str
-
-    # Remove None from union types (handles both X | None and None | X)
-    dtype_str = dtype_str.replace(" | None", "").replace("| None", "")
-    dtype_str = dtype_str.replace("None | ", "").replace("None|", "")
+    dtype_str, is_optional = _strip_top_level_none(dtype_str.strip())
 
     # If it's just "None", return "NoneType"
     if dtype_str == "None":
