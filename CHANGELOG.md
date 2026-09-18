@@ -11,8 +11,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Restrict dependabot to security updates for python deps
 
+### Documentation
+
+- Add unreleased fixes to changelog
+
 ### Fixed
 
+- **codegen**: Parse optional unions structurally and keep nullable choices
 - **codegen**: Round-trip optional choices as Literal[...] | None
 - **runner**: Mount writable inputs read-write in container fallback
 - **init**: Run each CI matrix leg on its own Python version
