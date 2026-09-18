@@ -59,6 +59,10 @@ def test_init_produces_clean_project():
         assert "# GPU = True" in container_image
         assert "RUN_ARGS_APPTAINER" in container_image
 
+        # Markdown is excluded from ruff so the aligned comments in CLAUDE.md survive (#95).
+        assert 'extend-exclude = ["*.md"]' in (project_dir / "pyproject.toml").read_text()
+        assert "GPU = True                  #" in (project_dir / "CLAUDE.md").read_text()
+
         # Verify ruff format check passes (no files would be reformatted)
         result = subprocess.run(
             ["uv", "run", "ruff", "format", "--check", "."],
