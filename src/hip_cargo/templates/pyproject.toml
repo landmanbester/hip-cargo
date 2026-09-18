@@ -16,7 +16,7 @@ classifiers = [
     "Programming Language :: Python :: 3.12",
 ]
 dependencies = [
-    "hip-cargo>=0.2.0",
+    "hip-cargo>=<HIP_CARGO_VERSION>",
 ]
 
 # Lightweight install (default):  pip install <PROJECT_NAME>
@@ -36,12 +36,12 @@ Repository = "<GITHUB_URL>"
 "Bug Tracker" = "<GITHUB_URL>/issues"
 
 [project.scripts]
-<CLI_COMMAND> = "<PACKAGE_NAME>.cli:app"
+"<CLI_COMMAND>" = "<PACKAGE_NAME>.cli:app"
 
 [build-system]
 # NOTE: This uv_build constraint is intentionally aligned with hip-cargo's own pyproject.toml.
 # If you bump uv_build in hip-cargo, update this template constraint to match.
-requires = ["uv_build>=0.8.3,<0.12.0"]
+requires = ["uv_build>=0.8.3,<0.13.0"]
 build-backend = "uv_build"
 
 [tool.ruff]

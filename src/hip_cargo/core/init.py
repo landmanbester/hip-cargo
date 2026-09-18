@@ -4,6 +4,7 @@ import datetime
 import subprocess
 from pathlib import Path
 
+from hip_cargo import __version__ as hip_cargo_version
 from hip_cargo.templates import TEMPLATES_DIR
 
 
@@ -74,6 +75,8 @@ def init(
         "<LICENSE_TYPE>": license_type,
         "<YEAR>": year,
         "<DEFAULT_BRANCH>": default_branch,
+        # Generated code targets this hip-cargo release, so pin it as the floor
+        "<HIP_CARGO_VERSION>": hip_cargo_version,
     }
 
     # Create directory tree
