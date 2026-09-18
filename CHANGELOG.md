@@ -19,10 +19,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Documentation
 
+- Update changelog
 - **init**: Drop rules duplicated in the CLAUDE.md template
 
 ### Fixed
 
+- **init**: Keep the template hip-cargo floor PEP 508-valid
 - **init**: Make pyproject template valid TOML and current
 - Sprint 2026-09-18 — dependabot policy, init template, writable mounts, optional choices (#101) ([#101](https://github.com/landmanbester/hip-cargo/pull/101))
 
