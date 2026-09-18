@@ -57,6 +57,26 @@ def test_dependabot_config_matches():
     assert (TEMPLATES / "dependabot.yml").read_text() == (ROOT / ".github" / "dependabot.yml").read_text()
 
 
+def test_template_requirements_are_pep508():
+    """GitHub's dependency graph rejects the whole file if any requirement is not PEP 508."""
+    from packaging.requirements import Requirement
+
+    project = tomllib.loads((TEMPLATES / "pyproject.toml").read_text())
+    reqs = project["project"]["dependencies"] + project["build-system"]["requires"]
+    for extra in project["project"].get("optional-dependencies", {}).values():
+        reqs += extra
+    for req in reqs:
+        Requirement(req)
+
+
+def test_template_hip_cargo_floor_is_current_release():
+    """tbump bumps this floor alongside __version__; generated code needs the release that wrote it."""
+    from hip_cargo import __version__
+
+    deps = tomllib.loads((TEMPLATES / "pyproject.toml").read_text())["project"]["dependencies"]
+    assert f"hip-cargo>={__version__}" in deps
+
+
 def test_build_backend_constraint_matches():
     own = tomllib.loads((ROOT / "pyproject.toml").read_text())["build-system"]["requires"]
     template = tomllib.loads((TEMPLATES / "pyproject.toml").read_text())["build-system"]["requires"]
