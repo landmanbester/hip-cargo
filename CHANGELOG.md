@@ -5,6 +5,24 @@ All notable changes to hip-cargo are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### CI
+
+- Restrict dependabot to security updates for python deps
+
+### Fixed
+
+- **codegen**: Round-trip optional choices as Literal[...] | None
+- **runner**: Mount writable inputs read-write in container fallback
+- **init**: Run each CI matrix leg on its own Python version
+- **init**: Exclude markdown from ruff in scaffolded projects
+
+### Miscellaneous
+
+- Exclude markdown from ruff format
+
+
 ## [0.3.0] - 2026-07-24
 
 ### Added
@@ -568,6 +586,7 @@ Co-authored-by: Copilot <175728472+Copilot@users.noreply.github.com>
 - Initial commit
 
 
+[Unreleased]: https://github.com/landmanbester/hip-cargo/compare/v0.3.0...HEAD
 [0.3.0]: https://github.com/landmanbester/hip-cargo/compare/v0.2.2...v0.3.0
 [0.2.2]: https://github.com/landmanbester/hip-cargo/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/landmanbester/hip-cargo/compare/v0.2.0...v0.2.1
