@@ -13,8 +13,8 @@ Deep reference documentation lives in `docs/wiki/` (start at
 `last_verified_commit` stamp — the commit its claims were last checked
 against.
 
-* **Read the relevant wiki page before working in a subsystem** (monitoring,
-  diagnostics, container execution, remote URIs).
+* **Read the relevant wiki page before working in a subsystem** (container
+  execution, remote URIs).
 * **Update-as-you-touch rule:** if a change you make invalidates or extends a
   wiki page, update that page and refresh its `last_verified_commit`
   (`git rev-parse --short HEAD`) and `timestamp` in the same session, and add
@@ -27,7 +27,7 @@ against.
 ## Core Dependencies
 
 * Minimize external dependencies.
-* Current allowed dependencies: `typer`, `pyyaml`, `libcst`, `ruff`, `typing-extensions`, `tomli` (Python < 3.11 only).
+* Current allowed dependencies: `typer`, `pyyaml`, `libcst`, `ruff`, `typing-extensions`.
 * **Note on Ruff:** `ruff` is a core dependency (not just dev) because `generate-function` runs `ruff format` and `ruff check --fix` on generated code.
 
 ## Mandatory Development Workflow
@@ -49,17 +49,19 @@ hip-cargo/
 │   │   ├── __init__.py
 │   │   ├── generate_cabs.yml
 │   │   ├── generate_function.yml
+│   │   ├── generate_schemas.yml
 │   │   └── init.yml
 │   ├── cli/                  # Lightweight CLI wrappers
 │   │   ├── __init__.py       # Main Typer app, registers commands
 │   │   ├── generate_cabs.py
 │   │   ├── generate_function.py
-│   │   ├── init.py           # hip-cargo init command
-│   │   └── monitor.py        # hip-cargo monitor command (needs monitoring extra)
+│   │   ├── generate_schemas.py
+│   │   └── init.py           # hip-cargo init command
 │   ├── core/                 # Core implementations (lazy-loaded)
 │   │   ├── __init__.py
 │   │   ├── generate_cabs.py
 │   │   ├── generate_function.py
+│   │   ├── generate_schemas.py # Pydantic schemas for tunable params
 │   │   └── init.py           # Project scaffolding logic
 │   ├── recipes/              # Stimela recipes for running via stimela
 │   │   ├── __init__.py
@@ -75,31 +77,18 @@ hip-cargo/
 │   │   ├── tbump.toml
 │   │   ├── licenses/         # MIT, Apache-2.0, BSD-3-Clause
 │   │   └── workflows/        # GitHub Actions workflow templates
-│   ├── monitoring/           # Pipeline monitoring (optional, needs hip-cargo[monitoring])
-│   │   ├── __init__.py
-│   │   ├── cab_resolver.py      # Resolve _include to cab schemas
-│   │   ├── config.py            # MonitorSettings (pydantic-settings, HIPCARGO_ prefix)
-│   │   ├── diagnostics_report.py # Join DIAGNOSTIC events into per-task report
-│   │   ├── dispatcher.py        # Centralised WebSocket event fan-out
-│   │   ├── ray_backend.py       # ProgressAggregator actor + RayProgressBackend
-│   │   ├── recipe_discovery.py  # Find recipe YAML files in project
-│   │   ├── recipe_parser.py     # Parse stimela recipe DAG structure
-│   │   └── server.py            # FastAPI app (REST + WebSocket)
 │   └── utils/                # Shared utilities
 │       ├── __init__.py
 │       ├── cab_to_function.py   # Generate function from cab YAML
 │       ├── config.py            # Container image URL + GPU/RUN_ARGS readers from _container_image.py
 │       ├── decorators.py        # @stimela_cab, @stimela_output
-│       ├── diagnostics.py       # Per-task resource capture (getrusage + optional psutil)
 │       ├── introspector.py      # Extract metadata from functions
-│       ├── progress.py          # ProgressEvent, EventType, ProgressBackend protocol
-│       ├── progress_context.py  # track_progress() context manager
+│       ├── metadata.py          # StimelaMeta
 │       ├── runner.py            # Container fallback execution
+│       ├── spec.py              # Shared IR (ParamSpec, CommandSpec, ModuleSpec)
 │       ├── yaml_comments.py     # YAML comment extraction/preservation
 │       └── types.py             # ListInt, ListFloat, ListStr NewTypes + parsers
 ├── tests/
-│   ├── mocks.py              # Shared test mocks (FakeJobClient, etc.)
-│   └── fixtures/
-│       └── sara.yml           # pfb-imaging SARA recipe fixture
+│   └── fixtures/             # Fixture package for introspection tests
 └── pyproject.toml
 ```

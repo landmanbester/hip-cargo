@@ -110,7 +110,7 @@ jobs:
 
       - name: Install dependencies
         if: env.SKIP_CHECKS != 'true'
-        run: uv sync --group test --group monitoring-dev
+        run: uv sync --group test
 
       - name: Run tests
         if: env.SKIP_CHECKS != 'true'
