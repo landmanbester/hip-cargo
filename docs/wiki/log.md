@@ -8,7 +8,7 @@ last_verified_commit: 7e1a122
 
 # Wiki changelog
 
-## 2026-09-23 — `cab-yaml-emission.md` records what the guard misses (verified at `PENDING`)
+## 2026-09-23 — `cab-yaml-emission.md` records what the guard misses (verified at `960f3e1`)
 
 - Added the failure table for the cases that survive the `yaml.safe_load`
   guard: a trailing colon, `" #"`, a leading `"- "` and non-ASCII. Two of them
