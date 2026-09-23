@@ -8,6 +8,35 @@ last_verified_commit: 7e1a122
 
 # Wiki changelog
 
+## 2026-09-23 — `cab-yaml-emission.md` records what the guard misses (verified at `960f3e1`)
+
+- Added the failure table for the cases that survive the `yaml.safe_load`
+  guard: a trailing colon, `" #"`, a leading `"- "` and non-ASCII. Two of them
+  are silent, because the guard checks that the output parses rather than that
+  it round-trips by value.
+- Noted that `get_cst_value`'s fallback still emits source text as a value for
+  anything it cannot evaluate; #109 fixed one instance, not the class.
+- Tracked in #116.
+
+## 2026-09-19 — `cli-dialect.md` added (verified at `4532253`)
+
+- New page recording the closed set of typer constructs a CLI module may use,
+  and why: the cab and the module are two renderings of one definition, so the
+  writable language is whatever a cab can express.
+- Prompted by #112 and #113 — `typer.Option` param_decls were mis-parsed into
+  `default`, and `typer.Argument` failed either as a round-trip line diff or as
+  an internal `RuntimeError`. Both are now rejected at parse time with a message
+  naming the rule.
+- `index.md` re-stamped; it was last touched by `5d56942` without one.
+
+## 2026-09-18 — cab YAML emission documented (verified at `5d56942`)
+
+- **Added** `cab-yaml-emission.md`: how CLI source becomes cab YAML, why
+  `get_cst_value`'s source-text fallback is a silent-corruption risk (signed
+  literals), the three invariants `format_info_fields` must preserve, and the
+  new `yaml.safe_load` guard in `generate_cabs`. Written alongside the fixes
+  for #109 and #110.
+
 ## 2026-09-18 — monitoring and transpile removed (verified at `7e1a122`)
 
 - Deleted `progress-protocol.md`, `diagnostics.md`, `monitoring-api.md`,
