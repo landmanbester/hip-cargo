@@ -1,0 +1,17 @@
+# Released packages whose committed cli/ and cabs/ must keep round-tripping
+# under this hip-cargo. Opt-in; run before cutting a release:
+#
+#     HIP_CARGO_DOWNSTREAM=1 uv run pytest tests/test_downstream_roundtrip.py
+#
+# Each entry is a PyPI distribution name. The harness tests its sdist -- no
+# install, no clone. `version` is optional: omit it to test the latest release
+# (what you want before a release), pin it to reproduce a failure.
+
+[[package]]
+name = "pfb-imaging"
+
+[[package]]
+name = "meerkat-beams"
+
+[[package]]
+name = "pfb-model-spec"
