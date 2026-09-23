@@ -5,7 +5,11 @@ All notable changes to hip-cargo are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.4.0] - 2026-09-23
+
+### Added
+
+- Remove monitoring stack and transpile
 
 ### CI
 
@@ -19,11 +23,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Documentation
 
+- **wiki**: Stamp cab-yaml-emission against its update
+- **wiki**: Record what the cab YAML guard does not catch
+- **test**: Say why the harness reads image back from the cabs
+- **wiki**: Stamp cli-dialect against its fix commit
+- **wiki**: Stamp cab-yaml-emission against its fix commit
+- **wiki**: Refresh freshness stamps after removal
+- Update changelog
 - Update changelog
 - **init**: Drop rules duplicated in the CLAUDE.md template
 
 ### Fixed
 
+- **introspector**: Reject typer constructs a cab cannot express
+- **cabs**: Stop emitting broken or mistyped cab YAML
 - **init**: Keep the template hip-cargo floor PEP 508-valid
 - **init**: Make pyproject template valid TOML and current
 - Sprint 2026-09-18 — dependabot policy, init template, writable mounts, optional choices (#101) ([#101](https://github.com/landmanbester/hip-cargo/pull/101))
@@ -35,6 +48,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Testing
 
+- Add an opt-in downstream round-trip harness
 - **init**: Guard templates against drift from hip-cargo's config
 
 
@@ -601,7 +615,7 @@ Co-authored-by: Copilot <175728472+Copilot@users.noreply.github.com>
 - Initial commit
 
 
-[Unreleased]: https://github.com/landmanbester/hip-cargo/compare/v0.3.0...HEAD
+[0.4.0]: https://github.com/landmanbester/hip-cargo/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/landmanbester/hip-cargo/compare/v0.2.2...v0.3.0
 [0.2.2]: https://github.com/landmanbester/hip-cargo/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/landmanbester/hip-cargo/compare/v0.2.0...v0.2.1
