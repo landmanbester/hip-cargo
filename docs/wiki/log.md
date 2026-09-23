@@ -8,6 +8,16 @@ last_verified_commit: 7e1a122
 
 # Wiki changelog
 
+## 2026-09-23 — `cab-yaml-emission.md` records what the guard misses (verified at `PENDING`)
+
+- Added the failure table for the cases that survive the `yaml.safe_load`
+  guard: a trailing colon, `" #"`, a leading `"- "` and non-ASCII. Two of them
+  are silent, because the guard checks that the output parses rather than that
+  it round-trips by value.
+- Noted that `get_cst_value`'s fallback still emits source text as a value for
+  anything it cannot evaluate; #109 fixed one instance, not the class.
+- Tracked in #116.
+
 ## 2026-09-19 — `cli-dialect.md` added (verified at `4532253`)
 
 - New page recording the closed set of typer constructs a CLI module may use,
