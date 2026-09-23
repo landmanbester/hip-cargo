@@ -132,7 +132,12 @@ def image_from_cabs(cabs_dir: Path) -> str | None:
     """Container image declared by the shipped cabs, if any.
 
     ``generate_cabs`` resolves this from installed distribution metadata, which
-    is unavailable here, so the harness passes it explicitly.
+    is unavailable here — nothing is installed — so the harness passes it
+    explicitly. Reading it back out of the shipped cabs is deliberate: it
+    neutralises the field. Whether a released package's ``image:`` agrees with
+    its own ``_container_image.py`` is that package's business, checked by its
+    own round-trip suite; a disagreement must not fail a harness that is asking
+    whether *hip-cargo* still round-trips it.
     """
     for cab_file in sorted(cabs_dir.glob("*.yml")):
         with open(cab_file) as f:
