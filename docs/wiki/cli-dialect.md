@@ -3,8 +3,8 @@ type: reference
 title: The CLI dialect
 description: Which typer constructs a CLI module may use, why the set is closed, and where the parser enforces it.
 tags: [generate-cabs, generate-function, typer, introspector, round-trip]
-timestamp: 2026-09-19
-last_verified_commit: 4532253
+timestamp: 2026-11-17
+last_verified_commit: 359c0ac
 ---
 
 # The CLI dialect
@@ -18,8 +18,13 @@ A cab and a CLI module are two renderings of one definition. `generate-cabs`
 produces the cab from the module; `generate-function` produces the module from
 the cab. A human writes whichever side they prefer — the YAML cab is the simpler
 one — and generates the other. `tests/test_roundtrip.py`, shipped by
-`hip-cargo init` into every downstream project, asserts that
-`cli -> cab -> cli` is byte-identical.
+`hip-cargo init` into every downstream project, checks both directions against
+the **committed** files: `generate-cabs` on `cli/<cmd>.py` must equal the
+committed `cabs/<cmd>.yml` (as a parsed document), and `generate-function` on
+that cab must equal the committed `cli/<cmd>.py` byte for byte. Commands are
+discovered (an `ast` check for a `@stimela_cab` decorator), and the image is
+read from `_container_image.py` with `ast`, so the suite needs no install
+(#115).
 
 That makes the writable language exactly *what a cab can express*. A construct
 with no cab representation cannot survive the round trip, so it is not part of

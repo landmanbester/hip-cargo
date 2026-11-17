@@ -4,20 +4,31 @@ Read this when editing `tests/**` or `.github/workflows/**` files.
 
 ## 1. Round-Trip Tests
 
-The round-trip test in `tests/test_roundtrip.py` is **not optional** — it is how
-this project guarantees that `cli/*.py` and `cabs/*.yml` agree. It runs:
+The round-trip tests in `tests/test_roundtrip.py` are **not optional** — they
+are how this project guarantees that the committed `cli/*.py` and the committed
+`cabs/*.yml` agree. They check both directions, against the committed files:
 
 ```
-cli/<cmd>.py  ──(generate-cabs)──►  cabs/<cmd>.yml  ──(generate-function)──►  <cmd>.py
+cli/<cmd>.py  ──(generate-cabs)──►      == cabs/<cmd>.yml   (as a parsed document)
+cabs/<cmd>.yml ──(generate-function)──► == cli/<cmd>.py     (byte for byte)
 ```
 
-…then asserts the regenerated `<cmd>.py` is byte-identical (after `ruff format`)
-to the original `cli/<cmd>.py`. If you write a CLI wrapper in a shape that
-hip-cargo cannot round-trip, the test fails and the cab is unreliable. **Fix the
-source, not the test.**
+- A **forward** failure means the committed cab is stale: regenerate it (the
+  pre-commit hook does this on commit).
+- A **reverse** failure means `cli/<cmd>.py` is not in the shape hip-cargo emits.
+  Do not hand-fix it: edit the cab and regenerate the module, or report a
+  hip-cargo bug if the regeneration itself is wrong. **Fix the source, not the
+  test.**
 
-Add a new round-trip case to `tests/test_roundtrip.py` whenever you add a new
-command under `cli/`.
+Commands are discovered, not listed: a new module under `cli/` is covered with
+no change to the test file, and a `@stimela_cab` command without a committed cab
+fails `test_every_decorated_command_has_a_committed_cab`. Modules whose name
+starts with `_` are skipped. The suite needs no install: it reads
+`CONTAINER_IMAGE` from `_container_image.py` with `ast` rather than importing
+the package.
+
+After upgrading hip-cargo, a reverse failure across every command usually means
+the emitter changed in that release: regenerate `cli/*.py` from the cabs.
 
 ## 2. Test Infrastructure
 
