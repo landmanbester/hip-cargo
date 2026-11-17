@@ -3,6 +3,7 @@
 Subsequent tasks (6, 7, 9, 10, 11) append additional test functions here.
 """
 
+import sys
 from typing import Annotated
 
 import fsspec
@@ -401,3 +402,21 @@ def test_detect_runtime_error_mentions_extras_for_equals_form(monkeypatch):
         runner._detect_runtime("auto")
 
     assert "hip-cargo[gcs]" in str(exc.value)
+
+
+def test_preflight_raises_import_error_for_a_missing_backend_without_must_exist(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A remote path with no fsspec backend installed must fail in the pre-flight.
+
+    The generated wrapper only guards the pre-flight with ``except ImportError``
+    (#120), so this is what sends ``--backend auto`` to the container before any
+    work starts, rather than the core run failing part-way through.
+    """
+    monkeypatch.setitem(sys.modules, "s3fs", None)
+
+    def fn(out: Annotated[Directory, typer.Option()] = UPath("s3://bucket/out")) -> None:  # noqa: B008
+        pass
+
+    with pytest.raises(ImportError, match="s3fs"):
+        preflight_remote_must_exist(fn, {"out": UPath("s3://bucket/out")})

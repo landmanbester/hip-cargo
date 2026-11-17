@@ -70,33 +70,28 @@ def wrap_demo(
     """
     Render a dataset to an image.
     """
+    params = dict(
+        src=src,
+        names=names,
+        output=output,
+    )
+
     if backend == "native" or backend == "auto":
+        # Only a missing install falls back to the container, so only the
+        # imports and the pre-flight are guarded; the core call is not.
         try:
-            # Pre-flight must_exist for remote URIs before dispatching.
-            from hip_cargo.utils.runner import preflight_remote_must_exist  # noqa: E402
-
-            preflight_remote_must_exist(
-                wrap_demo,
-                dict(
-                    src=src,
-                    names=names,
-                    output=output,
-                ),
-            )
-
-            # Lazy import the core implementation
             from fixture_pkg.core.wrap_demo import wrap_demo as wrap_demo_core  # noqa: E402
 
-            # Call the core function with all parameters
-            wrap_demo_core(
-                src,
-                output,
-                names=names,
-            )
-            return
+            from hip_cargo.utils.runner import preflight_remote_must_exist  # noqa: E402
+
+            # Pre-flight must_exist for remote URIs before dispatching.
+            preflight_remote_must_exist(wrap_demo, params)
         except ImportError:
             if backend == "native":
                 raise
+        else:
+            wrap_demo_core(**params)
+            return
 
     # Resolve container image from installed package metadata
     from hip_cargo.utils.config import get_container_image  # noqa: E402
@@ -108,11 +103,7 @@ def wrap_demo(
 
     run_in_container(
         wrap_demo,
-        dict(
-            src=src,
-            names=names,
-            output=output,
-        ),
+        params,
         image=image,
         backend=backend,
         always_pull_images=always_pull_images,

@@ -45,24 +45,16 @@ def tunable_demo(
     """
     Fixture command exercising tunable parameter round-trip.
     """
-    # Pre-flight must_exist for remote URIs before dispatching.
-    from hip_cargo.utils.runner import preflight_remote_must_exist  # noqa: E402
-
-    preflight_remote_must_exist(
-        tunable_demo,
-        dict(
-            n_iter=n_iter,
-            threshold=threshold,
-            label=label,
-        ),
-    )
-
-    # Lazy import the core implementation
-    from fixture_pkg.core.tunable_demo import tunable_demo as tunable_demo_core  # noqa: E402
-
-    # Call the core function with all parameters
-    tunable_demo_core(
+    params = dict(
         n_iter=n_iter,
         threshold=threshold,
         label=label,
     )
+
+    from fixture_pkg.core.tunable_demo import tunable_demo as tunable_demo_core  # noqa: E402
+
+    from hip_cargo.utils.runner import preflight_remote_must_exist  # noqa: E402
+
+    # Pre-flight must_exist for remote URIs before dispatching.
+    preflight_remote_must_exist(tunable_demo, params)
+    tunable_demo_core(**params)

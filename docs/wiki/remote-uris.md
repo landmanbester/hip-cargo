@@ -3,8 +3,8 @@ type: reference
 title: Path types and remote URIs
 description: UPath-backed File/Directory/MS/URI types, remote object-store handling, credential forwarding, and fsspec extras.
 tags: [paths, upath, s3, gcs, azure, fsspec]
-timestamp: 2026-07-13
-last_verified_commit: a1b714a
+timestamp: 2026-11-17
+last_verified_commit: 24e1fa7
 ---
 
 # Path types and remote URIs
@@ -45,10 +45,14 @@ keep their comma-separated parsers.
 
 fsspec backends stay **lazy** — never imported from CLI modules. Extras:
 `hip-cargo[s3]` (s3fs), `[gcs]` (gcsfs), `[azure]` (adlfs), `[all]`. A remote
-URI without the extra raises `ImportError`, which the generated wrapper's
-existing `try/except ImportError → run_in_container` catches: users with a
-container runtime fall through to containerised execution; users without get
-an error suggesting the matching `pip install hip-cargo[...]`.
+URI without the extra raises `ImportError` from `preflight_remote_must_exist`,
+which resolves `fsspec.get_filesystem_class` for every remote protocol in use
+(constructing an `S3Path`/`GCSPath`/`AzurePath` does not import the backend,
+so without this a remote output path would only fail mid-run). The pre-flight
+sits inside the generated wrapper's `try/except ImportError`, which is
+otherwise limited to the core import (#120): users with a container runtime
+fall through to containerised execution before any work starts; users without
+get an error suggesting the matching `pip install hip-cargo[...]`.
 
 Testing convention: unit tests use fsspec's `memory://` protocol (no
 credentials, fast). Live-cloud tests are opt-in behind `HIP_CARGO_LIVE_S3` /

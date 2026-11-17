@@ -32,24 +32,16 @@ def choices_demo(
     """
     Fixture command exercising optional choices round-trip.
     """
-    # Pre-flight must_exist for remote URIs before dispatching.
-    from hip_cargo.utils.runner import preflight_remote_must_exist  # noqa: E402
-
-    preflight_remote_must_exist(
-        choices_demo,
-        dict(
-            beam_model=beam_model,
-            mode=mode,
-            precision=precision,
-        ),
-    )
-
-    # Lazy import the core implementation
-    from fixture_pkg.core.choices_demo import choices_demo as choices_demo_core  # noqa: E402
-
-    # Call the core function with all parameters
-    choices_demo_core(
+    params = dict(
         beam_model=beam_model,
         mode=mode,
         precision=precision,
     )
+
+    from fixture_pkg.core.choices_demo import choices_demo as choices_demo_core  # noqa: E402
+
+    from hip_cargo.utils.runner import preflight_remote_must_exist  # noqa: E402
+
+    # Pre-flight must_exist for remote URIs before dispatching.
+    preflight_remote_must_exist(choices_demo, params)
+    choices_demo_core(**params)

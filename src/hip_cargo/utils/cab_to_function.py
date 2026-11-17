@@ -521,13 +521,25 @@ def generate_parameter_signature(
     return "\n".join(lines_out)
 
 
+def _local_name(name: str, func_name: str) -> str:
+    """Return ``name``, suffixed with ``_`` if it would shadow the wrapper function."""
+    return f"{name}_" if name == func_name else name
+
+
 def generate_function_body(cab_def: dict[str, Any], inputs: dict[str, Any], outputs: dict[str, Any]) -> list[str]:
     """
-    Generate the function body with lazy import and core function call.
+    Generate the function body: build the parameters once, then dispatch.
 
-    When the cab definition includes an image, the body is wrapped in a try/except
-    ImportError block with a container fallback. Otherwise, the existing direct
-    lazy import pattern is used.
+    The parameters are collected into a single ``params`` dict, which feeds the
+    remote pre-flight, the core call and (when the cab has an image) the container
+    fallback. Binding it before anything else also means a later local cannot
+    shadow a parameter, e.g. the resolved container ``image``.
+
+    When the cab has an image, only the imports and the remote pre-flight are
+    guarded by ``except ImportError``: those are how a missing ``[full]`` install
+    or fsspec backend shows up, and neither has side effects. The core call runs
+    outside the ``try``, so an ``ImportError`` raised during the run propagates
+    instead of silently re-running the command in a container.
 
     Args:
         cab_def: Cab definition dictionary
@@ -538,132 +550,73 @@ def generate_function_body(cab_def: dict[str, Any], inputs: dict[str, Any], outp
         List of code lines for the function body
     """
     has_image = bool(cab_def.get("image"))
-    # Indentation: extra two levels inside the if/try block when image is present
-    indent = "            " if has_image else "    "
-
-    lines = []
     func_name = cab_def.get("_name", "").replace("-", "_")
 
-    if has_image:
-        lines.append("    if backend == 'native' or backend == 'auto':")
-        lines.append("        try:")
-
-    # Parse the command to get the import path
-    command = cab_def.get("command", "")
     # Format is: module.path.function_name
+    command = cab_def.get("command", "")
     command_parts = command.split(".")
     import_path = ".".join(command_parts[:-1])
     core_func_name = command_parts[-1]
 
-    # Pre-flight must_exist for remote URIs before dispatching.
-    # The preflight calls .exists() on remote UPaths, which may raise ImportError
-    # if the fsspec backend is missing. When has_image is True, it must live
-    # INSIDE the try/except block so the container fallback can catch that.
-    if has_image:
-        lines.append(f"{indent}# Pre-flight must_exist for remote URIs before dispatching.")
-        lines.append(f"{indent}from hip_cargo.utils.runner import preflight_remote_must_exist  # noqa: E402")
-        lines.append(f"{indent}preflight_remote_must_exist(")
-        lines.append(f"{indent}    {func_name},")
-        lines.append(f"{indent}    dict(")
-        for param_name in inputs:
-            py_name = param_name.replace("-", "_")
-            lines.append(f"{indent}        {py_name}={py_name},")
-        for output_name in outputs:
-            py_name = output_name.replace("-", "_")
-            lines.append(f"{indent}        {py_name}={py_name},")
-        lines.append(f"{indent}    ),")
-        lines.append(f"{indent})")
-        lines.append("")
-    else:
-        lines.append("    # Pre-flight must_exist for remote URIs before dispatching.")
-        lines.append("    from hip_cargo.utils.runner import preflight_remote_must_exist  # noqa: E402")
-        lines.append("    preflight_remote_must_exist(")
-        lines.append(f"        {func_name},")
-        lines.append("        dict(")
-        for param_name in inputs:
-            py_name = param_name.replace("-", "_")
-            lines.append(f"            {py_name}={py_name},")
-        for output_name in outputs:
-            py_name = output_name.replace("-", "_")
-            lines.append(f"            {py_name}={py_name},")
-        lines.append("        ),")
-        lines.append("    )")
-        lines.append("")
+    # The body refers to the wrapper by name, so its own locals must not reuse it.
+    params_var = _local_name("params", func_name)
+    image_var = _local_name("image", func_name)
 
-    # Lazy import
-    lines.append(f"{indent}# Lazy import the core implementation")
-    lines.append(f"{indent}from {import_path} import {core_func_name} as {core_func_name}_core  # noqa: E402")
+    param_names = [name.replace("-", "_") for name in [*inputs, *outputs]]
+    lines = []
+    if param_names:
+        lines.append(f"    {params_var} = dict(")
+        lines.extend(f"        {name}={name}," for name in param_names)
+        lines.append("    )")
+    else:
+        lines.append(f"    {params_var} = {{}}")
     lines.append("")
 
-    # Generate the function call
-    lines.append(f"{indent}# Call the core function with all parameters")
-    lines.append(f"{indent}{core_func_name}_core(")
+    # The pre-flight calls .exists() on remote UPaths, which raises ImportError
+    # when the fsspec backend is missing, so it belongs with the guarded imports.
+    def dispatch_imports(indent: str) -> list[str]:
+        return [
+            f"{indent}from hip_cargo.utils.runner import preflight_remote_must_exist  # noqa: E402",
+            f"{indent}from {import_path} import {core_func_name} as {core_func_name}_core  # noqa: E402",
+            "",
+            f"{indent}# Pre-flight must_exist for remote URIs before dispatching.",
+            f"{indent}preflight_remote_must_exist({func_name}, {params_var})",
+        ]
 
-    # Separate required (positional) and optional (keyword) parameters
-    positional_params = []
-    keyword_params = []
+    if not has_image:
+        lines.extend(dispatch_imports("    "))
+        lines.append(f"    {core_func_name}_core(**{params_var})")
+        return lines
 
-    # Add input parameters
-    for param_name, param_def in inputs.items():
-        py_param_name = param_name.replace("-", "_")
-        is_required = param_def.get("required", False)
+    # Derive distribution name from command: "pfb_imaging.core.grid.grid" → "pfb-imaging"
+    dist_name = command.split(".")[0].replace("_", "-") if command else ""
 
-        if is_required:
-            positional_params.append(f"{indent}    {py_param_name},")
-        else:
-            keyword_params.append(f"{indent}    {py_param_name}={py_param_name},")
-
-    # Add output parameters (positional if they have positional policy, otherwise keyword)
-    for output_name, output_def in outputs.items():
-        py_output_name = output_name.replace("-", "_")
-        policies = output_def.get("policies", {})
-        is_positional = policies.get("positional", False)
-
-        if is_positional:
-            positional_params.append(f"{indent}    {py_output_name},")
-        else:
-            keyword_params.append(f"{indent}    {py_output_name}={py_output_name},")
-
-    # Combine: positional args first, then keyword args
-    all_params = positional_params + keyword_params
-    lines.extend(all_params)
-    lines.append(f"{indent})")
-
-    if has_image:
-        lines.append(f"{indent}return")
-        lines.append("        except ImportError:")
-        lines.append("            if backend == 'native':")
-        lines.append("                raise")
-        lines.append("")
-        lines.append("    # Resolve container image from installed package metadata")
-        lines.append("    from hip_cargo.utils.config import get_container_image  # noqa: E402")
-        lines.append("    from hip_cargo.utils.runner import run_in_container  # noqa: E402")
-        lines.append("")
-
-        # Derive distribution name from command: "pfb_imaging.core.grid.grid" → "pfb-imaging"
-        command = cab_def.get("command", "")
-        import_name = command.split(".")[0] if command else ""
-        dist_name = import_name.replace("_", "-")
-
-        lines.append(f'    image = get_container_image("{dist_name}")')
-        lines.append("    if image is None:")
-        lines.append(f'        raise RuntimeError("No Container URL in {dist_name} metadata.")')
-        lines.append("")
-
-        # Build the params dict for run_in_container (excludes backend)
-        lines.append("    run_in_container(")
-        lines.append(f"        {func_name},")
-        lines.append("        dict(")
-        for param_name in inputs:
-            py_name = param_name.replace("-", "_")
-            lines.append(f"            {py_name}={py_name},")
-        for output_name in outputs:
-            py_name = output_name.replace("-", "_")
-            lines.append(f"            {py_name}={py_name},")
-        lines.append("        ),")
-        lines.append("        image=image,")
-        lines.append("        backend=backend,")
-        lines.append("        always_pull_images=always_pull_images,")
-        lines.append("    )")
+    lines.append("    if backend == 'native' or backend == 'auto':")
+    lines.append("        # Only a missing install falls back to the container, so only the")
+    lines.append("        # imports and the pre-flight are guarded; the core call is not.")
+    lines.append("        try:")
+    lines.extend(dispatch_imports("            "))
+    lines.append("        except ImportError:")
+    lines.append("            if backend == 'native':")
+    lines.append("                raise")
+    lines.append("        else:")
+    lines.append(f"            {core_func_name}_core(**{params_var})")
+    lines.append("            return")
+    lines.append("")
+    lines.append("    # Resolve container image from installed package metadata")
+    lines.append("    from hip_cargo.utils.config import get_container_image  # noqa: E402")
+    lines.append("    from hip_cargo.utils.runner import run_in_container  # noqa: E402")
+    lines.append("")
+    lines.append(f'    {image_var} = get_container_image("{dist_name}")')
+    lines.append(f"    if {image_var} is None:")
+    lines.append(f'        raise RuntimeError("No Container URL in {dist_name} metadata.")')
+    lines.append("")
+    lines.append("    run_in_container(")
+    lines.append(f"        {func_name},")
+    lines.append(f"        {params_var},")
+    lines.append(f"        image={image_var},")
+    lines.append("        backend=backend,")
+    lines.append("        always_pull_images=always_pull_images,")
+    lines.append("    )")
 
     return lines

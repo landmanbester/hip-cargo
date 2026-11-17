@@ -1,7 +1,7 @@
 """Tests for generate_function_body in cab_to_function.py.
 
-Verifies the generated code patterns: simple lazy import (no image) vs
-try/except ImportError with container fallback (image present).
+Verifies the generated code patterns: one ``params`` dict, then a simple lazy
+import (no image) or a guarded import with container fallback (image present).
 """
 
 import pytest
@@ -22,8 +22,8 @@ class TestGenerateFunctionBodyNoImage:
         code = "\n".join(lines)
 
         assert "from my_pkg.core.process import process as process_core" in code
-        assert "process_core(" in code
-        assert "input_file," in code
+        assert "process_core(**params)" in code
+        assert "input_file=input_file," in code
         # No container fallback
         assert "ImportError" not in code
         assert "run_in_container" not in code
@@ -145,6 +145,7 @@ class TestGenerateFunctionBodyWithImage:
 
         assert "run_in_container(" in code
         assert "grid," in code  # func reference
+        assert "params," in code
         assert "image=image," in code
         assert "backend=backend," in code
         assert "always_pull_images=always_pull_images," in code
@@ -153,26 +154,37 @@ class TestGenerateFunctionBodyWithImage:
         assert "output_dir=output_dir," in code
 
     @pytest.mark.unit
-    def test_params_ordering_positional_then_keyword(self):
-        """Required params should appear before optional params in the core call."""
+    def test_core_call_is_outside_the_import_guard(self) -> None:
+        """#120: only the imports and pre-flight are guarded; the core call runs in `else:`."""
         cab_def = {
             "command": "pkg.core.run.run",
             "image": "ghcr.io/user/pkg:latest",
             "_name": "run",
         }
-        inputs = {
-            "required-param": {"dtype": "str", "required": True},
-            "optional-param": {"dtype": "int", "required": False},
+        lines = generate_function_body(cab_def, {"x": {"dtype": "int"}}, {})
+
+        stripped = [line.strip() for line in lines]
+        assert stripped.index("except ImportError:") < stripped.index("else:") < stripped.index("run_core(**params)")
+
+    @pytest.mark.unit
+    def test_params_dict_is_built_once(self) -> None:
+        """#118: one dict feeds the pre-flight, the core call and the container fallback."""
+        cab_def = {
+            "command": "pkg.core.run.run",
+            "image": "ghcr.io/user/pkg:latest",
+            "_name": "run",
         }
-        outputs = {}
+        inputs = {"required-param": {"dtype": "str", "required": True}, "optional-param": {"dtype": "int"}}
+        code = "\n".join(generate_function_body(cab_def, inputs, {}))
 
-        lines = generate_function_body(cab_def, inputs, outputs)
-        code = "\n".join(lines)
+        assert code.count("dict(") == 1
+        assert code.count("required_param=required_param,") == 1
+        assert "preflight_remote_must_exist(run, params)" in code
 
-        # Find the core function call
-        req_idx = code.index("required_param,")
-        opt_idx = code.index("optional_param=optional_param,")
-        assert req_idx < opt_idx, "Required (positional) params should come before optional (keyword)"
+    @pytest.mark.unit
+    def test_no_parameters_gives_an_empty_params_dict(self) -> None:
+        cab_def = {"command": "pkg.core.run.run", "_name": "run"}
+        assert "    params = {}" in generate_function_body(cab_def, {}, {})
 
     @pytest.mark.unit
     def test_hyphenated_names_sanitized(self):
@@ -188,8 +200,8 @@ class TestGenerateFunctionBodyWithImage:
         lines = generate_function_body(cab_def, inputs, outputs)
         code = "\n".join(lines)
 
-        assert "input_file," in code
-        assert "output_dir," in code
+        assert "input_file=input_file," in code
+        assert "output_dir=output_dir," in code
         assert "input-file" not in code
         assert "output-dir" not in code
 

@@ -4,7 +4,7 @@ title: Container execution and image lifecycle
 description: The _container_image.py contract, container fallback runner, GPU passthrough, per-backend run-args, and release tag mechanics.
 tags: [containers, runner, gpu, releases]
 timestamp: 2026-11-17
-last_verified_commit: fbfc9c7
+last_verified_commit: 24e1fa7
 ---
 
 # Container execution and image lifecycle
@@ -62,9 +62,22 @@ If that happens, restore `src/hip_cargo/cabs/` and commit with
 
 ## Container fallback
 
-Generated CLI wrappers lazy-import the core function inside
-`try/except ImportError`; on failure `run_in_container()` reconstructs
-`sys.argv` and re-runs the command in the package's container. Backend
+Generated CLI wrappers bind every parameter into one `params` dict, then
+guard only the lazy core import and `preflight_remote_must_exist` with
+`try/except ImportError`. The core call, `<name>_core(**params)`, runs in the
+`else:` branch: an `ImportError` raised *during* a run (an optional import
+inside `core/`, a worker process, a C extension loading a library) propagates
+with its traceback instead of silently re-running the command in a container,
+where in-place side effects would happen twice (#120). On fallback
+`run_in_container()` reconstructs `sys.argv` from the same `params` and re-runs
+the command in the package's container. Because `params` is bound first, the
+later `image = get_container_image(...)` cannot shadow a parameter called
+`image` (it did, for hip-cargo's own `generate-cabs`, before #120).
+
+Consequences for package authors: heavy imports belong at module scope in
+`core/<name>.py`, since only a failing import of `core/` signals a missing
+`[full]` install; and core parameter names must match the CLI's, since the
+core function is called with `**params`. Backend
 priority: `apptainer` → `singularity` → `docker` → `podman`. Volume mounts
 resolve automatically from Path-like type hints (ro) and `@stimela_output`
 decorators (rw); an input with `StimelaMeta(writable=True)` (cab

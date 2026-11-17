@@ -5,7 +5,9 @@ compiles and the fallback pattern works correctly when dependencies are missing.
 """
 
 import tempfile
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -341,3 +343,142 @@ class TestGenerateCabsImageResolution:
 
             cab_def = data["cabs"]["generate_cabs"]
             assert cab_def["image"] == "custom.registry.io/team/pkg:v2.0"
+
+
+def _load_generated(cab_file: Path, tmp_path: Path) -> Callable[..., None]:
+    """Generate the CLI module for ``cab_file`` and return its function."""
+    output_file = tmp_path / f"{cab_file.stem}.py"
+    generate_function(cab_file, output_file=output_file)
+    namespace: dict[str, Any] = {}
+    exec(compile(output_file.read_text(), str(output_file), "exec"), namespace)
+    return namespace[cab_file.stem]
+
+
+def _core_module(core: MagicMock, name: str = "process_data") -> dict[str, MagicMock]:
+    """sys.modules entries that make ``my_pkg.core.<name>.<name>`` resolve to ``core``."""
+    module = MagicMock()
+    setattr(module, name, core)
+    return {"my_pkg": MagicMock(), "my_pkg.core": MagicMock(), f"my_pkg.core.{name}": module}
+
+
+class TestFallbackScope:
+    """Only a missing install may send ``--backend auto`` to the container (#120)."""
+
+    @pytest.mark.integration
+    def test_import_error_raised_by_the_core_run_propagates(self, tmp_path: Path) -> None:
+        """An ImportError from inside the run is a real error, not a missing install."""
+        func = _load_generated(_write_cab_with_image(tmp_path), tmp_path)
+        core = MagicMock(side_effect=ModuleNotFoundError("No module named 'optional_dep'"))
+        mock_run = MagicMock()
+
+        with (
+            patch.dict("sys.modules", _core_module(core)),
+            patch("hip_cargo.utils.runner.run_in_container", mock_run),
+            pytest.raises(ModuleNotFoundError, match="optional_dep"),
+        ):
+            func(input_ms=Path("/data/input.ms"), backend="auto", always_pull_images=False)
+
+        core.assert_called_once()
+        mock_run.assert_not_called()
+
+    @pytest.mark.integration
+    def test_import_error_from_remote_preflight_still_falls_back(self, tmp_path: Path) -> None:
+        """A missing fsspec backend surfaces in the preflight, before any work: fall back."""
+        func = _load_generated(_write_cab_with_image(tmp_path), tmp_path)
+        core = MagicMock()
+        mock_run = MagicMock()
+
+        with (
+            patch.dict("sys.modules", _core_module(core)),
+            patch(
+                "hip_cargo.utils.runner.preflight_remote_must_exist",
+                MagicMock(side_effect=ImportError("Install s3fs to access S3")),
+            ),
+            patch("hip_cargo.utils.config.get_container_image", MagicMock(return_value="img:latest")),
+            patch("hip_cargo.utils.runner.run_in_container", mock_run),
+        ):
+            func(input_ms=Path("/data/input.ms"), backend="auto", always_pull_images=False)
+
+        core.assert_not_called()
+        mock_run.assert_called_once()
+
+    @pytest.mark.integration
+    def test_core_receives_every_parameter_by_name(self, tmp_path: Path) -> None:
+        func = _load_generated(_write_cab_with_image(tmp_path), tmp_path)
+        core = MagicMock()
+
+        with patch.dict("sys.modules", _core_module(core)):
+            func(
+                input_ms=Path("/data/input.ms"),
+                threshold=0.7,
+                output_dir=Path("/output"),
+                backend="auto",
+                always_pull_images=False,
+            )
+
+        core.assert_called_once_with(input_ms=Path("/data/input.ms"), threshold=0.7, output_dir=Path("/output"))
+
+    @pytest.mark.integration
+    def test_a_parameter_named_image_reaches_the_container_unchanged(self, tmp_path: Path) -> None:
+        """The resolved container image must not overwrite a user parameter called ``image``."""
+        cab = {
+            "cabs": {
+                "process_data": {
+                    "info": "Process input data",
+                    "command": "my_pkg.core.process_data.process_data",
+                    "image": "ghcr.io/user/my-pkg:latest",
+                    "inputs": {"image": {"dtype": "str", "info": "A user-facing image name"}},
+                    "outputs": {},
+                }
+            }
+        }
+        cab_file = tmp_path / "process_data.yml"
+        cab_file.write_text(yaml.safe_dump(cab, sort_keys=False))
+        func = _load_generated(cab_file, tmp_path)
+        mock_run = MagicMock()
+
+        with (
+            patch.dict("sys.modules", {"my_pkg": None}),
+            patch("hip_cargo.utils.config.get_container_image", MagicMock(return_value="ghcr.io/user/my-pkg:latest")),
+            patch("hip_cargo.utils.runner.run_in_container", mock_run),
+        ):
+            func(image="user-value", backend="auto", always_pull_images=False)
+
+        params = mock_run.call_args.args[1]
+        assert params == {"image": "user-value"}
+        assert mock_run.call_args.kwargs["image"] == "ghcr.io/user/my-pkg:latest"
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize("command", ["params", "image"])
+def test_a_command_named_like_a_wrapper_local_still_dispatches(command: str, tmp_path: Path) -> None:
+    """The wrapper refers to itself by name, so its locals must not reuse that name."""
+    cab = {
+        "cabs": {
+            command: {
+                "info": "Command whose name matches a local in the generated body",
+                "command": f"my_pkg.core.{command}.{command}",
+                "image": "ghcr.io/user/my-pkg:latest",
+                "inputs": {"x": {"dtype": "int", "info": "A value"}},
+                "outputs": {},
+            }
+        }
+    }
+    cab_file = tmp_path / f"{command}.yml"
+    cab_file.write_text(yaml.safe_dump(cab, sort_keys=False))
+    func = _load_generated(cab_file, tmp_path)
+
+    core = MagicMock()
+    with patch.dict("sys.modules", _core_module(core, name=command)):
+        func(x=3, backend="auto", always_pull_images=False)
+    core.assert_called_once_with(x=3)
+
+    mock_run = MagicMock()
+    with (
+        patch.dict("sys.modules", {"my_pkg": None}),
+        patch("hip_cargo.utils.config.get_container_image", MagicMock(return_value="img:latest")),
+        patch("hip_cargo.utils.runner.run_in_container", mock_run),
+    ):
+        func(x=3, backend="auto", always_pull_images=False)
+    assert mock_run.call_args.args == (func, {"x": 3})
+    assert mock_run.call_args.kwargs["image"] == "img:latest"
