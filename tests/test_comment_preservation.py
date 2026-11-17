@@ -147,18 +147,3 @@ def foo(
         # Check that comment is preserved
         assert comment in input_def["info"], f"Comment '{comment}' not found in: {input_def['info']}"
         print(f"✓ PASSED - {comment} preserved")
-
-
-if __name__ == "__main__":
-    print("=" * 60)
-    print("TESTING: Comment Preservation")
-    print("=" * 60)
-
-    test_inline_comment_noqa_e501()
-    test_inline_comment_type_ignore()
-    test_no_comment()
-    test_multiple_comment_types()
-
-    print("\n" + "=" * 60)
-    print("✅ All comment preservation tests passed!")
-    print("=" * 60)

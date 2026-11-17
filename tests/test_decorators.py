@@ -87,7 +87,3 @@ class TestDecorators:
         outputs_by_name = {out["name"]: out for out in multi_output_function.__stimela_outputs__}
         assert outputs_by_name["output_file"]["required"] is True
         assert outputs_by_name["log_file"]["required"] is False
-
-
-if __name__ == "__main__":
-    pytest.main([__file__])

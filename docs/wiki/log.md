@@ -16,6 +16,8 @@ last_verified_commit: a470098
 - The tag lifecycle now states that agents never change the tag; feature-branch
   tags are an optional, maintainer-only step. Matches pfb-model-spec,
   pfb-imaging and meerkat-beams.
+- Test list: `test_container_resolution.py` (a copy of `test_config.py`'s
+  `TestGetContainerImage`) was deleted; point at `test_config.py`.
 
 ## 2026-09-23 — `cab-yaml-emission.md` records what the guard misses (verified at `960f3e1`)
 

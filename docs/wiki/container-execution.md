@@ -86,6 +86,6 @@ docker and apptainer/singularity; on podman prefer `True`/`"auto"`/`"all"`
 subcommand for the active runtime. Env `HIP_CARGO_RUN_ARGS` (shlex-split)
 appends to whichever backend runs.
 
-Tests: `tests/test_runner.py`, `tests/test_container_resolution.py`,
+Tests: `tests/test_runner.py`, `tests/test_config.py`,
 `tests/test_container_fallback_integration.py`, `tests/test_gpu_live.py`
 (opt-in), `tests/test_container_tag_regex.py`.

@@ -410,24 +410,3 @@ def foo(
     assert "required" not in input_def2 or input_def2.get("required") is False
 
     print("✓ Backward compatibility maintained")
-
-
-if __name__ == "__main__":
-    print("=" * 60)
-    print("Testing Stimela Metadata Feature")
-    print("=" * 60)
-
-    test_extract_stimela_metadata_basic()
-    test_extract_stimela_metadata_no_dict()
-    test_stimela_dtype_override()
-    test_stimela_arbitrary_fields()
-    test_stimela_policies_merge()
-    test_stimela_roundtrip()
-    test_extract_stimela_metadata_new_form()
-    test_extract_stimela_metadata_new_form_with_nested()
-    test_stimela_roundtrip_new_form()
-    test_backward_compatibility()
-
-    print("\n" + "=" * 60)
-    print("✅ All Stimela Metadata Tests Passed!")
-    print("=" * 60)
