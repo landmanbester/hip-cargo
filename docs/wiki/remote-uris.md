@@ -4,7 +4,7 @@ title: Path types and remote URIs
 description: UPath-backed File/Directory/MS/URI types, remote object-store handling, credential forwarding, and fsspec extras.
 tags: [paths, upath, s3, gcs, azure, fsspec]
 timestamp: 2026-11-17
-last_verified_commit: 24e1fa7
+last_verified_commit: 6e40c1d
 ---
 
 # Path types and remote URIs
@@ -15,14 +15,19 @@ Source: `src/hip_cargo/utils/types.py` (types + `parse_upath`),
 ## The path types
 
 `File`, `Directory`, `MS`, `URI` are all `NewType(..., UPath)`
-(universal_pathlib). User functions receive a `UPath` and call
+(universal_pathlib), defined once in `utils/types.py` and exported from
+`hip_cargo`. User functions receive a `UPath` and call
 `.open()` / `.read_bytes()` / `.exists()` directly — **hip-cargo does no IO**.
 Local paths behave exactly like `pathlib.Path`; remote URIs (`s3://`, `gs://`,
 `az://`, `http(s)://`) route to the matching fsspec backend on first access.
 
 Codegen contract: for these four types the generator emits
 `parser=parse_upath` (never `parser=Path`) in `typer.Option(...)` and adds
-`parse_upath` to the generated `from hip_cargo import ...` block. List types
+the path types it uses and `parse_upath` to the generated
+`from hip_cargo import ...` block. Before #114 it declared the types locally
+as `NewType(..., Path)`, an annotation that is false for remote URIs (a remote
+`UPath` is not a `pathlib.Path`). The forward parser only reads the annotation
+name, so those older modules still parse until they are regenerated. List types
 keep their comma-separated parsers.
 
 ## Remote URI behaviour (protocol not in `{"", "file", "local"}`)

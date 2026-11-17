@@ -166,7 +166,7 @@ hip-cargo/
 │           ├── config.py        # Utility to get container from project metadata
 │           ├── decorators.py
 │           ├── introspector.py
-│           └── types.py         # ListInt, ListFloat, ListStr NewTypes + parsers
+│           └── types.py         # File/Directory/MS/URI, ListInt/ListFloat/ListStr NewTypes + parsers
 ├── tests
 │   ├── __init__.py
 │   └── conftest.py
@@ -317,7 +317,7 @@ stimela run 'mypackage.recipes::killer_recipe.yml' recipe_name option1=option1..
 ## Type Inference
 
 `hip-cargo` automatically recognizes custom `stimela` types.
-These should be created using `typing.NewType`.
+Import the path types (`File`, `Directory`, `MS`, `URI`) and list types (`ListInt`, `ListFloat`, `ListStr`) from `hip_cargo`.
 See the [`generate-cabs` CLI module](./src/hip_cargo/cli/generate_cabs.py) for an example.
 
 ## Decorators
@@ -549,15 +549,17 @@ def my_func(
 ### Custom Stimela types via `NewType`
 
 Stimela has its own type system (`File`, `Directory`, `MS`, `URI`) that doesn't map 1:1 to Python types.
-We use `typing.NewType` to create thin wrappers around `Path`:
+`hip-cargo` defines each one as a `typing.NewType` over `UPath` and exports them:
 
 ```python
-from typing import NewType
-File = NewType("File", Path)
+from hip_cargo import MS, Directory, File, parse_upath
 ```
 
 These `NewType`s serve double duty: they're valid Python type hints for Typer, and `hip-cargo` introspects the name to produce the correct Stimela dtype in the cab YAML.
-For these types, you also need `parser=parse_upath` in the `typer.Option()`, so Click parses the string argument into a `UPath` (which accepts both local paths and remote URIs — see [Remote URIs and object stores](#remote-uris-and-object-stores)). `UPath` emits a `Path` compatible object for local paths. Core modules that do not use remote URIs can therefore safely use `Path`.
+For these types, you also need `parser=parse_upath` in the `typer.Option()`, so Click parses the string argument into a `UPath` (which accepts both local paths and remote URIs — see [Remote URIs and object stores](#remote-uris-and-object-stores)).
+For a local path the `UPath` is also a `pathlib.Path`, so core modules that only handle local paths can annotate with `Path`. For a remote URI it is not, which is why the CLI annotation says `UPath`.
+
+Modules generated before hip-cargo 0.5.0 declare these types locally as `NewType(..., Path)`. They still parse, since only the name matters to `generate-cabs`, but regenerating them switches to the shared definitions.
 
 ### Ruff formatting and `config_file`
 

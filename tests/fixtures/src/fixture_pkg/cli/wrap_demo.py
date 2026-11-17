@@ -1,9 +1,9 @@
-from pathlib import Path
-from typing import Annotated, Literal, NewType
+from typing import Annotated, Literal
 
 import typer
 
 from hip_cargo import (
+    Directory,
     ListStr,
     StimelaMeta,
     parse_list_str,
@@ -11,8 +11,6 @@ from hip_cargo import (
     stimela_cab,
     stimela_output,
 )
-
-Directory = NewType("Directory", Path)
 
 
 @stimela_cab(

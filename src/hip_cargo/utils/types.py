@@ -4,6 +4,14 @@ from typing import NewType
 
 from upath import UPath
 
+# Path-like parameter types. Generated CLIs import these from ``hip_cargo`` and
+# pair them with ``parser=parse_upath``, so the annotation matches the value:
+# a UPath, which is a pathlib.Path only for local paths.
+File = NewType("File", UPath)
+Directory = NewType("Directory", UPath)
+MS = NewType("MS", UPath)
+URI = NewType("URI", UPath)
+
 ListInt = NewType("ListInt", str)
 ListFloat = NewType("ListFloat", str)
 ListStr = NewType("ListStr", str)

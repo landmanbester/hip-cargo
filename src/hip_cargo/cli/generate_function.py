@@ -1,11 +1,8 @@
-from pathlib import Path
-from typing import Annotated, Literal, NewType
+from typing import Annotated, Literal
 
 import typer
 
-from hip_cargo import StimelaMeta, parse_upath, stimela_cab, stimela_output
-
-File = NewType("File", Path)
+from hip_cargo import File, StimelaMeta, parse_upath, stimela_cab, stimela_output
 
 
 @stimela_cab(

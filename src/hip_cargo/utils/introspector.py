@@ -3,19 +3,13 @@
 import ast
 import re
 from pathlib import Path
-from typing import Any, NewType
+from typing import Any
 
 import libcst as cst
 from libcst import matchers
-from upath import UPath
 
 from hip_cargo.utils.spec import CommandSpec, ModuleSpec, ParamSpec
 from hip_cargo.utils.types import LIST_DTYPE_PARSERS
-
-MS = NewType("MS", UPath)
-Directory = NewType("Directory", UPath)
-File = NewType("File", UPath)
-URI = NewType("URI", UPath)
 
 
 def _normalize_list_default(dtype: str, default: Any) -> Any:

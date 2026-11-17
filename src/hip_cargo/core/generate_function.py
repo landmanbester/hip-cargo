@@ -137,14 +137,8 @@ def generate_function(cab_file: Path, output_file: Path, config_file: Path | Non
     lines = []
 
     # Imports
-    lines.append("from pathlib import Path")
-    if uses_literal:
-        lines.append("from typing import Annotated, Literal, NewType")
-    else:
-        typing_imports = ["Annotated"]
-        if custom_types:
-            typing_imports.append("NewType")
-        lines.append(f"from typing import {', '.join(sorted(typing_imports))}")
+    typing_imports = ["Annotated", "Literal"] if uses_literal else ["Annotated"]
+    lines.append(f"from typing import {', '.join(typing_imports)}")
     lines.append("")
     lines.append("import typer")
 
@@ -158,17 +152,13 @@ def generate_function(cab_file: Path, output_file: Path, config_file: Path | Non
     if cab_def.get("image"):
         hip_cargo_imports.append("get_container_image")
     if custom_types:
+        # File/Directory/MS/URI are UPath-backed NewTypes owned by hip-cargo (#114).
+        hip_cargo_imports.extend(sorted(custom_types))
         hip_cargo_imports.append("parse_upath")
     hip_cargo_imports.extend(["stimela_cab", "stimela_output", "StimelaMeta"])
     lines.append(f"from hip_cargo import {', '.join(sorted(hip_cargo_imports))}")
 
     lines.append("")
-
-    # Add NewType declarations for custom types
-    if custom_types:
-        for custom_type in sorted(custom_types):  # Sort for consistent output
-            lines.append(f'{custom_type} = NewType("{custom_type}", Path)')
-        lines.append("")
 
     # Decorators
     lines.append("@stimela_cab(")

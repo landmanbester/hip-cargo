@@ -6,6 +6,10 @@ from hip_cargo.utils.config import get_container_image
 from hip_cargo.utils.decorators import stimela_cab, stimela_output
 from hip_cargo.utils.metadata import StimelaMeta
 from hip_cargo.utils.types import (
+    MS,
+    URI,
+    Directory,
+    File,
     ListFloat,
     ListInt,
     ListStr,
@@ -25,6 +29,10 @@ __all__ = [
     "ListFloat",
     "ListStr",
     "UPath",
+    "File",
+    "Directory",
+    "MS",
+    "URI",
     "parse_list_int",
     "parse_list_float",
     "parse_list_str",

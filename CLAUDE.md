@@ -93,7 +93,7 @@ hip-cargo/
 │       ├── runner.py            # Container fallback execution
 │       ├── spec.py              # Shared IR (ParamSpec, CommandSpec, ModuleSpec)
 │       ├── yaml_comments.py     # YAML comment extraction/preservation
-│       └── types.py             # ListInt, ListFloat, ListStr NewTypes + parsers
+│       └── types.py             # File/Directory/MS/URI + ListInt/ListFloat/ListStr NewTypes, parsers
 ├── tests/
 │   └── fixtures/             # Fixture package for introspection tests
 └── pyproject.toml

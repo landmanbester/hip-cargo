@@ -35,7 +35,9 @@ lightweight install fast and lets the container-fallback pattern work (see
   handle variable-length lists as a single option; these `NewType` wrappers wrap
   `str` for Typer but parse into `list[int]` etc. at runtime.
 - **UPath-backed path types:** `File`, `Directory`, `MS`, `URI` are
-  `NewType(..., UPath)`. Generated CLIs use `parser=parse_upath` so the same
+  `NewType(..., UPath)`, imported from `hip_cargo`. Never declare them locally
+  (older generated modules did, over `Path`, which is wrong for remote URIs).
+  Generated CLIs use `parser=parse_upath` so the same
   signature accepts local paths and remote URIs. User functions receive a
   `universal_pathlib.UPath` and call `.open()` / `.exists()` directly.
 - **The `stimela` metadata dict:** `Annotated[..., StimelaMeta(...)]` overrides

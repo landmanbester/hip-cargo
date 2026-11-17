@@ -3,10 +3,16 @@ type: log
 title: Wiki changelog
 description: Chronological record of wiki updates.
 timestamp: 2026-11-17
-last_verified_commit: 24e1fa7
+last_verified_commit: 6e40c1d
 ---
 
 # Wiki changelog
+
+## 2026-11-17 — `remote-uris.md`: shared path NewTypes (verified at `6e40c1d`)
+
+- `File`/`Directory`/`MS`/`URI` now live in `utils/types.py` and are exported
+  from `hip_cargo`; generated modules import them instead of declaring
+  `NewType(..., Path)` locally (#114).
 
 ## 2026-11-17 — `container-execution.md`, `remote-uris.md`: fallback scope and one `params` dict (verified at `24e1fa7`)
 
