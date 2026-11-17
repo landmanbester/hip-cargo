@@ -150,6 +150,13 @@ def generate_function(cab_file: Path, output_file: Path, config_file: Path | Non
 
     # Build a single import line from hip_cargo with decorators + list types
     hip_cargo_imports = sorted(list_types_used) + sorted(LIST_TYPE_PARSERS[t] for t in list_types_used)
+    # Not used by the generated module (the body imports it lazily), so `ruff check
+    # --fix` removes it again. It is still load-bearing: ruff wraps the import before
+    # dropping the name, so whether the final import is exploded depends on this
+    # name's length. Committed downstream CLIs encode that layout; removing this
+    # line breaks their round-trip.
+    if cab_def.get("image"):
+        hip_cargo_imports.append("get_container_image")
     if custom_types:
         hip_cargo_imports.append("parse_upath")
     hip_cargo_imports.extend(["stimela_cab", "stimela_output", "StimelaMeta"])
