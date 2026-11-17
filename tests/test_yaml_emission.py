@@ -6,7 +6,10 @@ Two ways ``generate-cabs`` could produce a cab that is wrong or unloadable:
   ``dtype`` (#109) — invisible to the round-trip test, because the reverse
   generator casts it back using the dtype;
 * a colon inside a multi-sentence ``help=``, which used to be quoted line by
-  line and broke the surrounding multi-line plain scalar (#110).
+  line and broke the surrounding multi-line plain scalar (#110);
+* YAML that parses but means something else: a trailing colon, ``#``, a
+  leading ``-`` or non-ASCII in ``help=``, and non-literal numeric defaults
+  (#116).
 """
 
 from pathlib import Path
@@ -115,3 +118,116 @@ def test_generate_cabs_rejects_unparseable_output(tmp_path, monkeypatch):
     )
     with pytest.raises(ValueError, match="not parseable"):
         generate_cabs([FIXTURE_CLI], output_dir=tmp_path / "cabs")
+
+
+# --- #116: valid YAML that means something else -----------------------------
+
+
+def _write_module(tmp_path: Path, body: str) -> Path:
+    """Write a one-command CLI module at the src/<pkg>/cli/ path generate-cabs expects."""
+    cli = tmp_path / "src" / "demo_pkg" / "cli" / "demo.py"
+    cli.parent.mkdir(parents=True)
+    cli.write_text(
+        "from typing import Annotated\n\n"
+        "import typer\n\n"
+        "from hip_cargo import stimela_cab\n\n\n"
+        '@stimela_cab(name="demo", info="Demo.")\n'
+        f"def demo(\n{body}):\n"
+        "    pass\n"
+    )
+    return cli
+
+
+def _generate(tmp_path: Path, body: str) -> tuple[str, dict]:
+    """Generate the cab for a one-command module; return its text and its inputs."""
+    cli = _write_module(tmp_path, body)
+    cab_dir = tmp_path / "cabs"
+    generate_cabs([cli], output_dir=cab_dir)
+    text = (cab_dir / "demo.yml").read_text()
+    return text, yaml.safe_load(text)["cabs"]["demo"]["inputs"]
+
+
+@pytest.mark.parametrize(
+    "help_text",
+    [
+        "Weights column. Options are as follows:",
+        "Options are as follows:",
+        "Use channel #3. Second sentence.",
+        "- leading dash. Second sentence.",
+        "Angle in degrees (°). Second sentence.",
+        "Wavelength λ in μm. Second sentence.",
+        "It's here: really. Second sentence.",
+        "Plain sentence. Another plain one.",
+    ],
+)
+def test_info_loads_back_as_the_help_string(tmp_path: Path, help_text: str) -> None:
+    """The cab's info must load as exactly the help string, not merely parse (#116)."""
+    text, inputs = _generate(tmp_path, f'    x: Annotated[int, typer.Option(help="{help_text}")] = 1,\n')
+
+    assert inputs["x"]["info"] == help_text
+    assert "\\x" not in text and "\\u" not in text
+
+
+def test_info_keeps_its_trailing_comment_when_it_falls_back(tmp_path: Path) -> None:
+    """The single-line fallback still puts the inline comment outside the scalar."""
+    body = (
+        "    x: Annotated[\n"
+        "        int,\n"
+        "        typer.Option(\n"
+        '            help="Options are as follows:"  # noqa: E501\n'
+        "        ),\n"
+        "    ] = 1,\n"
+    )
+    text, inputs = _generate(tmp_path, body)
+
+    assert inputs["x"]["info"] == "Options are as follows:"
+    assert "# noqa: E501" in text
+
+
+@pytest.mark.parametrize(
+    "help_text",
+    [
+        "Plain sentence. Another plain one.",
+        "Options are as follows:",
+        "Angle in degrees (°). Second sentence.",
+    ],
+)
+def test_cli_to_cab_to_cli_round_trips(tmp_path: Path, help_text: str) -> None:
+    """Whatever form the cab takes, generate-function turns it back into the same help."""
+    from hip_cargo.core.generate_function import generate_function
+
+    _generate(tmp_path, f'    x: Annotated[int, typer.Option(help="{help_text}")] = 1,\n')
+    regenerated = tmp_path / "regen" / "src" / "demo_pkg" / "cli" / "demo.py"
+    generate_function(tmp_path / "cabs" / "demo.yml", output_file=regenerated)
+    cab_again = tmp_path / "cabs_again"
+    generate_cabs([regenerated], output_dir=cab_again)
+
+    assert yaml.safe_load((cab_again / "demo.yml").read_text())["cabs"]["demo"]["inputs"]["x"]["info"] == help_text
+
+
+def test_format_info_fields_escapes_apostrophes_in_implicit() -> None:
+    formatted = format_info_fields("      implicit: '{current.prefix}''s.fits'\n")
+
+    assert yaml.safe_load(formatted) == {"implicit": "{current.prefix}'s.fits"}
+
+
+@pytest.mark.parametrize(
+    "annotation,default",
+    [
+        ("int", "SENTINEL"),
+        ("float", 'float("inf")'),
+        ("int | None", "SENTINEL"),
+        ("bool", "FLAG"),
+    ],
+)
+def test_non_literal_numeric_default_is_rejected(tmp_path: Path, annotation: str, default: str) -> None:
+    """A numeric cab default must be a value, not the source text of an expression (#116)."""
+    body = f'    x: Annotated[{annotation}, typer.Option(help="X.")] = {default},\n'
+    with pytest.raises(ValueError, match="not a literal"):
+        _generate(tmp_path, body)
+
+
+def test_non_literal_default_is_still_allowed_for_non_numeric_dtypes(tmp_path: Path) -> None:
+    """The source-text fallback stays for other dtypes, e.g. a str constant."""
+    _, inputs = _generate(tmp_path, '    x: Annotated[str, typer.Option(help="X.")] = DEFAULT_NAME,\n')
+    assert inputs["x"]["default"] == "DEFAULT_NAME"

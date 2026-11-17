@@ -3,10 +3,19 @@ type: log
 title: Wiki changelog
 description: Chronological record of wiki updates.
 timestamp: 2026-11-17
-last_verified_commit: 6e40c1d
+last_verified_commit: dbbf133
 ---
 
 # Wiki changelog
+
+## 2026-11-17 — `cab-yaml-emission.md`: value-checked info rewrite (verified at `dbbf133`)
+
+- Replaced "What the guard does not catch" with how #116 closes it:
+  `format_info_fields` decodes each scalar with YAML and keeps only a rendering
+  that reloads to the same value; `allow_unicode=True` on the dump; non-literal
+  numeric defaults raise.
+- Recorded the gotcha that a parameter's inline comment is only read when
+  `help=` is the last `typer.Option` argument with no trailing comma.
 
 ## 2026-11-17 — `remote-uris.md`: shared path NewTypes (verified at `6e40c1d`)
 

@@ -3,8 +3,8 @@ type: reference
 title: Cab YAML emission
 description: How CLI source becomes cab YAML, the two text-rewriting steps that can corrupt it, and the invariants that must hold.
 tags: [generate-cabs, yaml, introspector, libcst]
-timestamp: 2026-09-23
-last_verified_commit: 960f3e1
+timestamp: 2026-11-17
+last_verified_commit: dbbf133
 ---
 
 # Cab YAML emission
@@ -71,40 +71,52 @@ raises `ValueError` if it fails. Before that guard, `generate-cabs` wrote
 corrupt cabs and exited 0; the breakage only surfaced later, in a project's
 round-trip test (`generate-function` loads the YAML) or in stimela.
 
-## What the guard does not catch
+## Every rewrite is checked against the value (#116)
 
-The guard asserts that the output **parses**, not that it means what went in.
-Two families survive it, because both produce valid YAML with the wrong value.
-Verified against this branch, one `help=` string per row:
+Parsing is not enough. Before #116 the guard only checked that the output
+**parsed**, and the rewrite chose quoting from one heuristic (`": "` present).
+These produced valid YAML with the wrong value:
 
-| `help=` | Result |
+| `help=` | Before #116 |
 |---|---|
-| `"Weights column. Options are as follows:"` | guard raises `ValueError` |
-| `"Options are as follows:"` | **silent** — `info` loads as `{'Options are as follows': None}`, a mapping |
-| `"Use channel #3. Second sentence."` | guard raises |
-| `"- leading dash. Second sentence."` | guard raises |
-| `"Angle in degrees (°). Second sentence."` | **silent** — `info` loads as `'Angle in degrees (\xB0). ...'` |
+| `"Options are as follows:"` | `info` loaded as `{'Options are as follows': None}`, a mapping |
+| `"Weights column. Options are as follows:"`, `"Use channel #3. ..."`, `"- leading dash. ..."` | unparseable, so the guard raised |
+| `"Angle in degrees (°). ..."` | `info` loaded as the escape text `'Angle in degrees (\xB0). ...'` |
 
-The colon rows are the same defect as #110 from a different angle: the rewrite
-decides quoting from one heuristic (`": "` present) rather than from what YAML
-actually requires, so a trailing colon, a `" #"` and a leading `"- "` all slip
-past it. The non-ASCII row is separate: `safe_dump` defaults to
-`allow_unicode=False` and emits a *double*-quoted scalar with escapes, and
-stripping the quotes without unescaping leaves the escape text in the value.
-`°`, `λ` and `μ` are all plausible in this domain.
+Now `format_info_fields`:
 
-`get_cst_value` has the matching gap on the value side: its fallback returns the
-node's source text for anything it cannot evaluate, so a module-level constant
-or a call still lands in the cab as if it were a value — `default: SENTINEL`,
-`default: float("inf")` — under a numeric `dtype`. #109 fixed the signed-literal
-instance of this, not the class.
+1. **Decodes** each dumped scalar with `yaml.safe_load` instead of stripping
+   quotes by hand, so `safe_dump`'s quoting and escapes are undone exactly
+   (this subsumes invariant 2).
+2. **Tries renderings in order**, keeping the first that reloads, comment
+   included, to exactly the value:
+   - plain, one sentence per line;
+   - the same lines as one single-quoted scalar (invariant 1);
+   - a single line quoted by `safe_dump`.
 
-Tracked in #116. The shape of the fix for the first family is to make the guard
-a *value* comparison rather than a parse: build the multi-line form, reload it,
-and fall back to the single-line scalar `safe_dump` already produced when the
-value does not survive. That keeps the comment placement in invariant 3 intact,
-which a block scalar would not. `allow_unicode=True` on the dump removes the
-second family at source.
+   The first two are what hip-cargo always emitted, so cabs that were already
+   correct are byte-identical (checked against every committed cab in
+   hip-cargo, pfb-imaging, meerkat-beams, pfb-model-spec, surfvis and
+   jackknify).
+3. **Keeps the comment outside the scalar** in every rendering (invariant 3), so
+   comment preservation survives the fallback.
+
+`implicit:` gets the same check, and apostrophes inside it are now escaped.
+`generate_cabs` dumps with `allow_unicode=True`, so `°`, `λ` and `μ` stay
+literal in cabs. The `safe_load` guard in `generate_cabs` remains as a last
+line of defence.
+
+On the value side, `get_cst_value`'s source-text fallback stays, because
+`Path.cwd()` and similar defaults rely on it. But a parameter whose dtype is
+`int`, `float` or `bool` (optionally `| None`) and whose default is not a
+literal (`_is_literal`) now raises `ValueError` in `extract_param_spec`. It
+used to emit `default: SENTINEL` or `default: float("inf")` under a numeric
+`dtype`. Non-numeric dtypes keep the fallback.
+
+Gotcha: a parameter's inline comment is only picked up when `help=` is the
+**last** argument of `typer.Option(...)` with no trailing comma
+(`help="..."  # noqa: E501`). After a trailing comma the comment hangs off the
+comma, and `_extract_inline_comment_from_help_string` does not look there.
 
 Tests: `tests/test_yaml_emission.py`, fixture
 `tests/fixtures/src/fixture_pkg/cli/yaml_emission_demo.py`.
