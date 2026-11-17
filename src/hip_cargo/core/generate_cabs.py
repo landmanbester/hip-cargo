@@ -74,6 +74,9 @@ def generate_cabs(module: list[Path], image: str | None = None, output_dir: Path
                 sort_keys=False,
                 indent=2,
                 width=YAML_MAX_WIDTH,
+                # Otherwise non-ASCII (°, λ, μ) is escaped into a double-quoted
+                # scalar, which no one wants to read in a cab (#116).
+                allow_unicode=True,
             )
             yaml_content_formatted = format_info_fields(yaml_content)
 

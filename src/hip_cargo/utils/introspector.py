@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 import libcst as cst
+import yaml
 from libcst import matchers
 
 from hip_cargo.utils.spec import CommandSpec, ModuleSpec, ParamSpec
@@ -124,6 +125,33 @@ def _callee_name(call: cst.Call) -> str:
     return ""
 
 
+def _find_typer_call(metadata_nodes: list[cst.CSTNode]) -> cst.Call | None:
+    """Return the ``typer.Option``/``typer.Argument`` call among Annotated metadata, if any."""
+    for node in metadata_nodes:
+        if isinstance(node, cst.Call):
+            func = node.func
+            # typer.Option(...) / typer.Argument(...)
+            if isinstance(func, cst.Attribute):
+                if isinstance(func.value, cst.Name) and func.value.value == "typer":
+                    return node
+            # Direct call like Option(...) - assume it's from typer
+            elif isinstance(func, cst.Name):
+                return node
+    return None
+
+
+def _typer_default_node(metadata_nodes: list[cst.CSTNode]) -> cst.BaseExpression | None:
+    """The expression a ``typer.Option`` uses as its default: ``default=`` or the first positional."""
+    typer_call = _find_typer_call(metadata_nodes)
+    if typer_call is None:
+        return None
+    for arg in typer_call.args:
+        if arg.keyword is not None and arg.keyword.value == "default":
+            return arg.value
+    positional = [arg for arg in typer_call.args if arg.keyword is None]
+    return positional[0].value if positional else None
+
+
 def extract_typer_metadata_libcst(metadata_nodes: list[cst.CSTNode], param_name: str | None = None) -> dict[str, Any]:
     """
     Extract metadata from a typer.Option(...) call.
@@ -144,22 +172,7 @@ def extract_typer_metadata_libcst(metadata_nodes: list[cst.CSTNode], param_name:
         ValueError: If no typer call is found, if it is a ``typer.Argument``, or if
             it carries param_decls.
     """
-    # Find the typer.Option or typer.Argument call
-    typer_call = None
-    for node in metadata_nodes:
-        if isinstance(node, cst.Call):
-            # Check if it's a typer call (typer.Option, typer.Argument, etc.)
-            func = node.func
-            if isinstance(func, cst.Attribute):
-                # typer.Option or typer.Argument
-                if isinstance(func.value, cst.Name) and func.value.value == "typer":
-                    typer_call = node
-                    break
-            elif isinstance(func, cst.Name):
-                # Direct call like Option(...) - assume it's from typer
-                typer_call = node
-                break
-
+    typer_call = _find_typer_call(metadata_nodes)
     if typer_call is None:
         raise ValueError("No typer.Option() or typer.Argument() call found in metadata")
 
@@ -271,10 +284,20 @@ def extract_param_spec(param: cst.Param) -> ParamSpec:
         dtype_str = _cst_node_to_code(dtype_node)
         typer_metadata = extract_typer_metadata_libcst(metadata_nodes, param_name)
         stimela_metadata = extract_stimela_metadata_libcst(metadata_nodes)
+        typer_default_node = _typer_default_node(metadata_nodes)
     else:
         dtype_str = "str"
         typer_metadata = {}
         stimela_metadata = {}
+        typer_default_node = None
+
+    default_node = param.default if param.default is not None else typer_default_node
+    if default_node is not None and _is_numeric_dtype(dtype_str) and not _is_literal(default_node):
+        raise ValueError(
+            f"Parameter '{param_name}': default `{_cst_node_to_code(default_node)}` is not a literal. "
+            f"The cab would carry that source text as the default of a `{dtype_str}` parameter, "
+            f"which Stimela cannot use. Write the value itself (e.g. `= -1`)."
+        )
 
     inline_comment = _extract_inline_comment_from_help_string(param)
 
@@ -460,6 +483,36 @@ def _dtype_to_str_from_string(dtype_str: str) -> str:
 
     # Return as-is for custom types like File, Directory, etc.
     return f"Optional[{dtype_str}]" if is_optional else dtype_str
+
+
+_NUMERIC_DTYPES = frozenset({"int", "float", "bool"})
+
+
+def _is_numeric_dtype(dtype_str: str) -> bool:
+    """True for ``int``/``float``/``bool``, optionally made optional (``| None``, ``Optional[...]``)."""
+    names = set(re.findall(r"[A-Za-z_]\w*", dtype_str)) - {"None", "Optional", "Union"}
+    return bool(names) and names <= _NUMERIC_DTYPES
+
+
+def _is_literal(node: cst.CSTNode) -> bool:
+    """True if :func:`get_cst_value` evaluates ``node`` rather than falling back to its source text."""
+    if isinstance(node, (cst.Ellipsis, cst.Integer, cst.Float, cst.SimpleString, cst.ConcatenatedString)):
+        return True
+    if isinstance(node, cst.Name):
+        return node.value in {"True", "False", "None"}
+    if isinstance(node, (cst.List, cst.Tuple)):
+        return all(_is_literal(el.value) for el in node.elements)
+    if isinstance(node, cst.Dict):
+        return all(
+            isinstance(el, cst.DictElement) and _is_literal(el.key) and _is_literal(el.value) for el in node.elements
+        )
+    if isinstance(node, cst.UnaryOperation):
+        if isinstance(node.operator, cst.BitInvert):
+            return isinstance(node.expression, cst.Integer)
+        return isinstance(node.operator, (cst.Minus, cst.Plus)) and isinstance(
+            node.expression, (cst.Integer, cst.Float)
+        )
+    return False
 
 
 def get_cst_value(node: cst.CSTNode) -> Any:
@@ -695,90 +748,118 @@ def parse_module(module_path: Path) -> ModuleSpec:
     return ModuleSpec(path=module_path, commands=tuple(commands))
 
 
+_INFO_FIELD = re.compile(r"^(\s*)(info|implicit):\s*(.*)$")
+
+
+def _loads_as(block: list[str], indent: str, field_name: str, value: str) -> bool:
+    """True if ``block`` (lines at ``indent``) loads as ``{field_name: value}``."""
+    try:
+        loaded = yaml.safe_load("\n".join(line[len(indent) :] for line in block))
+    except yaml.YAMLError:
+        return False
+    return loaded == {field_name: value}
+
+
+def _info_candidates(indent: str, content: str, comment: str | None) -> list[list[str]]:
+    """Multi-line renderings of an info value, most readable first.
+
+    One sentence per line, plain; then the same lines as one single-quoted
+    scalar (a multi-line single-quoted scalar folds to the same string). The
+    comment goes after the last line, outside the scalar.
+    """
+    sentences = content.replace(". ", ".\n").strip().split("\n")
+    quoted = [line.replace("'", "''") for line in sentences]
+    quoted[0] = "'" + quoted[0]
+    quoted[-1] = quoted[-1] + "'"
+    suffix = f"  {comment}" if comment else ""
+    return [
+        [f"{indent}info:"] + [f"{indent}  {line}" for line in lines[:-1]] + [f"{indent}  {lines[-1]}{suffix}"]
+        for lines in (sentences, quoted)
+    ]
+
+
+def _single_line(indent: str, field_name: str, content: str, comment: str | None) -> list[str]:
+    """``field: <scalar>`` quoted however YAML needs it (several lines if the value has newlines)."""
+    dumped = yaml.safe_dump({field_name: content}, allow_unicode=True, width=_YAML_WIDTH).rstrip("\n").split("\n")
+    rendered = [f"{indent}{line}" if line else "" for line in dumped]
+    if comment:
+        rendered[-1] += f"  {comment}"
+    return rendered
+
+
+_YAML_WIDTH = 10000
+
+
 def format_info_fields(yaml_str: str) -> str:
     """
-    Replace inline info strings with multi-line format.
-    Also handles implicit fields to extract trailing comments.
+    Rewrite dumped ``info``/``implicit`` scalars into their cab form.
+
+    ``info`` goes one sentence per line; ``implicit`` stays on one line. Both
+    move an inline comment carried in the string (``\\s{2,}#``) out of the
+    scalar and into a YAML comment.
+
+    Each value is first decoded by YAML itself (so quoting and escapes from
+    ``safe_dump`` are undone exactly), and every rewrite is reloaded and checked
+    against that value. A rendering that would load as something else -- a
+    mapping, a comment, a sequence -- is not used; the value falls back to a
+    single line quoted by ``safe_dump`` (#116).
 
     Args:
         yaml_str: YAML string to format
 
     Returns:
         Formatted YAML string
+
+    Raises:
+        ValueError: No rendering loads back as the original value.
     """
-    # Process line by line to handle wrapped content
     lines = yaml_str.split("\n")
     result = []
     i = 0
 
     while i < len(lines):
-        line = lines[i]
+        match = _INFO_FIELD.match(lines[i])
+        if not match:
+            result.append(lines[i])
+            i += 1
+            continue
 
-        # Match both 'info:' and 'implicit:' fields
-        match = re.match(r"^(\s*)(info|implicit):\s*(.*)$", line)
-
-        if match:
-            indent = match.group(1)
-            field_name = match.group(2)
-            content = match.group(3)
-
-            # Collect continuation lines (indented more than 'field:')
-            cond1 = i + 1 < len(lines)
-            while cond1 and lines[i + 1].startswith(indent + "  ") and not re.match(r"^\s*\w+:", lines[i + 1]):
-                i += 1
-                content += " " + lines[i].strip()
-                cond1 = i + 1 < len(lines)
-
-            # Strip quotes (YAML adds them for strings with special chars).
-            # A single-quoted scalar also doubles any apostrophe inside it, so
-            # undo that too or it survives into the emitted value.
-            content = content.strip()
-            if len(content) >= 2 and content[0] == content[-1] and content[0] in "'\"":
-                quoted_with = content[0]
-                content = content[1:-1]
-                if quoted_with == "'":
-                    content = content.replace("''", "'")
-
-            # Extract any trailing comment from the string itself
-            # PEP 8: inline comments should have at least 2 spaces before the #
-            # Use regex to match 2+ spaces before # to be flexible about whitespace
-            trailing_comment = None
-            comment_match = re.search(r"\s{2,}#", content)
-            if comment_match:
-                comment_idx = comment_match.start()
-                trailing_comment = content[comment_idx:].strip()
-                content = content[:comment_idx].rstrip()
-
-            # Format based on field type
-            if field_name == "info":
-                # Multi-line format for info (split at periods)
-                formatted_lines = content.replace(". ", ".\n").strip().split("\n")
-                result.append(f"{indent}{field_name}:")
-                # A colon anywhere forces quoting, or YAML reads the line as a
-                # mapping. Quote the value as a whole rather than line by line:
-                # a quoted scalar cannot be continued by unquoted lines, so
-                # per-line quoting breaks a multi-line block. A multi-line
-                # single-quoted scalar folds to the same string a plain one does.
-                if any(": " in formatted_line for formatted_line in formatted_lines):
-                    # Escape single quotes for YAML single-quoted strings
-                    formatted_lines = [formatted_line.replace("'", "''") for formatted_line in formatted_lines]
-                    formatted_lines[0] = "'" + formatted_lines[0]
-                    formatted_lines[-1] = formatted_lines[-1] + "'"
-                for j, formatted_line in enumerate(formatted_lines):
-                    if j == len(formatted_lines) - 1 and trailing_comment:
-                        # Add comment to last line as YAML comment (not string content)
-                        result.append(f"{indent}  {formatted_line}  {trailing_comment}")
-                    else:
-                        result.append(f"{indent}  {formatted_line}")
-            else:
-                # Single-line format for implicit (don't split at periods)
-                if trailing_comment:
-                    result.append(f"{indent}{field_name}: '{content}'  {trailing_comment}")
-                else:
-                    result.append(f"{indent}{field_name}: '{content}'")
-        else:
-            result.append(line)
-
+        indent, field_name = match.group(1), match.group(2)
+        # The scalar continues on deeper-indented lines, and on blank lines inside
+        # a quoted scalar (safe_dump writes an embedded newline as a blank line).
+        # A sibling key sits at `indent` exactly, so it ends the block.
+        block = [lines[i]]
+        while i + 1 < len(lines) and (lines[i + 1].startswith(indent + " ") or not lines[i + 1].strip()):
+            i += 1
+            block.append(lines[i])
+        # Trailing blank lines belong to whatever follows (e.g. the final newline).
+        while len(block) > 1 and not block[-1].strip():
+            block.pop()
+            i -= 1
         i += 1
+
+        value = yaml.safe_load("\n".join(line[len(indent) :] for line in block))[field_name]
+        if not isinstance(value, str):
+            result.extend(block)
+            continue
+
+        # PEP 8 inline comment: 2+ spaces before the '#'
+        content, comment = value, None
+        comment_match = re.search(r"\s{2,}#", value)
+        if comment_match:
+            content = value[: comment_match.start()].rstrip()
+            comment = value[comment_match.start() :].strip()
+
+        if field_name == "info":
+            candidates = _info_candidates(indent, content, comment)
+        else:
+            escaped = content.replace("'", "''")
+            candidates = [[f"{indent}implicit: '{escaped}'" + (f"  {comment}" if comment else "")]]
+        candidates.append(_single_line(indent, field_name, content, comment))
+
+        chosen = next((c for c in candidates if _loads_as(c, indent, field_name, content)), None)
+        if chosen is None:
+            raise ValueError(f"Cannot render {field_name} value {content!r} as YAML that loads back unchanged.")
+        result.extend(chosen)
 
     return "\n".join(result)
