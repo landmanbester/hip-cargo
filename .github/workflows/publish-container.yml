@@ -15,6 +15,13 @@ on:
 # This workflow only builds and pushes container images (stimela pulls the image
 # named in the cab definitions).
 
+# A later push to the same ref cancels an in-flight build, so :latest always comes
+# from the newest commit on main (the update-cabs bot commit supersedes the merge).
+# Release tags get their own group and are never cancelled by pushes to main.
+concurrency:
+  group: publish-container-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}

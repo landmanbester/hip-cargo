@@ -18,6 +18,8 @@ last_verified_commit: a470098
   pfb-imaging and meerkat-beams.
 - Test list: `test_container_resolution.py` (a copy of `test_config.py`'s
   `TestGetContainerImage`) was deleted; point at `test_config.py`.
+- `publish-container.yml` gained a per-ref `concurrency` group so the
+  `update-cabs` bot push cancels the superseded merge build.
 
 ## 2026-09-23 — `cab-yaml-emission.md` records what the guard misses (verified at `960f3e1`)
 
