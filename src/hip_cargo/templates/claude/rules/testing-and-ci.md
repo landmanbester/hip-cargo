@@ -43,12 +43,16 @@ the round-trip.
 
 ## 4. CI
 
-- **CI matrix is bracketed:** tests run on the oldest and newest supported
-  Python on x86 (`Tests (3.10)`, `Tests (3.14)`) plus one arm64 job at the
-  newest (`Tests (3.14, arm64)`). The oldest must equal the `requires-python`
-  floor: the lightweight install has to keep working there, while commands run
-  in the container on a newer Python. Changing the matrix renames required
-  checks, so the branch ruleset must be updated with it.
+- **CI matrix is bracketed:** the full test suite runs on the oldest and newest
+  Python the full install supports, on x86 (`Tests (3.11)`, `Tests (3.14)`),
+  plus one arm64 job at the newest (`Tests (3.14, arm64)`).
+- **Python 3.10 is lightweight-only:** `Lightweight install (3.10)` installs the
+  package without extras and runs `<CLI_COMMAND> --help`, which imports every
+  `cli/` module. Its Python must equal the `requires-python` floor. Commands
+  still run on 3.10 by dispatching into the container, which ships a newer
+  Python. Do not add a 3.10 leg to the full test matrix.
+- Changing job names renames required checks, so update the branch ruleset in
+  the same change.
 - **Container images are multi-arch:** `publish-container.yml` builds amd64 and
   arm64 on native runners, pushes each by digest, and a `merge` job publishes
   one manifest under the real tags. Drop the arm64 build entry (and the arm64

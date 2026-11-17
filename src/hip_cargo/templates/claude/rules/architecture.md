@@ -67,6 +67,11 @@ The lightweight install is **always sufficient to invoke any command** because
 the generated CLI wrappers fall back to running the same command inside the
 project's container when native imports fail (see §3).
 
+On Python 3.10 **only the lightweight install is supported**: `requires-python`
+stays at `>=3.10` so the package installs there, but the `full` extra (and so
+native execution and the full test suite) needs 3.11+. CI pins this with the
+`Lightweight install (3.10)` job.
+
 ### When you add a heavy dep
 
 - Add it to `[project.optional-dependencies].full` in `pyproject.toml`, **not**
@@ -74,6 +79,11 @@ project's container when native imports fail (see §3).
   lightweight install remains lightweight.
 - Import it **only from inside `core/`**. Never import it from `cli/` at module
   scope.
+- If it has no release for Python 3.10, mark it
+  `"<dep>>=X.Y; python_version >= '3.11'"`. uv resolves one lock for every
+  Python `requires-python` allows (`>=3.10`), so an unmarked 3.11-only
+  dependency fails `uv lock` with "only supports >=3.11". Do **not** raise
+  `requires-python` instead: that would drop the lightweight install on 3.10.
 
 ## 3. Container Fallback & Backends
 
