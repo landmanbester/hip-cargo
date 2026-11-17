@@ -384,21 +384,6 @@ def param_spec_to_cab_input(spec: ParamSpec) -> tuple[str, dict[str, Any]]:
     return spec.name, input_def
 
 
-def extract_input_libcst(param: cst.Param) -> tuple[str, dict[str, Any]]:
-    """Extract a cab-shaped input definition from a CST Param node.
-
-    Thin compose of :func:`extract_param_spec` and
-    :func:`param_spec_to_cab_input`. Retained for backward compatibility.
-
-    Args:
-        param: LibCST Param node to analyse.
-
-    Returns:
-        Tuple of ``(param_name, input_def)``.
-    """
-    return param_spec_to_cab_input(extract_param_spec(param))
-
-
 def _strip_top_level_none(dtype_str: str) -> tuple[str, bool]:
     """Remove ``None`` members from a top-level ``X | None`` union.
 
@@ -716,15 +701,13 @@ def parse_module(module_path: Path) -> ModuleSpec:
     return ModuleSpec(path=module_path, commands=tuple(commands))
 
 
-def format_info_fields(yaml_str, comment_map=None):
+def format_info_fields(yaml_str: str) -> str:
     """
     Replace inline info strings with multi-line format.
     Also handles implicit fields to extract trailing comments.
 
     Args:
         yaml_str: YAML string to format
-        comment_map: Optional dict mapping line keys to comments
-                     (e.g., "cabs.cab_name.outputs.output-dir.info" -> "# noqa")
 
     Returns:
         Formatted YAML string

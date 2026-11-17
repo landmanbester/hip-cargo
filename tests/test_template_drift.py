@@ -99,3 +99,33 @@ def test_precommit_ruff_matches_locked_ruff():
         "https://github.com/astral-sh/ruff-pre-commit"
     ]
     assert rev == f"v{locked}"
+
+
+def test_publish_container_matches_template():
+    """hip-cargo's own publish-container workflow is the template with the default branch filled in."""
+    template = (TEMPLATES / "workflows" / "publish-container.yml").read_text()
+    own = (ROOT / ".github" / "workflows" / "publish-container.yml").read_text()
+    assert template.replace("<DEFAULT_BRANCH>", "main") == own
+
+
+def test_publish_container_never_runs_on_pull_requests():
+    """Feature-branch images are built on manual dispatch only, never on PR pushes."""
+    triggers = yaml.safe_load((TEMPLATES / "workflows" / "publish-container.yml").read_text())[True]
+    assert "pull_request" not in triggers
+    assert "workflow_dispatch" in triggers
+
+
+@pytest.mark.parametrize(
+    ("workflow", "pyproject"),
+    [
+        (ROOT / ".github" / "workflows" / "ci.yml", ROOT / "pyproject.toml"),
+        (TEMPLATES / "workflows" / "ci.yml", TEMPLATES / "pyproject.toml"),
+    ],
+    ids=["hip-cargo", "template"],
+)
+def test_ci_tests_the_oldest_supported_python(workflow: Path, pyproject: Path):
+    """The CI matrix is bracketed, so its oldest entry must be the requires-python floor."""
+    matrix = yaml.safe_load(workflow.read_text())["jobs"]["test"]["strategy"]["matrix"]
+    oldest = min(matrix["python-version"], key=lambda v: tuple(map(int, v.split("."))))
+    requires = tomllib.loads(pyproject.read_text())["project"]["requires-python"]
+    assert requires.startswith(f">={oldest}"), f"{workflow.name} oldest {oldest} vs requires-python {requires}"

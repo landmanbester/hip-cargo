@@ -129,7 +129,3 @@ def test_cmd(
         print("  ✅ Comments in input parameter help strings preserved through roundtrip")
         print("  ✅ Output comments appear in BOTH decorator AND parameter in generated Python")
         print("  ✅ Parameter help for outputs uses the decorator info (with comment)")
-
-
-if __name__ == "__main__":
-    test_comments_in_both_locations()

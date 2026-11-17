@@ -7,7 +7,11 @@ import libcst as cst
 
 from hip_cargo.core.generate_cabs import generate_cabs
 from hip_cargo.core.generate_function import generate_function
-from hip_cargo.utils.introspector import extract_input_libcst, extract_stimela_metadata_libcst
+from hip_cargo.utils.introspector import (
+    extract_param_spec,
+    extract_stimela_metadata_libcst,
+    param_spec_to_cab_input,
+)
 
 
 def test_extract_stimela_metadata_basic():
@@ -94,7 +98,7 @@ def foo(
     cst_func = cst_tree.body[-1]
     cst_param = cst_func.params.params[0]
 
-    param_name, input_def = extract_input_libcst(cst_param)
+    param_name, input_def = param_spec_to_cab_input(extract_param_spec(cst_param))
 
     assert param_name == "param"
     assert input_def["dtype"] == "File"  # Should be File, not str
@@ -121,7 +125,7 @@ def foo(
     cst_func = cst_tree.body[-1]
     cst_param = cst_func.params.params[0]
 
-    param_name, input_def = extract_input_libcst(cst_param)
+    param_name, input_def = param_spec_to_cab_input(extract_param_spec(cst_param))
 
     assert input_def["custom_field"] == "custom_value"
     assert input_def["another"] == 123
@@ -151,7 +155,7 @@ def foo(
     cst_func = cst_tree.body[-1]
     cst_param = cst_func.params.params[0]
 
-    param_name, input_def = extract_input_libcst(cst_param)
+    param_name, input_def = param_spec_to_cab_input(extract_param_spec(cst_param))
 
     # Should have both inferred (positional) and explicit (skip, io) policies
     assert input_def["policies"]["positional"] is True  # Inferred from required
@@ -388,7 +392,7 @@ def foo(
 
     # First parameter (required File)
     cst_param1 = cst_func.params.params[0]
-    param_name1, input_def1 = extract_input_libcst(cst_param1)
+    param_name1, input_def1 = param_spec_to_cab_input(extract_param_spec(cst_param1))
 
     assert param_name1 == "input_file"
     assert input_def1["dtype"] == "File"
@@ -397,7 +401,7 @@ def foo(
 
     # Second parameter (optional str)
     cst_param2 = cst_func.params.params[1]
-    param_name2, input_def2 = extract_input_libcst(cst_param2)
+    param_name2, input_def2 = param_spec_to_cab_input(extract_param_spec(cst_param2))
 
     assert param_name2 == "output"
     assert input_def2["dtype"] == "Optional[str]"  # str | None produces Optional[str]
@@ -406,24 +410,3 @@ def foo(
     assert "required" not in input_def2 or input_def2.get("required") is False
 
     print("✓ Backward compatibility maintained")
-
-
-if __name__ == "__main__":
-    print("=" * 60)
-    print("Testing Stimela Metadata Feature")
-    print("=" * 60)
-
-    test_extract_stimela_metadata_basic()
-    test_extract_stimela_metadata_no_dict()
-    test_stimela_dtype_override()
-    test_stimela_arbitrary_fields()
-    test_stimela_policies_merge()
-    test_stimela_roundtrip()
-    test_extract_stimela_metadata_new_form()
-    test_extract_stimela_metadata_new_form_with_nested()
-    test_stimela_roundtrip_new_form()
-    test_backward_compatibility()
-
-    print("\n" + "=" * 60)
-    print("✅ All Stimela Metadata Tests Passed!")
-    print("=" * 60)

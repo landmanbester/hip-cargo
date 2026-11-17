@@ -36,31 +36,6 @@ def test_forward_cab_carries_metadata_tunable():
         assert inputs["label"]["metadata"] == {"rich_help_panel": "Inputs"}
 
 
-def test_reverse_regenerates_stimela_meta_tunable():
-    """generate-function reconstructs StimelaMeta(metadata={"tunable": True})."""
-    with tempfile.TemporaryDirectory() as tmp:
-        tmp = Path(tmp)
-        cab_dir = tmp / "cabs"
-        cab_dir.mkdir()
-        generate_cabs([FIXTURE_CLI], output_dir=cab_dir)
-
-        regen = tmp / "regen.py"
-        generate_function(
-            cab_dir / "tunable_demo.yml",
-            output_file=regen,
-            config_file=Path("pyproject.toml"),
-        )
-
-        code = regen.read_text()
-
-        # rich_help_panel routed back into typer.Option, tunable into StimelaMeta.
-        assert 'rich_help_panel="Tuning"' in code
-        assert 'rich_help_panel="Inputs"' in code
-        assert '"tunable": True' in code
-        # The non-tunable param must NOT have a StimelaMeta block.
-        assert code.count("StimelaMeta(") == 2
-
-
 def test_tunable_demo_line_for_line_roundtrip():
     """cli → cab → cli is line-for-line identical for the tunable fixture."""
     with tempfile.TemporaryDirectory() as tmp:

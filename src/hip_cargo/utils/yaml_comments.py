@@ -38,17 +38,3 @@ def extract_yaml_comments(yaml_file: Path) -> dict[str, str]:
                     comments[value.strip()] = comment
 
     return comments
-
-
-def add_inline_comment_to_string(text: str, comment: str) -> str:
-    """
-    Add a comment marker to text so format_info_fields can place it correctly.
-
-    Args:
-        text: The info text
-        comment: The comment (with # prefix)
-
-    Returns:
-        Text with comment marker
-    """
-    return f"{text}  {comment}"

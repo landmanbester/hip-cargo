@@ -27,8 +27,14 @@ against.
 ## Core Dependencies
 
 * Minimize external dependencies.
-* Current allowed dependencies: `typer`, `pyyaml`, `libcst`, `ruff`, `typing-extensions`.
+* Current allowed dependencies: `typer`, `pyyaml`, `libcst`, `ruff`, `fsspec`, `universal-pathlib`.
 * **Note on Ruff:** `ruff` is a core dependency (not just dev) because `generate-function` runs `ruff format` and `ruff check --fix` on generated code.
+
+## Container Image Tag
+
+**Never change the container image tag** (`CONTAINER_IMAGE` in
+`src/hip_cargo/_container_image.py`, or the `image:` line in `cabs/*.yml`).
+The maintainer sets it by hand — see `.claude/rules/architecture.md` §4.
 
 ## Mandatory Development Workflow
 
@@ -92,3 +98,17 @@ hip-cargo/
 │   └── fixtures/             # Fixture package for introspection tests
 └── pyproject.toml
 ```
+
+## Agent skills
+
+### Issue tracker
+
+Issues live in GitHub Issues on landmanbester/hip-cargo (via `gh`). See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Default vocabulary: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`. See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: `GLOSSARY.md` + `docs/adr/` at the repo root (created lazily). See `docs/agents/domain.md`.

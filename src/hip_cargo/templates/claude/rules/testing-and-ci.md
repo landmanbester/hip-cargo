@@ -41,7 +41,20 @@ This is non-negotiable — the pre-commit hook and CI both enforce it, and
 generated code is formatted with the same configuration, so divergence breaks
 the round-trip.
 
-## 4. Commits
+## 4. CI
+
+- **CI matrix is bracketed:** tests run on the oldest and newest supported
+  Python on x86 (`Tests (3.10)`, `Tests (3.14)`) plus one arm64 job at the
+  newest (`Tests (3.14, arm64)`). The oldest must equal the `requires-python`
+  floor: the lightweight install has to keep working there, while commands run
+  in the container on a newer Python. Changing the matrix renames required
+  checks, so the branch ruleset must be updated with it.
+- **Container images are multi-arch:** `publish-container.yml` builds amd64 and
+  arm64 on native runners, pushes each by digest, and a `merge` job publishes
+  one manifest under the real tags. Drop the arm64 build entry (and the arm64
+  test job) for an amd64-only project.
+
+## 5. Commits
 
 - Use [Conventional Commits](https://www.conventionalcommits.org/):
   `<type>: <description>` (`feat`, `fix`, `refactor`, `perf`, `docs`, `test`,

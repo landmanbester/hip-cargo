@@ -21,13 +21,6 @@ LIST_TYPE_PARSERS = {
     "ListStr": "parse_list_str",
 }
 
-# Mapping from ListType name to stimela dtype
-CUSTOM_LIST_TYPES = {
-    "ListInt": "List[int]",
-    "ListFloat": "List[float]",
-    "ListStr": "List[str]",
-}
-
 
 def extract_trailing_comment(text: str) -> tuple[str, str]:
     """
@@ -89,13 +82,13 @@ def extract_custom_types(dct: dict[str, Any]) -> set[str]:
     return custom_types
 
 
-def stimela_dtype_to_python_type(dtype: str, preserve_custom: bool = True) -> str:
+def stimela_dtype_to_python_type(dtype: str) -> str:
     """
     Convert Stimela dtype to Python type hint string.
 
     Args:
-        dtype: Stimela dtype (e.g., 'File', 'int', 'List[str]')
-        preserve_custom: If True, keep custom types (File, MS, etc.) as-is
+        dtype: Stimela dtype (e.g., 'File', 'int', 'List[str]'). Custom path
+            types (File, MS, etc.) are kept as-is.
 
     Returns:
         Python type hint as string
@@ -103,20 +96,20 @@ def stimela_dtype_to_python_type(dtype: str, preserve_custom: bool = True) -> st
     # Handle Optional types - unwrap and add | None
     if dtype.startswith("Optional[") and dtype.endswith("]"):
         inner = dtype[9:-1]
-        inner_py = stimela_dtype_to_python_type(inner, preserve_custom)
+        inner_py = stimela_dtype_to_python_type(inner)
         return f"{inner_py} | None"
 
     # Handle List types - use lowercase 'list'
     if dtype.startswith("List["):
         inner_type = dtype[5:-1]  # Extract inner type
-        inner_py = stimela_dtype_to_python_type(inner_type, preserve_custom)
+        inner_py = stimela_dtype_to_python_type(inner_type)
         return f"list[{inner_py}]"
 
     # Handle Tuple types - use lowercase 'tuple'
     if dtype.startswith("Tuple["):
         inner_types = dtype[6:-1]  # Extract inner types
         # Split by comma and convert each type
-        inner_parts = [stimela_dtype_to_python_type(t.strip(), preserve_custom) for t in inner_types.split(",")]
+        inner_parts = [stimela_dtype_to_python_type(t.strip()) for t in inner_types.split(",")]
         return f"tuple[{', '.join(inner_parts)}]"
 
     # Map Stimela types to Python types
@@ -128,13 +121,8 @@ def stimela_dtype_to_python_type(dtype: str, preserve_custom: bool = True) -> st
         "URL": "str",
     }
 
-    # For custom types, preserve them if requested
-    if preserve_custom and dtype in CUSTOM_STIMELA_TYPES:
-        return dtype
-
-    # Otherwise map to Path
     if dtype in CUSTOM_STIMELA_TYPES:
-        return "Path"
+        return dtype
 
     return type_map.get(dtype, "str")
 
@@ -339,7 +327,7 @@ def generate_parameter_signature(
             default = LIST_DTYPE_PARSERS[lookup_dtype](default)
     else:
         # Determine Python type normally
-        py_type = stimela_dtype_to_python_type(dtype, preserve_custom=True)
+        py_type = stimela_dtype_to_python_type(dtype)
 
     # Extract trailing comment before splitting
     info, trailing_comment = extract_trailing_comment(info)

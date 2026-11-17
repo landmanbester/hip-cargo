@@ -1,8 +1,8 @@
-"""Test comment preservation in extract_input_libcst."""
+"""Test comment preservation in the cab-input adaptor."""
 
 import libcst as cst
 
-from hip_cargo.utils.introspector import extract_input_libcst
+from hip_cargo.utils.introspector import extract_param_spec, param_spec_to_cab_input
 
 
 def test_inline_comment_noqa_e501():
@@ -30,7 +30,7 @@ def foo(
     cst_tree = cst.parse_module(code)
     cst_func = cst_tree.body[-1]
     cst_param = cst_func.params.params[0]
-    param_name, input_def = extract_input_libcst(cst_param)
+    param_name, input_def = param_spec_to_cab_input(extract_param_spec(cst_param))
 
     print(f"\nParameter: {param_name}")
     print(f"Info: {input_def.get('info')}")
@@ -64,7 +64,7 @@ def foo(
     cst_tree = cst.parse_module(code)
     cst_func = cst_tree.body[-1]
     cst_param = cst_func.params.params[0]
-    param_name, input_def = extract_input_libcst(cst_param)
+    param_name, input_def = param_spec_to_cab_input(extract_param_spec(cst_param))
 
     print(f"\nParameter: {param_name}")
     print(f"Info: {input_def.get('info')}")
@@ -97,7 +97,7 @@ def foo(
     cst_tree = cst.parse_module(code)
     cst_func = cst_tree.body[-1]
     cst_param = cst_func.params.params[0]
-    param_name, input_def = extract_input_libcst(cst_param)
+    param_name, input_def = param_spec_to_cab_input(extract_param_spec(cst_param))
 
     print(f"\nParameter: {param_name}")
     print(f"Info: {input_def.get('info')}")
@@ -139,7 +139,7 @@ def foo(
         cst_tree = cst.parse_module(code)
         cst_func = cst_tree.body[-1]
         cst_param = cst_func.params.params[0]
-        param_name, input_def = extract_input_libcst(cst_param)
+        param_name, input_def = param_spec_to_cab_input(extract_param_spec(cst_param))
 
         print(f"\nTesting: {description} ({comment})")
         print(f"Info: {input_def.get('info')}")
@@ -147,18 +147,3 @@ def foo(
         # Check that comment is preserved
         assert comment in input_def["info"], f"Comment '{comment}' not found in: {input_def['info']}"
         print(f"✓ PASSED - {comment} preserved")
-
-
-if __name__ == "__main__":
-    print("=" * 60)
-    print("TESTING: Comment Preservation")
-    print("=" * 60)
-
-    test_inline_comment_noqa_e501()
-    test_inline_comment_type_ignore()
-    test_no_comment()
-    test_multiple_comment_types()
-
-    print("\n" + "=" * 60)
-    print("✅ All comment preservation tests passed!")
-    print("=" * 60)

@@ -33,8 +33,6 @@ class ParamSpec:
             ``typer.Option(...)`` / ``typer.Argument(...)``.
         inline_comment: Inline comment attached to the ``help=`` kwarg, if any
             (e.g. ``"# noqa: E501"``).
-        line: 1-based line number of the parameter in its source module, used
-            for diagnostics.
     """
 
     name: str
@@ -45,7 +43,6 @@ class ParamSpec:
     stimela_meta: dict[str, Any] = field(default_factory=dict)
     raw_typer_meta: dict[str, Any] = field(default_factory=dict)
     inline_comment: str | None = None
-    line: int | None = None
 
     @property
     def is_tunable(self) -> bool:
@@ -69,14 +66,12 @@ class CommandSpec:
         decorators: Parsed decorators keyed by name. Each value carries
             ``{"args": [...], "kwargs": {...}}`` per ``parse_decorator_libcst``.
         params: All function parameters in declaration order.
-        line: 1-based line of the ``def`` statement.
     """
 
     name: str
     module_path: Path
     decorators: dict[str, dict[str, Any]]
     params: tuple[ParamSpec, ...]
-    line: int | None = None
 
     @property
     def tunable_params(self) -> tuple[ParamSpec, ...]:
