@@ -46,6 +46,21 @@ def test_every_command_has_a_committed_cab() -> None:
     assert COMMANDS and not missing, f"no committed cab for {missing}; run generate-cabs"
 
 
+def test_every_generated_cab_has_a_cli_module() -> None:
+    """A generated cab whose CLI module was deleted would otherwise go unchecked.
+
+    Only generated cabs count: ``cabs/<cmd>.yml`` defining ``cabs.<cmd>`` with a
+    ``command``. A hand-written aggregate such as ``cabs/cabs.yml`` (stimela
+    ``_include`` entries) is not one.
+    """
+    orphans = []
+    for cab_file in sorted(CABS_DIR.glob("*.yml")):
+        cab = (yaml.safe_load(cab_file.read_text()) or {}).get("cabs", {}).get(cab_file.stem)
+        if isinstance(cab, dict) and "command" in cab and not (CLI_DIR / f"{cab_file.stem}.py").is_file():
+            orphans.append(cab_file.name)
+    assert not orphans, f"committed cabs with no cli/ module: {orphans}; delete them or restore the module"
+
+
 @pytest.mark.parametrize("command", COMMANDS)
 def test_the_committed_cab_is_what_generate_cabs_emits(command: str, tmp_path: Path) -> None:
     """Forward direction: cli/<command>.py -> cabs/<command>.yml."""

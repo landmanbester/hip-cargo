@@ -84,6 +84,21 @@ def test_there_is_at_least_one_command() -> None:
     assert COMMANDS, f"no CLI modules with cabs found under {CLI_DIR}"
 
 
+def test_every_generated_cab_has_a_cli_module() -> None:
+    """A generated cab whose CLI module was deleted would otherwise go unchecked.
+
+    Only generated cabs count: ``cabs/<cmd>.yml`` defining ``cabs.<cmd>`` with a
+    ``command``. A hand-written aggregate such as ``cabs/cabs.yml`` (stimela
+    ``_include`` entries) is not one.
+    """
+    orphans = []
+    for cab_file in sorted(CABS_DIR.glob("*.yml")):
+        cab = (yaml.safe_load(cab_file.read_text()) or {}).get("cabs", {}).get(cab_file.stem)
+        if isinstance(cab, dict) and "command" in cab and not (CLI_DIR / f"{cab_file.stem}.py").is_file():
+            orphans.append(cab_file.name)
+    assert not orphans, f"committed cabs with no cli/ module: {orphans}; delete them or restore the module"
+
+
 def test_every_decorated_command_has_a_committed_cab() -> None:
     """A @stimela_cab command with no cab means generate-cabs was not run."""
     missing = [
