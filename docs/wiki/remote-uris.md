@@ -4,7 +4,7 @@ title: Path types and remote URIs
 description: UPath-backed File/Directory/MS/URI types, remote object-store handling, credential forwarding, and fsspec extras.
 tags: [paths, upath, s3, gcs, azure, fsspec]
 timestamp: 2026-11-17
-last_verified_commit: 6e40c1d
+last_verified_commit: aeaaa4a
 ---
 
 # Path types and remote URIs
@@ -20,6 +20,16 @@ Source: `src/hip_cargo/utils/types.py` (types + `parse_upath`),
 `.open()` / `.read_bytes()` / `.exists()` directly — **hip-cargo does no IO**.
 Local paths behave exactly like `pathlib.Path`; remote URIs (`s3://`, `gs://`,
 `az://`, `http(s)://`) route to the matching fsspec backend on first access.
+
+**Remote support stops at the wrapper (#96).** hip-cargo makes the *CLI*
+accept a remote URI: `parse_upath`, the pre-flight, credential forwarding and
+mount skipping. Whether the *command* works on one depends entirely on what the
+package's `core/` does with the `UPath`. A `core/` built on `os.*`, `open()`,
+`shutil` or a C library (casacore, CFITSIO, HDF5) is local-only, both natively
+and in the container fallback, which runs the same code. Seen in
+talonmyburgh/jackknify#7, where generated wrappers led to a README claiming URI
+support that `core/` did not have. The scaffolded
+`.claude/rules/architecture.md` now says to check `core/` before claiming it.
 
 Codegen contract: for these four types the generator emits
 `parser=parse_upath` (never `parser=Path`) in `typer.Option(...)` and adds

@@ -56,4 +56,4 @@ Read this when editing `src/hip_cargo/**/*.py` files.
 ## 6. Project Scaffolding (`hip-cargo init`)
 * Templates reside in `src/hip_cargo/templates/` and use `<PLACEHOLDER>` substitution.
 * **CLI Mode Branching:** `--cli-mode single` uses `cli_single.py`, while `--cli-mode multi` uses `cli_multi.py`. **Do not unify the post-init print paths** in `core/init.py`; they must remain branched based on this mode.
-* **Post-Generation Sequence:** The exact order of operations in `core/init.py` must be strictly followed: `uv sync` → `pytest` → `hip-cargo generate-cabs` → `ruff format/check` → `git init/add/commit` → `pre-commit install`.
+* **Post-Generation Sequence:** The exact order of operations in `core/init.py` must be strictly followed: `uv sync` → pin the ruff-pre-commit `rev` to the locked ruff (`_pin_precommit_ruff`, #119) → `pytest` → `hip-cargo generate-cabs` → `ruff format/check` → `git init/add/commit` → `pre-commit install`.

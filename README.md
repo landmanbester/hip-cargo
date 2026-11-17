@@ -458,6 +458,12 @@ remote URI: `s3://bucket/key`, `gs://bucket/key`, `az://container/key`,
 `http(s)://...`, plus any other scheme fsspec supports (`memory://`, `ftp://`,
 etc.).
 
+> **This is a property of the CLI, not of your command.** hip-cargo hands your
+> core function a `UPath`. If the core implementation uses `os.path`, `open()`,
+> `shutil` or a C library such as casacore, the command is still local-only,
+> natively and in the container. Check `core/` before documenting remote-URI
+> support for a command.
+
 ### Installing backends
 
 hip-cargo's core install includes `fsspec` and `universal_pathlib`. Cloud

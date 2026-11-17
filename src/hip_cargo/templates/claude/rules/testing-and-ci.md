@@ -52,6 +52,14 @@ This is non-negotiable — the pre-commit hook and CI both enforce it, and
 generated code is formatted with the same configuration, so divergence breaks
 the round-trip.
 
+**Keep the pre-commit ruff equal to the locked ruff.** The hook runs its own
+ruff, pinned by `rev:` under `astral-sh/ruff-pre-commit` in
+`.pre-commit-config.yaml`; CI and `generate-function` use the ruff in `uv.lock`.
+When ruff moves in `uv.lock` (an upgrade or a Dependabot PR), set the hook's
+`rev` to `v<that version>` in the same change and run
+`pre-commit run --all-files`. `tests/test_precommit.py` fails until you do.
+`hip-cargo init` pins them equal at creation.
+
 ## 4. CI
 
 - **CI matrix is bracketed:** the full test suite runs on the oldest and newest
