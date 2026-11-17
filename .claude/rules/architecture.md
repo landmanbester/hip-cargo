@@ -4,7 +4,7 @@ Read this when editing `src/hip_cargo/**/*.py` files.
 
 ## 1. Code Parsing & Comment Preservation (LibCST)
 * **Strict Requirement:** The project uses LibCST (Concrete Syntax Tree) for parsing Python code to preserve formatting, whitespace, and inline comments. **Do not use `eval()` or standard AST for parsing code.**
-* **Core Functions:** Rely on `parse_decorator_libcst()`, `extract_input_libcst()`, `parse_annotated_libcst()`, and `get_cst_value()` for AST operations.
+* **Core Functions:** Rely on `parse_decorator_libcst()`, `extract_param_spec()` + `param_spec_to_cab_input()`, `parse_annotated_libcst()`, and `get_cst_value()` for AST operations.
 * **Comment Handling:** Inline comments are detected via the regex pattern `r'\s{2,}#'` (PEP 8 standard) and must be preserved through the full CLI → YAML → CLI roundtrip.
 * **Multi-line Info Fields:** Multi-line info fields format each sentence on a new line, with the comment placed on the last line. You must use `format_info_fields()` to ensure proper YAML formatting with comment preservation.
 
@@ -46,7 +46,7 @@ Read this when editing `src/hip_cargo/**/*.py` files.
 
 ## 5. Shared IR and `generate-schemas`
 * **One CST walk, two consumers.** `hip_cargo.utils.spec` defines frozen dataclasses (`ParamSpec`, `CommandSpec`, `ModuleSpec`) that capture the *neutral* facts of a parsed CLI module. `parse_module(path) -> ModuleSpec` (in `utils/introspector.py`) is the single entry point both `generate-cabs` and `generate-schemas` go through. The IR carries no cab- or schema-specific shaping; that lives in adaptor functions next to each generator.
-* **Cab-shaping adaptor.** `param_spec_to_cab_input(spec) -> (name, dict)` in `utils/introspector.py` applies cab semantics (dtype inference vs explicit override, Literal → choices, policies, info+inline-comment merge, `metadata.rich_help_panel`, the final `stimela_metadata` merge). `extract_input_libcst` is now a thin compose of `extract_param_spec` + `param_spec_to_cab_input`, retained for backward compat.
+* **Cab-shaping adaptor.** `param_spec_to_cab_input(spec) -> (name, dict)` in `utils/introspector.py` applies cab semantics (dtype inference vs explicit override, Literal → choices, policies, info+inline-comment merge, `metadata.rich_help_panel`, the final `stimela_metadata` merge).
 * **Tunable parameters live under `metadata`.** Stimela has a finite set of allowed top-level fields on a parameter definition — we cannot invent new ones. `tunable: true` rides inside the `metadata` dict (the same dict that carries `rich_help_panel`). In Python source: `StimelaMeta(metadata={"tunable": True})`. In cab YAML: `metadata: {tunable: true}`. The forward path merges `StimelaMeta.metadata` into `input_def["metadata"]` (it does not replace it). The reverse path (`generate_parameter_signature` in `utils/cab_to_function.py`) extracts `rich_help_panel` into `typer.Option(rich_help_panel=...)` and routes the rest of `metadata` back into `StimelaMeta(metadata=...)`.
 * **Tunable type whitelist.** `core/generate_schemas.py::_to_pydantic_type` accepts only `int`, `float`, `str`, `bool`, `Literal[...]`, `ListInt`/`ListFloat`/`ListStr`, `list[int|float|str|bool]`, optionally `| None`. Path types (`File`/`Directory`/`MS`/`URI`) and any tunable with a typer `callback=` raise `TunableTypeError`. Non-tunable parameters of any type are ignored.
 * **Schema generation is idempotent.** `_render_schema_module` returns deterministic output; the writer reads the existing file and skips the write if the formatted source is byte-identical (preserves mtime).

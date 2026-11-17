@@ -1,10 +1,10 @@
 """Shared test fixtures and configuration."""
 
 from pathlib import Path
+from typing import Annotated
 
 import pytest
 import typer
-from typing_extensions import Annotated
 
 from hip_cargo import stimela_cab, stimela_output
 

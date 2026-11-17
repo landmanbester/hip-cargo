@@ -25,7 +25,7 @@ def temp_module_file():
 
 from pathlib import Path
 import typer
-from typing_extensions import Annotated
+from typing import Annotated
 from hip_cargo import stimela_cab, stimela_output
 
 

@@ -27,7 +27,7 @@ against.
 ## Core Dependencies
 
 * Minimize external dependencies.
-* Current allowed dependencies: `typer`, `pyyaml`, `libcst`, `ruff`, `typing-extensions`.
+* Current allowed dependencies: `typer`, `pyyaml`, `libcst`, `ruff`, `fsspec`, `universal-pathlib`.
 * **Note on Ruff:** `ruff` is a core dependency (not just dev) because `generate-function` runs `ruff format` and `ruff check --fix` on generated code.
 
 ## Container Image Tag

@@ -1291,7 +1291,6 @@ dependencies = [
     { name = "pyyaml" },
     { name = "ruff" },
     { name = "typer" },
-    { name = "typing-extensions" },
     { name = "universal-pathlib" },
 ]
 
@@ -1334,7 +1333,6 @@ requires-dist = [
     { name = "ruff", specifier = ">=0.13.2" },
     { name = "s3fs", marker = "extra == 's3'", specifier = ">=2024.10.0" },
     { name = "typer", specifier = ">=0.12.0" },
-    { name = "typing-extensions", specifier = ">=4.15.0" },
     { name = "universal-pathlib", specifier = ">=0.2.5" },
 ]
 provides-extras = ["s3", "gcs", "azure", "all"]

@@ -141,27 +141,7 @@ def init(
         f'"""{description}"""\n\n__version__ = "{initial_version}"\n\n__all__ = ["__version__"]\n',
     )
     _write_file(src_pkg / "core" / "__init__.py", f'"""Core implementations for {project_name}."""\n')
-    _write_file(
-        src_pkg / "cabs" / "__init__.py",
-        '"""Cab definitions for generated Stimela cabs."""\n\n'
-        "from pathlib import Path\n\n"
-        "CAB_DIR = Path(__file__).parent\n"
-        'AVAILABLE_CABS = [p.stem for p in CAB_DIR.glob("*.yml")]\n\n\n'
-        "def get_cab_path(name: str) -> Path:\n"
-        '    """Get path to a cab definition.\n\n'
-        "    Args:\n"
-        "        name: Name of the cab (without .yml extension)\n\n"
-        "    Returns:\n"
-        "        Path to the cab YAML file\n\n"
-        "    Raises:\n"
-        "        FileNotFoundError: If the cab doesn't exist\n"
-        '    """\n'
-        '    cab_path = CAB_DIR / f"{name}.yml"\n'
-        "    if not cab_path.exists():\n"
-        '        raise FileNotFoundError(f"Cab not found: {name}")\n'
-        "    return cab_path\n\n\n"
-        '__all__ = ["CAB_DIR", "AVAILABLE_CABS", "get_cab_path"]\n',
-    )
+    _write_file(src_pkg / "cabs" / "__init__.py", '"""Generated Stimela cab definitions."""\n')
     _write_file(
         src_pkg / "_container_image.py",
         (

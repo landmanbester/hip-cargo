@@ -13,7 +13,7 @@ from hip_cargo.utils.cab_to_function import (
     generate_function_body,
     generate_parameter_signature,
 )
-from hip_cargo.utils.introspector import extract_input_libcst
+from hip_cargo.utils.introspector import extract_param_spec, param_spec_to_cab_input
 from hip_cargo.utils.types import (
     parse_list_float,
     parse_list_int,
@@ -79,7 +79,7 @@ def foo(
     cst_func = cst_tree.body[-1]
     cst_param = cst_func.params.params[0]
 
-    param_name, input_def = extract_input_libcst(cst_param)
+    param_name, input_def = param_spec_to_cab_input(extract_param_spec(cst_param))
 
     assert param_name == "indices"
     assert input_def["dtype"] == "List[int]"
@@ -104,7 +104,7 @@ def foo(
     cst_func = cst_tree.body[-1]
     cst_param = cst_func.params.params[0]
 
-    param_name, input_def = extract_input_libcst(cst_param)
+    param_name, input_def = param_spec_to_cab_input(extract_param_spec(cst_param))
 
     assert param_name == "weights"
     assert input_def["dtype"] == "List[float]"
@@ -129,7 +129,7 @@ def foo(
     cst_func = cst_tree.body[-1]
     cst_param = cst_func.params.params[0]
 
-    param_name, input_def = extract_input_libcst(cst_param)
+    param_name, input_def = param_spec_to_cab_input(extract_param_spec(cst_param))
 
     assert param_name == "names"
     assert input_def["dtype"] == "List[str]"
@@ -362,7 +362,7 @@ def foo(
     cst_tree = cst.parse_module(code)
     cst_param = cst_tree.body[-1].params.params[0]
 
-    _, input_def = extract_input_libcst(cst_param)
+    _, input_def = param_spec_to_cab_input(extract_param_spec(cst_param))
 
     assert input_def["dtype"] == "List[str]"
     assert input_def["default"] == ["a", "b", "c"]
@@ -386,7 +386,7 @@ def foo(
     cst_tree = cst.parse_module(code)
     cst_param = cst_tree.body[-1].params.params[0]
 
-    _, input_def = extract_input_libcst(cst_param)
+    _, input_def = param_spec_to_cab_input(extract_param_spec(cst_param))
 
     assert input_def["dtype"] == "List[int]"
     assert input_def["default"] == [0, 1, 2]
@@ -410,7 +410,7 @@ def foo(
     cst_tree = cst.parse_module(code)
     cst_param = cst_tree.body[-1].params.params[0]
 
-    _, input_def = extract_input_libcst(cst_param)
+    _, input_def = param_spec_to_cab_input(extract_param_spec(cst_param))
 
     assert input_def["dtype"] == "List[float]"
     assert input_def["default"] == [1.0, 2.0]
