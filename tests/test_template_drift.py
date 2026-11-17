@@ -99,3 +99,17 @@ def test_precommit_ruff_matches_locked_ruff():
         "https://github.com/astral-sh/ruff-pre-commit"
     ]
     assert rev == f"v{locked}"
+
+
+def test_publish_container_matches_template():
+    """hip-cargo's own publish-container workflow is the template with the default branch filled in."""
+    template = (TEMPLATES / "workflows" / "publish-container.yml").read_text()
+    own = (ROOT / ".github" / "workflows" / "publish-container.yml").read_text()
+    assert template.replace("<DEFAULT_BRANCH>", "main") == own
+
+
+def test_publish_container_never_runs_on_pull_requests():
+    """Feature-branch images are built on manual dispatch only, never on PR pushes."""
+    triggers = yaml.safe_load((TEMPLATES / "workflows" / "publish-container.yml").read_text())[True]
+    assert "pull_request" not in triggers
+    assert "workflow_dispatch" in triggers

@@ -21,6 +21,10 @@ disclosure. Read the relevant file before editing the matching files.*
 | `.claude/rules/python-standards.md` | any `**/*.py` — type hints, lazy imports, Typer syntax, hip-cargo types. |
 | `.claude/rules/testing-and-ci.md` | `tests/**` or `.github/workflows/**` — round-trip tests, dev workflow, commits. |
 
+**Never change the container image tag** (`CONTAINER_IMAGE` in
+`src/<PACKAGE_NAME>/_container_image.py`, or the `image:` line in `cabs/*.yml`).
+The maintainer sets it by hand — see `.claude/rules/architecture.md`.
+
 ---
 
 ## Where to Go Deeper

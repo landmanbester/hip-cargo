@@ -28,7 +28,7 @@ Read this when editing `src/<PACKAGE_NAME>/**` files.
 └── .github/workflows/
     ├── ci.yml
     ├── publish.yml             # PyPI on tag push
-    ├── publish-container.yml   # ghcr.io on tag + every push to <DEFAULT_BRANCH>
+    ├── publish-container.yml   # ghcr.io on tag + push to <DEFAULT_BRANCH> + manual dispatch
     └── update-cabs.yml         # Regenerates cabs on merge to <DEFAULT_BRANCH>
 ```
 
@@ -121,15 +121,20 @@ The image tag is owned by `src/<PACKAGE_NAME>/_container_image.py`:
 CONTAINER_IMAGE = "ghcr.io/<GITHUB_USER>/<PROJECT_NAME>:latest"
 ```
 
-Three things keep this in sync — do not bypass them:
+**Agents never change the image tag.** Do not edit `CONTAINER_IMAGE` or the
+`image:` line in `cabs/*.yml`; whatever value is on the branch is the
+maintainer's choice. The tag is set by:
 
-1. **Feature branches:** Edit `_container_image.py` by hand to point at your
-   branch tag (e.g. `:my-feature`). The `publish-container.yml` workflow builds
-   and pushes that tag on every push of the PR.
-2. **Merge to `<DEFAULT_BRANCH>`:** The `update-cabs.yml` workflow resets the
-   tag to `latest` and regenerates cabs in a `[skip checks]` commit.
-3. **Releases:** `tbump <version>` rewrites the tag to the semantic version and
-   regenerates cabs as a `before_commit` hook.
+1. **Merge to `<DEFAULT_BRANCH>`:** The `update-cabs.yml` workflow resets the
+   tag to `latest` and regenerates cabs in a `[skip checks]` commit;
+   `publish-container.yml` builds `:latest`.
+2. **Releases:** `tbump <version>` rewrites the tag to the semantic version and
+   regenerates cabs as a `before_commit` hook; the `v*` tag builds that image.
+3. **Feature branches (maintainer only, optional):** PR pushes build nothing.
+   To test a branch image, the maintainer sets the tag by hand to the branch
+   name with `/` → `-` (`feat/x` → `:feat-x`) and runs
+   `gh workflow run publish-container.yml --ref <branch>`. A branch tag merged
+   into `<DEFAULT_BRANCH>` would conflict with the `update-cabs` reset.
 
 ### GPU passthrough & extra run-args
 

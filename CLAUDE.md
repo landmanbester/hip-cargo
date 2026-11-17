@@ -30,6 +30,12 @@ against.
 * Current allowed dependencies: `typer`, `pyyaml`, `libcst`, `ruff`, `typing-extensions`.
 * **Note on Ruff:** `ruff` is a core dependency (not just dev) because `generate-function` runs `ruff format` and `ruff check --fix` on generated code.
 
+## Container Image Tag
+
+**Never change the container image tag** (`CONTAINER_IMAGE` in
+`src/hip_cargo/_container_image.py`, or the `image:` line in `cabs/*.yml`).
+The maintainer sets it by hand — see `.claude/rules/architecture.md` §4.
+
 ## Mandatory Development Workflow
 
 **Always run linting after adding or modifying any code:**

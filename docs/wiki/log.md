@@ -2,11 +2,20 @@
 type: log
 title: Wiki changelog
 description: Chronological record of wiki updates.
-timestamp: 2026-09-18
-last_verified_commit: 7e1a122
+timestamp: 2026-11-17
+last_verified_commit: a470098
 ---
 
 # Wiki changelog
+
+## 2026-11-17 — `container-execution.md`: maintainer-owned image tag (verified at `a470098`)
+
+- `publish-container.yml` (and its `hip-cargo init` template) no longer builds
+  on PR pushes: images come from pushes to main, `v*` tags, and manual
+  `workflow_dispatch` runs on feature branches (`feat/x` → `:feat-x`).
+- The tag lifecycle now states that agents never change the tag; feature-branch
+  tags are an optional, maintainer-only step. Matches pfb-model-spec,
+  pfb-imaging and meerkat-beams.
 
 ## 2026-09-23 — `cab-yaml-emission.md` records what the guard misses (verified at `960f3e1`)
 
