@@ -8,6 +8,13 @@ last_verified_commit: a470098
 
 # Wiki changelog
 
+## 2026-11-17 — `container-execution.md`: the load-bearing generated import (verified at `fbfc9c7`)
+
+- Recorded why `generate_function` emits a `get_container_image` import that
+  ruff then removes: it decides the wrapping of the `from hip_cargo import`
+  line. #121 removed it as dead code, which broke the round-trip of six
+  downstream CLIs (pfb-imaging x5, meerkat-beams `bds_to_xradio`); restored.
+
 ## 2026-11-17 — `container-execution.md`: maintainer-owned image tag (verified at `a470098`)
 
 - `publish-container.yml` (and its `hip-cargo init` template) no longer builds
