@@ -28,7 +28,7 @@ Read this when editing `src/<PACKAGE_NAME>/**` files.
 └── .github/workflows/
     ├── ci.yml
     ├── publish.yml             # PyPI on tag push
-    ├── publish-container.yml   # ghcr.io on tag + push to <DEFAULT_BRANCH> + manual dispatch
+    ├── publish-container.yml   # multi-arch ghcr.io image on tag + push to <DEFAULT_BRANCH> + dispatch
     └── update-cabs.yml         # Regenerates cabs on merge to <DEFAULT_BRANCH>
 ```
 

@@ -4,7 +4,7 @@ title: Container execution and image lifecycle
 description: The _container_image.py contract, container fallback runner, GPU passthrough, per-backend run-args, and release tag mechanics.
 tags: [containers, runner, gpu, releases]
 timestamp: 2026-11-17
-last_verified_commit: a470098
+last_verified_commit: 780e826
 ---
 
 # Container execution and image lifecycle
@@ -42,6 +42,14 @@ maintainer do.
    `gh workflow run publish-container.yml --ref feat/x`; the workflow's
    `type=ref,event=branch` tag produces the same sanitised name. A branch tag
    merged into main would conflict with the `update-cabs` reset.
+
+Images are multi-arch (amd64 + arm64). Each architecture builds on its own
+native runner (`ubuntu-latest`, `ubuntu-24.04-arm`) and is pushed by digest; a
+`merge` job applies the tags to one manifest and fails if any built
+architecture is missing from it. Native runners rather than QEMU because
+emulated arm64 builds are roughly 10x slower, which matters as soon as a
+dependency compiles from source. Dropping the arm64 matrix entry gives an
+amd64-only image with no other change.
 
 The `hip-cargo init` templates (`templates/workflows/publish-container.yml`,
 `templates/claude/rules/architecture.md`, `templates/CLAUDE.md`,

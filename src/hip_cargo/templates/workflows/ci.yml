@@ -61,8 +61,10 @@ jobs:
         run: uv run ruff check .
 
   test:
-    name: Tests
-    runs-on: ubuntu-latest
+    # Job names are what branch protection requires: Tests (3.10), Tests (3.14),
+    # Tests (3.14, arm64).
+    name: Tests (${{ matrix.python-version }}${{ matrix.arch-label }})
+    runs-on: ${{ matrix.os }}
     env:
       SKIP_CHECKS: 'false'
       # Without this, uv obeys .python-version (3.11) and the matrix is cosmetic.
@@ -70,7 +72,17 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.10", "3.11", "3.12", "3.13"]
+        # Oldest and newest supported Python only: code that passes both rarely
+        # breaks in between. The oldest must match requires-python, because the
+        # lightweight install (no `full` extra) has to work there.
+        python-version: ["3.10", "3.14"]
+        os: [ubuntu-latest]
+        include:
+          # One arm64 job, matching the arm64 image publish-container builds. It
+          # catches a dependency without an aarch64 wheel before merge.
+          - os: ubuntu-24.04-arm
+            python-version: "3.14"
+            arch-label: ", arm64"
 
     steps:
       - name: Check for skip checks
@@ -103,10 +115,10 @@ jobs:
         uses: actions/cache@v6
         with:
           path: ~/.cache/uv
-          key: ${{ runner.os }}-uv-py${{ matrix.python-version }}-${{ hashFiles('uv.lock') }}
+          key: ${{ runner.os }}-${{ runner.arch }}-uv-py${{ matrix.python-version }}-${{ hashFiles('uv.lock') }}
           restore-keys: |
-            ${{ runner.os }}-uv-py${{ matrix.python-version }}-
-            ${{ runner.os }}-uv-
+            ${{ runner.os }}-${{ runner.arch }}-uv-py${{ matrix.python-version }}-
+            ${{ runner.os }}-${{ runner.arch }}-uv-
 
       - name: Install dependencies
         if: env.SKIP_CHECKS != 'true'

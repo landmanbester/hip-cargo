@@ -33,6 +33,18 @@ Always run linting after adding or modifying any code:
 This is mandatory. Do not consider a feature complete until linting passes cleanly. If `ruff check` reports errors that `--fix` cannot auto-correct, fix them manually before proceeding.
 
 ## 4. CI Workflow and `[skip checks]`
+* **CI matrix is bracketed:** tests run on the oldest and newest supported
+  Python on x86 (`Tests (3.10)`, `Tests (3.14)`) plus one arm64 job at the
+  newest (`Tests (3.14, arm64)`). The oldest must equal the `requires-python`
+  floor. hip-cargo stays on 3.10 because downstream packages must install in
+  lightweight mode (no `full` extra) on 3.10 and run commands in their newer
+  container; raise the floor only for a real blocker. Changing the matrix renames required
+  checks, so the branch ruleset must be updated with it.
+* **Container images are multi-arch:** `publish-container.yml` builds amd64 and
+  arm64 on native runners, pushes each by digest, and a `merge` job publishes
+  one manifest under the real tags. Drop the arm64 build entry (and the arm64
+  test job) for an amd64-only project.
+
 The CI pipeline relies on a custom `[skip checks]` tag, which operates differently from GitHub's native `[skip ci]`.
 * The `update-cabs` workflow commits with `[skip checks]` in the message after the GitHub App regenerates cab definitions on merge to main.
 * This custom tag allows the workflow to run but skips the heavy steps. This ensures required status checks always report a success status, satisfying branch protection rules.

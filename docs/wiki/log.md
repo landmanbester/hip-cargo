@@ -20,6 +20,9 @@ last_verified_commit: a470098
   `TestGetContainerImage`) was deleted; point at `test_config.py`.
 - `publish-container.yml` gained a per-ref `concurrency` group so the
   `update-cabs` bot push cancels the superseded merge build.
+- Images are now multi-arch (native amd64 + arm64 builds, merged by digest),
+  matching pfb-imaging; CI tests the oldest and newest Python plus one arm64
+  job.
 
 ## 2026-09-23 — `cab-yaml-emission.md` records what the guard misses (verified at `960f3e1`)
 
