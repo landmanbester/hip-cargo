@@ -231,3 +231,30 @@ def test_non_literal_default_is_still_allowed_for_non_numeric_dtypes(tmp_path: P
     """The source-text fallback stays for other dtypes, e.g. a str constant."""
     _, inputs = _generate(tmp_path, '    x: Annotated[str, typer.Option(help="X.")] = DEFAULT_NAME,\n')
     assert inputs["x"]["default"] == "DEFAULT_NAME"
+
+
+def test_non_literal_numeric_default_in_typer_option_is_rejected(tmp_path: Path) -> None:
+    """``typer.Option(default=...)`` is checked like ``= default`` (#116 review)."""
+    body = '    x: Annotated[float, typer.Option(default=float("inf"), help="X.")],\n'
+    with pytest.raises(ValueError, match="not a literal"):
+        _generate(tmp_path, body)
+
+
+@pytest.mark.parametrize(
+    "help_source,expected",
+    [
+        (r"Line one.\nLine two.", "Line one.\nLine two."),
+        (r"Options: a.\n\nThen b.", "Options: a.\n\nThen b."),
+    ],
+)
+def test_help_with_embedded_newlines_loads_back(tmp_path: Path, help_source: str, expected: str) -> None:
+    """safe_dump writes these as quoted scalars with blank continuation lines."""
+    text, inputs = _generate(
+        tmp_path,
+        f'    x: Annotated[int, typer.Option(help="{help_source}")] = 1,\n'
+        '    y: Annotated[int, typer.Option(help="After.")] = 2,\n',
+    )
+
+    assert inputs["x"]["info"] == expected
+    assert inputs["y"] == {"info": "After.", "dtype": "int", "default": 2}
+    assert not any(line != line.rstrip() for line in text.splitlines()), "no trailing whitespace"

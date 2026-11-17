@@ -125,6 +125,33 @@ def _callee_name(call: cst.Call) -> str:
     return ""
 
 
+def _find_typer_call(metadata_nodes: list[cst.CSTNode]) -> cst.Call | None:
+    """Return the ``typer.Option``/``typer.Argument`` call among Annotated metadata, if any."""
+    for node in metadata_nodes:
+        if isinstance(node, cst.Call):
+            func = node.func
+            # typer.Option(...) / typer.Argument(...)
+            if isinstance(func, cst.Attribute):
+                if isinstance(func.value, cst.Name) and func.value.value == "typer":
+                    return node
+            # Direct call like Option(...) - assume it's from typer
+            elif isinstance(func, cst.Name):
+                return node
+    return None
+
+
+def _typer_default_node(metadata_nodes: list[cst.CSTNode]) -> cst.BaseExpression | None:
+    """The expression a ``typer.Option`` uses as its default: ``default=`` or the first positional."""
+    typer_call = _find_typer_call(metadata_nodes)
+    if typer_call is None:
+        return None
+    for arg in typer_call.args:
+        if arg.keyword is not None and arg.keyword.value == "default":
+            return arg.value
+    positional = [arg for arg in typer_call.args if arg.keyword is None]
+    return positional[0].value if positional else None
+
+
 def extract_typer_metadata_libcst(metadata_nodes: list[cst.CSTNode], param_name: str | None = None) -> dict[str, Any]:
     """
     Extract metadata from a typer.Option(...) call.
@@ -145,22 +172,7 @@ def extract_typer_metadata_libcst(metadata_nodes: list[cst.CSTNode], param_name:
         ValueError: If no typer call is found, if it is a ``typer.Argument``, or if
             it carries param_decls.
     """
-    # Find the typer.Option or typer.Argument call
-    typer_call = None
-    for node in metadata_nodes:
-        if isinstance(node, cst.Call):
-            # Check if it's a typer call (typer.Option, typer.Argument, etc.)
-            func = node.func
-            if isinstance(func, cst.Attribute):
-                # typer.Option or typer.Argument
-                if isinstance(func.value, cst.Name) and func.value.value == "typer":
-                    typer_call = node
-                    break
-            elif isinstance(func, cst.Name):
-                # Direct call like Option(...) - assume it's from typer
-                typer_call = node
-                break
-
+    typer_call = _find_typer_call(metadata_nodes)
     if typer_call is None:
         raise ValueError("No typer.Option() or typer.Argument() call found in metadata")
 
@@ -272,20 +284,24 @@ def extract_param_spec(param: cst.Param) -> ParamSpec:
         dtype_str = _cst_node_to_code(dtype_node)
         typer_metadata = extract_typer_metadata_libcst(metadata_nodes, param_name)
         stimela_metadata = extract_stimela_metadata_libcst(metadata_nodes)
+        typer_default_node = _typer_default_node(metadata_nodes)
     else:
         dtype_str = "str"
         typer_metadata = {}
         stimela_metadata = {}
+        typer_default_node = None
+
+    default_node = param.default if param.default is not None else typer_default_node
+    if default_node is not None and _is_numeric_dtype(dtype_str) and not _is_literal(default_node):
+        raise ValueError(
+            f"Parameter '{param_name}': default `{_cst_node_to_code(default_node)}` is not a literal. "
+            f"The cab would carry that source text as the default of a `{dtype_str}` parameter, "
+            f"which Stimela cannot use. Write the value itself (e.g. `= -1`)."
+        )
 
     inline_comment = _extract_inline_comment_from_help_string(param)
 
     if param.default is not None:
-        if _is_numeric_dtype(dtype_str) and not _is_literal(param.default):
-            raise ValueError(
-                f"Parameter '{param_name}': default `{_cst_node_to_code(param.default)}` is not a literal. "
-                f"The cab would carry that source text as the default of a `{dtype_str}` parameter, "
-                f"which Stimela cannot use. Write the value itself (e.g. `= -1`)."
-            )
         default = get_cst_value(param.default)
     elif "default" in typer_metadata:
         default = typer_metadata["default"]
@@ -763,9 +779,12 @@ def _info_candidates(indent: str, content: str, comment: str | None) -> list[lis
 
 
 def _single_line(indent: str, field_name: str, content: str, comment: str | None) -> list[str]:
-    """``field: <scalar>`` with the scalar quoted however YAML needs it."""
-    line = yaml.safe_dump({field_name: content}, allow_unicode=True, width=_YAML_WIDTH).rstrip("\n")
-    return [f"{indent}{line}  {comment}" if comment else f"{indent}{line}"]
+    """``field: <scalar>`` quoted however YAML needs it (several lines if the value has newlines)."""
+    dumped = yaml.safe_dump({field_name: content}, allow_unicode=True, width=_YAML_WIDTH).rstrip("\n").split("\n")
+    rendered = [f"{indent}{line}" if line else "" for line in dumped]
+    if comment:
+        rendered[-1] += f"  {comment}"
+    return rendered
 
 
 _YAML_WIDTH = 10000
@@ -806,11 +825,17 @@ def format_info_fields(yaml_str: str) -> str:
             continue
 
         indent, field_name = match.group(1), match.group(2)
-        # Collect continuation lines (indented more than 'field:')
+        # The scalar continues on deeper-indented lines, and on blank lines inside
+        # a quoted scalar (safe_dump writes an embedded newline as a blank line).
+        # A sibling key sits at `indent` exactly, so it ends the block.
         block = [lines[i]]
-        while i + 1 < len(lines) and lines[i + 1].startswith(indent + "  ") and not re.match(r"^\s*\w+:", lines[i + 1]):
+        while i + 1 < len(lines) and (lines[i + 1].startswith(indent + " ") or not lines[i + 1].strip()):
             i += 1
             block.append(lines[i])
+        # Trailing blank lines belong to whatever follows (e.g. the final newline).
+        while len(block) > 1 and not block[-1].strip():
+            block.pop()
+            i -= 1
         i += 1
 
         value = yaml.safe_load("\n".join(line[len(indent) :] for line in block))[field_name]
