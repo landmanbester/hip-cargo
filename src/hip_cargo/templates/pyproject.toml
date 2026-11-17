@@ -28,6 +28,8 @@ dependencies = [
 # Full install:                    pip install <PROJECT_NAME>[full]  (Python 3.11+)
 #     Adds the heavy runtime deps that core/ implementations need to execute
 #     natively. Add new deps to the "full" extra below as you grow core/.
+#     Mark any dep without a Python 3.10 release so the 3.10 lock still
+#     resolves, e.g. "numpy>=2.3; python_version >= '3.11'".
 [project.optional-dependencies]
 full = []
 

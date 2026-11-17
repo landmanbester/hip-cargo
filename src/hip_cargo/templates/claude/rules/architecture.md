@@ -79,6 +79,11 @@ native execution and the full test suite) needs 3.11+. CI pins this with the
   lightweight install remains lightweight.
 - Import it **only from inside `core/`**. Never import it from `cli/` at module
   scope.
+- If it has no release for Python 3.10, mark it
+  `"<dep>>=X.Y; python_version >= '3.11'"`. uv resolves one lock for every
+  Python `requires-python` allows (`>=3.10`), so an unmarked 3.11-only
+  dependency fails `uv lock` with "only supports >=3.11". Do **not** raise
+  `requires-python` instead: that would drop the lightweight install on 3.10.
 
 ## 3. Container Fallback & Backends
 
