@@ -404,7 +404,9 @@ def test_detect_runtime_error_mentions_extras_for_equals_form(monkeypatch):
     assert "hip-cargo[gcs]" in str(exc.value)
 
 
-def test_preflight_raises_import_error_for_a_missing_backend_without_must_exist(monkeypatch):
+def test_preflight_raises_import_error_for_a_missing_backend_without_must_exist(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """A remote path with no fsspec backend installed must fail in the pre-flight.
 
     The generated wrapper only guards the pre-flight with ``except ImportError``

@@ -521,6 +521,11 @@ def generate_parameter_signature(
     return "\n".join(lines_out)
 
 
+def _local_name(name: str, func_name: str) -> str:
+    """Return ``name``, suffixed with ``_`` if it would shadow the wrapper function."""
+    return f"{name}_" if name == func_name else name
+
+
 def generate_function_body(cab_def: dict[str, Any], inputs: dict[str, Any], outputs: dict[str, Any]) -> list[str]:
     """
     Generate the function body: build the parameters once, then dispatch.
@@ -553,14 +558,18 @@ def generate_function_body(cab_def: dict[str, Any], inputs: dict[str, Any], outp
     import_path = ".".join(command_parts[:-1])
     core_func_name = command_parts[-1]
 
+    # The body refers to the wrapper by name, so its own locals must not reuse it.
+    params_var = _local_name("params", func_name)
+    image_var = _local_name("image", func_name)
+
     param_names = [name.replace("-", "_") for name in [*inputs, *outputs]]
     lines = []
     if param_names:
-        lines.append("    params = dict(")
+        lines.append(f"    {params_var} = dict(")
         lines.extend(f"        {name}={name}," for name in param_names)
         lines.append("    )")
     else:
-        lines.append("    params = {}")
+        lines.append(f"    {params_var} = {{}}")
     lines.append("")
 
     # The pre-flight calls .exists() on remote UPaths, which raises ImportError
@@ -571,12 +580,12 @@ def generate_function_body(cab_def: dict[str, Any], inputs: dict[str, Any], outp
             f"{indent}from {import_path} import {core_func_name} as {core_func_name}_core  # noqa: E402",
             "",
             f"{indent}# Pre-flight must_exist for remote URIs before dispatching.",
-            f"{indent}preflight_remote_must_exist({func_name}, params)",
+            f"{indent}preflight_remote_must_exist({func_name}, {params_var})",
         ]
 
     if not has_image:
         lines.extend(dispatch_imports("    "))
-        lines.append(f"    {core_func_name}_core(**params)")
+        lines.append(f"    {core_func_name}_core(**{params_var})")
         return lines
 
     # Derive distribution name from command: "pfb_imaging.core.grid.grid" → "pfb-imaging"
@@ -591,21 +600,21 @@ def generate_function_body(cab_def: dict[str, Any], inputs: dict[str, Any], outp
     lines.append("            if backend == 'native':")
     lines.append("                raise")
     lines.append("        else:")
-    lines.append(f"            {core_func_name}_core(**params)")
+    lines.append(f"            {core_func_name}_core(**{params_var})")
     lines.append("            return")
     lines.append("")
     lines.append("    # Resolve container image from installed package metadata")
     lines.append("    from hip_cargo.utils.config import get_container_image  # noqa: E402")
     lines.append("    from hip_cargo.utils.runner import run_in_container  # noqa: E402")
     lines.append("")
-    lines.append(f'    image = get_container_image("{dist_name}")')
-    lines.append("    if image is None:")
+    lines.append(f'    {image_var} = get_container_image("{dist_name}")')
+    lines.append(f"    if {image_var} is None:")
     lines.append(f'        raise RuntimeError("No Container URL in {dist_name} metadata.")')
     lines.append("")
     lines.append("    run_in_container(")
     lines.append(f"        {func_name},")
-    lines.append("        params,")
-    lines.append("        image=image,")
+    lines.append(f"        {params_var},")
+    lines.append(f"        image={image_var},")
     lines.append("        backend=backend,")
     lines.append("        always_pull_images=always_pull_images,")
     lines.append("    )")

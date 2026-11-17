@@ -154,7 +154,7 @@ class TestGenerateFunctionBodyWithImage:
         assert "output_dir=output_dir," in code
 
     @pytest.mark.unit
-    def test_core_call_is_outside_the_import_guard(self):
+    def test_core_call_is_outside_the_import_guard(self) -> None:
         """#120: only the imports and pre-flight are guarded; the core call runs in `else:`."""
         cab_def = {
             "command": "pkg.core.run.run",
@@ -167,7 +167,7 @@ class TestGenerateFunctionBodyWithImage:
         assert stripped.index("except ImportError:") < stripped.index("else:") < stripped.index("run_core(**params)")
 
     @pytest.mark.unit
-    def test_params_dict_is_built_once(self):
+    def test_params_dict_is_built_once(self) -> None:
         """#118: one dict feeds the pre-flight, the core call and the container fallback."""
         cab_def = {
             "command": "pkg.core.run.run",
@@ -182,7 +182,7 @@ class TestGenerateFunctionBodyWithImage:
         assert "preflight_remote_must_exist(run, params)" in code
 
     @pytest.mark.unit
-    def test_no_parameters_gives_an_empty_params_dict(self):
+    def test_no_parameters_gives_an_empty_params_dict(self) -> None:
         cab_def = {"command": "pkg.core.run.run", "_name": "run"}
         assert "    params = {}" in generate_function_body(cab_def, {}, {})
 

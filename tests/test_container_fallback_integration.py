@@ -5,7 +5,9 @@ compiles and the fallback pattern works correctly when dependencies are missing.
 """
 
 import tempfile
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -343,16 +345,17 @@ class TestGenerateCabsImageResolution:
             assert cab_def["image"] == "custom.registry.io/team/pkg:v2.0"
 
 
-def _load_generated(cab_file: Path, tmp_path: Path):
+def _load_generated(cab_file: Path, tmp_path: Path) -> Callable[..., None]:
     """Generate the CLI module for ``cab_file`` and return its function."""
     output_file = tmp_path / f"{cab_file.stem}.py"
     generate_function(cab_file, output_file=output_file)
-    namespace: dict = {}
+    namespace: dict[str, Any] = {}
     exec(compile(output_file.read_text(), str(output_file), "exec"), namespace)
     return namespace[cab_file.stem]
 
 
-def _core_module(core: MagicMock, name: str = "process_data") -> dict:
+def _core_module(core: MagicMock, name: str = "process_data") -> dict[str, MagicMock]:
+    """sys.modules entries that make ``my_pkg.core.<name>.<name>`` resolve to ``core``."""
     module = MagicMock()
     setattr(module, name, core)
     return {"my_pkg": MagicMock(), "my_pkg.core": MagicMock(), f"my_pkg.core.{name}": module}
@@ -444,3 +447,38 @@ class TestFallbackScope:
         params = mock_run.call_args.args[1]
         assert params == {"image": "user-value"}
         assert mock_run.call_args.kwargs["image"] == "ghcr.io/user/my-pkg:latest"
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize("command", ["params", "image"])
+def test_a_command_named_like_a_wrapper_local_still_dispatches(command: str, tmp_path: Path) -> None:
+    """The wrapper refers to itself by name, so its locals must not reuse that name."""
+    cab = {
+        "cabs": {
+            command: {
+                "info": "Command whose name matches a local in the generated body",
+                "command": f"my_pkg.core.{command}.{command}",
+                "image": "ghcr.io/user/my-pkg:latest",
+                "inputs": {"x": {"dtype": "int", "info": "A value"}},
+                "outputs": {},
+            }
+        }
+    }
+    cab_file = tmp_path / f"{command}.yml"
+    cab_file.write_text(yaml.safe_dump(cab, sort_keys=False))
+    func = _load_generated(cab_file, tmp_path)
+
+    core = MagicMock()
+    with patch.dict("sys.modules", _core_module(core, name=command)):
+        func(x=3, backend="auto", always_pull_images=False)
+    core.assert_called_once_with(x=3)
+
+    mock_run = MagicMock()
+    with (
+        patch.dict("sys.modules", {"my_pkg": None}),
+        patch("hip_cargo.utils.config.get_container_image", MagicMock(return_value="img:latest")),
+        patch("hip_cargo.utils.runner.run_in_container", mock_run),
+    ):
+        func(x=3, backend="auto", always_pull_images=False)
+    assert mock_run.call_args.args == (func, {"x": 3})
+    assert mock_run.call_args.kwargs["image"] == "img:latest"
