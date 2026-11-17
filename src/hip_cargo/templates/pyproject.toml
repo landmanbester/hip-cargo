@@ -24,7 +24,8 @@ dependencies = [
 #     and for running commands via container fallback. Generated CLI wrappers
 #     lazy-import core/, so when heavy deps are missing the wrapper drops into
 #     run_in_container() automatically.
-# Full install:                    pip install <PROJECT_NAME>[full]
+#     This is the only install supported on Python 3.10.
+# Full install:                    pip install <PROJECT_NAME>[full]  (Python 3.11+)
 #     Adds the heavy runtime deps that core/ implementations need to execute
 #     natively. Add new deps to the "full" extra below as you grow core/.
 [project.optional-dependencies]

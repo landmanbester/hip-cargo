@@ -115,17 +115,30 @@ def test_publish_container_never_runs_on_pull_requests():
     assert "workflow_dispatch" in triggers
 
 
-@pytest.mark.parametrize(
-    ("workflow", "pyproject"),
-    [
-        (ROOT / ".github" / "workflows" / "ci.yml", ROOT / "pyproject.toml"),
-        (TEMPLATES / "workflows" / "ci.yml", TEMPLATES / "pyproject.toml"),
-    ],
-    ids=["hip-cargo", "template"],
-)
-def test_ci_tests_the_oldest_supported_python(workflow: Path, pyproject: Path):
-    """The CI matrix is bracketed, so its oldest entry must be the requires-python floor."""
-    matrix = yaml.safe_load(workflow.read_text())["jobs"]["test"]["strategy"]["matrix"]
-    oldest = min(matrix["python-version"], key=lambda v: tuple(map(int, v.split("."))))
+def _floor(pyproject: Path) -> str:
     requires = tomllib.loads(pyproject.read_text())["project"]["requires-python"]
-    assert requires.startswith(f">={oldest}"), f"{workflow.name} oldest {oldest} vs requires-python {requires}"
+    assert requires.startswith(">="), requires
+    return requires[2:].split(",")[0].strip()
+
+
+def _version_key(v: str) -> tuple[int, ...]:
+    return tuple(map(int, v.split(".")))
+
+
+def test_ci_tests_the_oldest_supported_python():
+    """hip-cargo has no lightweight mode, so its full test matrix starts at the requires-python floor."""
+    matrix = yaml.safe_load((ROOT / ".github" / "workflows" / "ci.yml").read_text())["jobs"]["test"]["strategy"][
+        "matrix"
+    ]
+    assert min(matrix["python-version"], key=_version_key) == _floor(ROOT / "pyproject.toml")
+
+
+def test_template_ci_runs_lightweight_install_at_the_floor():
+    """Scaffolded packages support only the lightweight install on the floor Python; the full matrix starts above it."""
+    jobs = yaml.safe_load((TEMPLATES / "workflows" / "ci.yml").read_text())["jobs"]
+    floor = _floor(TEMPLATES / "pyproject.toml")
+    setup = [s for s in jobs["lightweight"]["steps"] if s.get("uses", "").startswith("actions/setup-python")]
+    assert [s["with"]["python-version"] for s in setup] == [floor]
+    assert jobs["lightweight"]["name"] == f"Lightweight install ({floor})"
+    full = jobs["test"]["strategy"]["matrix"]["python-version"]
+    assert _version_key(min(full, key=_version_key)) > _version_key(floor)
