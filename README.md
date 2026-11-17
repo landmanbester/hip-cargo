@@ -396,7 +396,7 @@ Both commands consume one shared intermediate representation (`hip_cargo.utils.s
 
 When a hip-cargo package is installed in lightweight mode (without heavy dependencies like NumPy, JAX, or Dask), CLI commands automatically fall back to running inside a container. This means users can run commands without installing the full dependency stack — they just need a container runtime.
 
-The fallback is transparent: if the core module import succeeds, the command runs natively. If it fails with `ImportError`, the same CLI command is re-executed inside the container with `--backend native` to force native execution (avoiding infinite recursion). The container image is resolved from `_container_image.py` in the package source directory.
+The fallback is transparent: if the core module import succeeds, the command runs natively. If that import (or the remote-URI pre-flight, which imports any fsspec backend in use) fails with `ImportError`, the same CLI command is re-executed inside the container with `--backend native` to force native execution (avoiding infinite recursion). The container image is resolved from `_container_image.py` in the package source directory. An `ImportError` raised while the command is running is a real error and propagates; it does not trigger the fallback.
 
 Every generated CLI function gets two additional options when the cab has a container image:
 

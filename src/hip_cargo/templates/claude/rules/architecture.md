@@ -93,22 +93,35 @@ write a new command by hand too):
 
 ```python
 def my_command(...):
+    params = dict(...)  # every parameter, built once
     if backend == "native" or backend == "auto":
         try:
             from hip_cargo.utils.runner import preflight_remote_must_exist
-            preflight_remote_must_exist(my_command, dict(...))
             from <PACKAGE_NAME>.core.my_command import my_command as my_command_core
-            my_command_core(...)
-            return
+            preflight_remote_must_exist(my_command, params)
         except ImportError:
             if backend == "native":
                 raise
+        else:
+            my_command_core(**params)
+            return
     # Heavy deps missing OR backend explicitly chose a container → run in container.
     from hip_cargo.utils.config import get_container_image
     from hip_cargo.utils.runner import run_in_container
     image = get_container_image("<PROJECT_NAME>")
-    run_in_container(my_command, dict(...), image=image, backend=backend, ...)
+    run_in_container(my_command, params, image=image, backend=backend, ...)
 ```
+
+Only the imports and the pre-flight sit inside the `try`. The core call runs in
+`else:`, so an `ImportError` raised *during* a run propagates with its real
+traceback instead of re-running the command in a container. Consequences:
+
+- **Put heavy imports at module scope in `core/<name>.py`.** A missing `[full]`
+  install is only detected when importing `core/` fails. An import deferred into
+  the core function body fails mid-run and is reported, not routed to the
+  container.
+- **Core parameter names must match the CLI's.** The core function is called
+  with `**params`, keyed by the CLI parameter names.
 
 ### How `--backend` flows
 
@@ -172,14 +185,15 @@ paths and remote URIs (`s3://...`, `gs://...`, `az://...`). When the path is
 remote:
 
 - `_resolve_mounts` skips it (nothing to bind-mount).
-- `preflight_remote_must_exist` checks existence via fsspec.
+- `preflight_remote_must_exist` imports the fsspec backend for every remote
+  protocol in use, then checks existence for `must_exist` params.
 - `run_in_container` forwards the matching credentials (`AWS_*`, `~/.aws`,
   `GOOGLE_APPLICATION_CREDENTIALS`, `~/.config/gcloud`, `AZURE_*`, `~/.azure`).
 
 Users who want native remote access install the right extra: `pip install
-hip-cargo[s3]`, `[gcs]`, or `[azure]`. Without it, the wrapper's existing
-`try/except ImportError` routes them into the container, which already has the
-backends.
+hip-cargo[s3]`, `[gcs]`, or `[azure]`. Without it, the pre-flight raises
+`ImportError` before any work starts, and the wrapper's `except ImportError`
+routes them into the container, which already has the backends.
 
 ## 4. Cab Generation is Automatic
 

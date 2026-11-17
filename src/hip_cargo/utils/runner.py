@@ -467,13 +467,27 @@ def _collect_remote_protocols(func: typing.Callable, params: dict[str, typing.An
 
 
 def preflight_remote_must_exist(func: typing.Callable, params: dict[str, typing.Any]) -> None:
-    """For remote UPath params whose metadata sets must_exist=True, verify they exist.
+    """Check remote UPath params before the command does any work.
 
-    Local paths and params without ``must_exist`` are ignored — those contracts
-    are enforced elsewhere (mount logic for local paths; the user's own code
-    otherwise). Raises ``typer.Exit(1)`` on a missing remote URI.
+    First, the fsspec backend of every remote protocol in use is imported, so a
+    missing extra (e.g. ``s3fs``) raises ``ImportError`` here rather than part-way
+    through the core run. The generated wrapper guards this call, not the core
+    call, with ``except ImportError`` and falls back to the container.
+
+    Then each remote param whose metadata sets ``must_exist=True`` is checked.
+    Local paths and params without ``must_exist`` are not — those contracts are
+    enforced elsewhere (mount logic for local paths; the user's own code
+    otherwise).
+
+    Raises:
+        ImportError: A remote protocol's fsspec backend is not installed.
+        typer.Exit: A ``must_exist`` remote URI does not exist (code 1).
     """
+    import fsspec
     import typer
+
+    for protocol in _collect_remote_protocols(func, params):
+        fsspec.get_filesystem_class(protocol)
 
     stimela_meta = _extract_stimela_meta_from_hints(func)
     output_meta: dict[str, dict] = {}

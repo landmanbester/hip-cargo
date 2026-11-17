@@ -3,10 +3,21 @@ type: log
 title: Wiki changelog
 description: Chronological record of wiki updates.
 timestamp: 2026-11-17
-last_verified_commit: a470098
+last_verified_commit: 24e1fa7
 ---
 
 # Wiki changelog
+
+## 2026-11-17 — `container-execution.md`, `remote-uris.md`: fallback scope and one `params` dict (verified at `24e1fa7`)
+
+- Generated wrappers now guard only the core import and the remote pre-flight
+  with `except ImportError`; the core call runs in `else:` so run-time
+  `ImportError`s propagate (#120). One `params` dict feeds the pre-flight, the
+  core call (`**params`) and `run_in_container` (#118), which also fixes the
+  resolved container `image` shadowing a parameter named `image`.
+- `preflight_remote_must_exist` now imports the fsspec backend for every remote
+  protocol in use, so a missing `[s3]`/`[gcs]`/`[azure]` extra still falls back
+  before any work starts.
 
 ## 2026-11-17 — `container-execution.md`: the load-bearing generated import (verified at `fbfc9c7`)
 

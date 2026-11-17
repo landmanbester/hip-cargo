@@ -69,33 +69,27 @@ def generate_function(
     """
     Generate Python function from Stimela cab definition.
     """
+    params = dict(
+        cab_file=cab_file,
+        config_file=config_file,
+        output_file=output_file,
+    )
+
     if backend == "native" or backend == "auto":
+        # Only a missing install falls back to the container, so only the
+        # imports and the pre-flight are guarded; the core call is not.
         try:
-            # Pre-flight must_exist for remote URIs before dispatching.
+            from hip_cargo.core.generate_function import generate_function as generate_function_core  # noqa: E402
             from hip_cargo.utils.runner import preflight_remote_must_exist  # noqa: E402
 
-            preflight_remote_must_exist(
-                generate_function,
-                dict(
-                    cab_file=cab_file,
-                    config_file=config_file,
-                    output_file=output_file,
-                ),
-            )
-
-            # Lazy import the core implementation
-            from hip_cargo.core.generate_function import generate_function as generate_function_core  # noqa: E402
-
-            # Call the core function with all parameters
-            generate_function_core(
-                cab_file,
-                output_file,
-                config_file=config_file,
-            )
-            return
+            # Pre-flight must_exist for remote URIs before dispatching.
+            preflight_remote_must_exist(generate_function, params)
         except ImportError:
             if backend == "native":
                 raise
+        else:
+            generate_function_core(**params)
+            return
 
     # Resolve container image from installed package metadata
     from hip_cargo.utils.config import get_container_image  # noqa: E402
@@ -107,11 +101,7 @@ def generate_function(
 
     run_in_container(
         generate_function,
-        dict(
-            cab_file=cab_file,
-            config_file=config_file,
-            output_file=output_file,
-        ),
+        params,
         image=image,
         backend=backend,
         always_pull_images=always_pull_images,

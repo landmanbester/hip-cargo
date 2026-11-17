@@ -53,11 +53,7 @@ def yaml_emission_demo(
     """
     Fixture command exercising signed defaults and colons in info fields.
     """
-    # Lazy import the core implementation
-    from fixture_pkg.core.yaml_emission_demo import yaml_emission_demo as yaml_emission_demo_core  # noqa: E402
-
-    # Call the core function with all parameters
-    yaml_emission_demo_core(
+    params = dict(
         neg_int=neg_int,
         neg_float=neg_float,
         pos_int=pos_int,
@@ -65,3 +61,11 @@ def yaml_emission_demo(
         colon_multi=colon_multi,
         apostrophe_colon=apostrophe_colon,
     )
+
+    from fixture_pkg.core.yaml_emission_demo import yaml_emission_demo as yaml_emission_demo_core  # noqa: E402
+
+    from hip_cargo.utils.runner import preflight_remote_must_exist  # noqa: E402
+
+    # Pre-flight must_exist for remote URIs before dispatching.
+    preflight_remote_must_exist(yaml_emission_demo, params)
+    yaml_emission_demo_core(**params)

@@ -31,25 +31,24 @@ def onboard(
     """
     Print setup instructions for CI/CD, PyPI publishing, and GitHub configuration.
     """
+    params = {}
+
     if backend == "native" or backend == "auto":
+        # Only a missing install falls back to the container, so only the
+        # imports and the pre-flight are guarded; the core call is not.
         try:
-            # Pre-flight must_exist for remote URIs before dispatching.
             from hip_cargo.utils.runner import preflight_remote_must_exist  # noqa: E402
 
-            preflight_remote_must_exist(
-                onboard,
-                dict(),
-            )
-
-            # Lazy import the core implementation
             from <PACKAGE_NAME>.core.onboard import onboard as onboard_core  # noqa: E402
 
-            # Call the core function with all parameters
-            onboard_core()
-            return
+            # Pre-flight must_exist for remote URIs before dispatching.
+            preflight_remote_must_exist(onboard, params)
         except ImportError:
             if backend == "native":
                 raise
+        else:
+            onboard_core(**params)
+            return
 
     # Resolve container image from installed package metadata
     from hip_cargo.utils.config import get_container_image  # noqa: E402
@@ -61,7 +60,7 @@ def onboard(
 
     run_in_container(
         onboard,
-        dict(),
+        params,
         image=image,
         backend=backend,
         always_pull_images=always_pull_images,

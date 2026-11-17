@@ -68,33 +68,27 @@ def generate_cabs(
     """
     Generate Stimela cab definition from Python CLI function.
     """
+    params = dict(
+        module=module,
+        image=image,
+        output_dir=output_dir,
+    )
+
     if backend == "native" or backend == "auto":
+        # Only a missing install falls back to the container, so only the
+        # imports and the pre-flight are guarded; the core call is not.
         try:
-            # Pre-flight must_exist for remote URIs before dispatching.
+            from hip_cargo.core.generate_cabs import generate_cabs as generate_cabs_core  # noqa: E402
             from hip_cargo.utils.runner import preflight_remote_must_exist  # noqa: E402
 
-            preflight_remote_must_exist(
-                generate_cabs,
-                dict(
-                    module=module,
-                    image=image,
-                    output_dir=output_dir,
-                ),
-            )
-
-            # Lazy import the core implementation
-            from hip_cargo.core.generate_cabs import generate_cabs as generate_cabs_core  # noqa: E402
-
-            # Call the core function with all parameters
-            generate_cabs_core(
-                module,
-                image=image,
-                output_dir=output_dir,
-            )
-            return
+            # Pre-flight must_exist for remote URIs before dispatching.
+            preflight_remote_must_exist(generate_cabs, params)
         except ImportError:
             if backend == "native":
                 raise
+        else:
+            generate_cabs_core(**params)
+            return
 
     # Resolve container image from installed package metadata
     from hip_cargo.utils.config import get_container_image  # noqa: E402
@@ -106,11 +100,7 @@ def generate_cabs(
 
     run_in_container(
         generate_cabs,
-        dict(
-            module=module,
-            image=image,
-            output_dir=output_dir,
-        ),
+        params,
         image=image,
         backend=backend,
         always_pull_images=always_pull_images,
