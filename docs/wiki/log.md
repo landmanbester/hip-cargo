@@ -3,10 +3,16 @@ type: log
 title: Wiki changelog
 description: Chronological record of wiki updates.
 timestamp: 2026-11-17
-last_verified_commit: 359c0ac
+last_verified_commit: aeaaa4a
 ---
 
 # Wiki changelog
+
+## 2026-11-17 — `remote-uris.md`: remote support stops at the wrapper (verified at `aeaaa4a`)
+
+- Added the #96 caveat: hip-cargo makes the CLI accept remote URIs; whether a
+  command works on one depends on its `core/`, which may be local-only in both
+  execution modes.
 
 ## 2026-11-17 — `cli-dialect.md`: two-way round-trip template (verified at `359c0ac`)
 

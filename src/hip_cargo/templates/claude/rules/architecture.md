@@ -195,6 +195,18 @@ hip-cargo[s3]`, `[gcs]`, or `[azure]`. Without it, the pre-flight raises
 `ImportError` before any work starts, and the wrapper's `except ImportError`
 routes them into the container, which already has the backends.
 
+**These mechanics stop at the wrapper.** `parse_upath` hands `core/` a `UPath`;
+whether a command actually works on a remote URI depends on what `core/` does
+with it. Implementations built on `os.*`, `open()`, `shutil` or C libraries
+(casacore, CFITSIO, HDF5) are local-only: they fail on a remote path even though
+the CLI accepted it, and the container fallback runs the same `core/` code, so
+it fails there too.
+
+**Before claiming remote-URI support for a command** (in a README, a docstring,
+or `help=`), read its `core/` implementation. If it is local-only, say so, or
+make `core/` go through the `UPath` it receives (`.open()`, `.read_bytes()`,
+`.exists()`, `fsspec`) instead of `os.path`.
+
 ## 4. Cab Generation is Automatic
 
 **The `src/<PACKAGE_NAME>/cabs/*.yml` files are generated artefacts. Never edit
