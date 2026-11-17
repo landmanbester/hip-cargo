@@ -37,7 +37,7 @@ src/hip_cargo/
 ├── cabs/          # Generated YAML cab definitions (git-tracked, auto-updated)
 ├── utils/         # Shared utilities (decorators, introspection, conversion, types)
 │   ├── config.py  # pyproject.toml [tool.hip-cargo] reader
-│   └── types.py   # ListInt, ListFloat, ListStr NewTypes + parsers
+│   └── types.py   # File/Directory/MS/URI and ListInt/ListFloat/ListStr NewTypes + parsers
 └── recipes/       # Stimela recipes for running via stimela
 ```
 

@@ -11,7 +11,7 @@ import pytest
 import typer
 from upath import UPath
 
-from hip_cargo.utils.introspector import MS, URI, Directory, File
+from hip_cargo import MS, URI, Directory, File
 from hip_cargo.utils.metadata import StimelaMeta
 from hip_cargo.utils.runner import (
     _build_container_cmd,
