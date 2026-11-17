@@ -1,43 +1,91 @@
-"""Test round-trip conversion: CLI function -> cab -> function.
+"""Round-trip tests: hip-cargo's own cli/*.py <-> cabs/*.yml.
 
-Each of hip-cargo's own CLI modules must survive generate-cabs followed by
-generate-function line for line. This also covers inline-comment preservation
-(every module carries ``# noqa: E501`` comments, which only reach the
-regenerated source by way of the cab YAML) and help-string spacing.
+Same shape as the template scaffolded projects get
+(``src/hip_cargo/templates/test_roundtrip.py``): commands are discovered, and
+both directions are checked against the committed files. The reverse direction
+also covers inline-comment preservation (``# noqa: E501`` comments only reach
+the regenerated source by way of the cab YAML) and help-string spacing.
 """
 
+import ast
 from pathlib import Path
 
 import pytest
+import yaml
 
 from hip_cargo.core.generate_cabs import generate_cabs
 from hip_cargo.core.generate_function import generate_function
 
-CLI_DIR = Path("src/hip_cargo/cli")
+REPO_ROOT = Path(__file__).resolve().parents[1]
+PYPROJECT = REPO_ROOT / "pyproject.toml"
+CLI_DIR = REPO_ROOT / "src" / "hip_cargo" / "cli"
+CABS_DIR = REPO_ROOT / "src" / "hip_cargo" / "cabs"
+CONTAINER_IMAGE_PY = REPO_ROOT / "src" / "hip_cargo" / "_container_image.py"
 
 
-@pytest.mark.parametrize("command", ["generate_cabs", "generate_function", "generate_schemas", "init"])
-def test_roundtrip_is_line_for_line(command: str, tmp_path: Path) -> None:
-    cli_module = CLI_DIR / f"{command}.py"
-    cab_dir = tmp_path / "cabs"
-    cab_dir.mkdir()
-    generate_cabs([cli_module], output_dir=cab_dir)
+def _cli_modules() -> list[Path]:
+    """Every CLI module, excluding __init__ and private helpers."""
+    return sorted(path for path in CLI_DIR.glob("*.py") if not path.stem.startswith("_"))
 
-    cab_file = cab_dir / f"{command}.yml"
-    assert cab_file.exists(), "Cab file should be generated"
 
-    generated_file = tmp_path / f"{command}_roundtrip.py"
-    generate_function(cab_file, output_file=generated_file, config_file=Path("pyproject.toml"))
-    generated_code = generated_file.read_text()
-    compile(generated_code, str(generated_file), "exec")
+def _container_image() -> str | None:
+    """CONTAINER_IMAGE, read from the source file rather than imported."""
+    for node in ast.parse(CONTAINER_IMAGE_PY.read_text()).body:
+        if isinstance(node, ast.Assign) and any(
+            isinstance(target, ast.Name) and target.id == "CONTAINER_IMAGE" for target in node.targets
+        ):
+            return ast.literal_eval(node.value)
+    return None
 
-    original_lines = cli_module.read_text().splitlines()
-    generated_lines = generated_code.splitlines()
-    assert len(original_lines) == len(generated_lines), (
-        f"Line count mismatch: original has {len(original_lines)} lines, generated has {len(generated_lines)} lines"
+
+COMMANDS = [path.stem for path in _cli_modules() if (CABS_DIR / f"{path.stem}.yml").is_file()]
+
+
+def test_every_command_has_a_committed_cab() -> None:
+    missing = [path.stem for path in _cli_modules() if not (CABS_DIR / f"{path.stem}.yml").is_file()]
+    assert COMMANDS and not missing, f"no committed cab for {missing}; run generate-cabs"
+
+
+def test_every_generated_cab_has_a_cli_module() -> None:
+    """A generated cab whose CLI module was deleted would otherwise go unchecked.
+
+    Only generated cabs count: ``cabs/<cmd>.yml`` defining ``cabs.<cmd>`` with a
+    ``command``. A hand-written aggregate such as ``cabs/cabs.yml`` (stimela
+    ``_include`` entries) is not one.
+    """
+    orphans = []
+    for cab_file in sorted(CABS_DIR.glob("*.yml")):
+        cab = (yaml.safe_load(cab_file.read_text()) or {}).get("cabs", {}).get(cab_file.stem)
+        if isinstance(cab, dict) and "command" in cab and not (CLI_DIR / f"{cab_file.stem}.py").is_file():
+            orphans.append(cab_file.name)
+    assert not orphans, f"committed cabs with no cli/ module: {orphans}; delete them or restore the module"
+
+
+@pytest.mark.parametrize("command", COMMANDS)
+def test_the_committed_cab_is_what_generate_cabs_emits(command: str, tmp_path: Path) -> None:
+    """Forward direction: cli/<command>.py -> cabs/<command>.yml."""
+    generate_cabs([CLI_DIR / f"{command}.py"], output_dir=tmp_path, image=_container_image())
+
+    committed = yaml.safe_load((CABS_DIR / f"{command}.yml").read_text())
+    regenerated = yaml.safe_load((tmp_path / f"{command}.yml").read_text())
+    assert regenerated == committed, f"cabs/{command}.yml is stale; run generate-cabs"
+
+
+@pytest.mark.parametrize("command", COMMANDS)
+def test_the_committed_cli_is_what_generate_function_emits(command: str, tmp_path: Path) -> None:
+    """Reverse direction: cabs/<command>.yml -> cli/<command>.py, line for line."""
+    regenerated_file = tmp_path / f"{command}.py"
+    generate_function(CABS_DIR / f"{command}.yml", output_file=regenerated_file, config_file=PYPROJECT)
+
+    committed_lines = (CLI_DIR / f"{command}.py").read_text().splitlines()
+    regenerated_lines = regenerated_file.read_text().splitlines()
+    assert len(regenerated_lines) == len(committed_lines), (
+        f"{command}: committed {len(committed_lines)} lines, regenerated {len(regenerated_lines)}"
     )
-    for i, (orig_line, gen_line) in enumerate(zip(original_lines, generated_lines), 1):
-        assert orig_line == gen_line, f"Line {i} differs:\n  Original:  {orig_line}\n  Generated: {gen_line}"
+    for number, (committed_line, regenerated_line) in enumerate(zip(committed_lines, regenerated_lines), 1):
+        assert committed_line == regenerated_line, (
+            f"{command} line {number} differs:\n  committed:   {committed_line}\n  regenerated: {regenerated_line}"
+        )
 
 
 def test_roundtrip_preserves_import_wrapping(tmp_path: Path) -> None:

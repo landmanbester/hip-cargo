@@ -3,7 +3,8 @@
 Read this when editing `src/hip_cargo/**/*.py` files.
 
 ## 1. Code Parsing & Comment Preservation (LibCST)
-* **Strict Requirement:** The project uses LibCST (Concrete Syntax Tree) for parsing Python code to preserve formatting, whitespace, and inline comments. **Do not use `eval()` or standard AST for parsing code.**
+* **Strict Requirement (generators):** `generate-cabs`, `generate-function` and `generate-schemas` parse CLI source with LibCST (Concrete Syntax Tree), so formatting, whitespace and inline comments survive the CLI → cab → CLI round trip. **In that code (`utils/introspector.py`, `utils/cab_to_function.py`, `core/generate_*.py`), never use `eval()` or the standard `ast` module.**
+* **Read-only inspection is exempt.** Code that only reads structure and regenerates nothing — e.g. the scaffolded `templates/test_roundtrip.py`, which checks for a `@stimela_cab` decorator and reads `CONTAINER_IMAGE` with `ast.literal_eval` — may use the stdlib `ast` module; there is no formatting to preserve. `eval()` stays forbidden everywhere.
 * **Core Functions:** Rely on `parse_decorator_libcst()`, `extract_param_spec()` + `param_spec_to_cab_input()`, `parse_annotated_libcst()`, and `get_cst_value()` for AST operations.
 * **Comment Handling:** Inline comments are detected via the regex pattern `r'\s{2,}#'` (PEP 8 standard) and must be preserved through the full CLI → YAML → CLI roundtrip.
 * **Multi-line Info Fields:** Multi-line info fields format each sentence on a new line, with the comment placed on the last line. You must use `format_info_fields()` to ensure proper YAML formatting with comment preservation. It decodes each dumped scalar with YAML and only keeps a rendering that reloads to exactly the original value, falling back to a single `safe_dump`-quoted line otherwise (#116); `generate_cabs` dumps with `allow_unicode=True`. Never decide quoting by inspecting the text.

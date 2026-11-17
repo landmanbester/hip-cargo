@@ -3,10 +3,16 @@ type: log
 title: Wiki changelog
 description: Chronological record of wiki updates.
 timestamp: 2026-11-17
-last_verified_commit: dbbf133
+last_verified_commit: 359c0ac
 ---
 
 # Wiki changelog
+
+## 2026-11-17 — `cli-dialect.md`: two-way round-trip template (verified at `359c0ac`)
+
+- The scaffolded `tests/test_roundtrip.py` now checks both directions against
+  the committed `cli/` and `cabs/`, discovers commands, and needs no install
+  (#115).
 
 ## 2026-11-17 — `cab-yaml-emission.md`: value-checked info rewrite (verified at `dbbf133`)
 
