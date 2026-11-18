@@ -3,8 +3,8 @@ type: reference
 title: Container execution and image lifecycle
 description: The _container_image.py contract, container fallback runner, GPU passthrough, per-backend run-args, and release tag mechanics.
 tags: [containers, runner, gpu, releases]
-timestamp: 2026-11-17
-last_verified_commit: 24e1fa7
+timestamp: 2026-11-18
+last_verified_commit: aeaaa4a
 ---
 
 # Container execution and image lifecycle
@@ -46,7 +46,12 @@ maintainer do.
 Images are multi-arch (amd64 + arm64). Each architecture builds on its own
 native runner (`ubuntu-latest`, `ubuntu-24.04-arm`) and is pushed by digest; a
 `merge` job applies the tags to one manifest and fails if any built
-architecture is missing from it. Native runners rather than QEMU because
+architecture is missing from it. A `meta` job runs `docker/metadata-action`
+once and feeds both: the OCI labels (`org.opencontainers.image.source`,
+`revision`, `version`, ...) must be passed to each per-arch build because they
+live in the image config, which `imagetools create` cannot change; the merge
+job adds the same metadata as index-level annotations. (The #121 split first
+dropped the labels; fixed before 0.5.0.) Native runners rather than QEMU because
 emulated arm64 builds are roughly 10x slower, which matters as soon as a
 dependency compiles from source. Dropping the arm64 matrix entry gives an
 amd64-only image with no other change.

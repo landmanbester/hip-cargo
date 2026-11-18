@@ -2,11 +2,17 @@
 type: log
 title: Wiki changelog
 description: Chronological record of wiki updates.
-timestamp: 2026-11-17
-last_verified_commit: 359c0ac
+timestamp: 2026-11-18
+last_verified_commit: aeaaa4a
 ---
 
 # Wiki changelog
+
+## 2026-11-18 — `container-execution.md`: image labels on multi-arch builds (verified at `aeaaa4a`)
+
+- `publish-container.yml` gained a `meta` job; per-arch builds set the OCI
+  labels again (lost in the #121 split) and the merge job adds index
+  annotations.
 
 ## 2026-11-17 — `cli-dialect.md`: two-way round-trip template (verified at `359c0ac`)
 
