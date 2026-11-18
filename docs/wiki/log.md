@@ -3,16 +3,22 @@ type: log
 title: Wiki changelog
 description: Chronological record of wiki updates.
 timestamp: 2026-11-18
-last_verified_commit: aeaaa4a
+last_verified_commit: 04c5e48
 ---
 
 # Wiki changelog
 
-## 2026-11-18 — `container-execution.md`: image labels on multi-arch builds (verified at `aeaaa4a`)
+## 2026-11-18 — `container-execution.md`: image labels on multi-arch builds (verified at `04c5e48`)
 
 - `publish-container.yml` gained a `meta` job; per-arch builds set the OCI
   labels again (lost in the #121 split) and the merge job adds index
   annotations.
+
+## 2026-11-17 — `remote-uris.md`: remote support stops at the wrapper (verified at `aeaaa4a`)
+
+- Added the #96 caveat: hip-cargo makes the CLI accept remote URIs; whether a
+  command works on one depends on its `core/`, which may be local-only in both
+  execution modes.
 
 ## 2026-11-17 — `cli-dialect.md`: two-way round-trip template (verified at `359c0ac`)
 

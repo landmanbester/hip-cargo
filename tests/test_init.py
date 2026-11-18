@@ -51,6 +51,7 @@ def test_init_produces_clean_project():
             "tests/__init__.py",
             "tests/test_install.py",
             "tests/test_roundtrip.py",
+            "tests/test_precommit.py",
         ]
         for filepath in expected_files:
             assert (project_dir / filepath).exists(), f"Missing scaffold file: {filepath}"
@@ -116,3 +117,26 @@ def test_init_produces_clean_project():
             text=True,
         )
         assert result.returncode == 0, f"scaffold test suite failed:\n{result.stdout}\n{result.stderr}"
+
+
+def test_pin_precommit_ruff_uses_the_locked_version(tmp_path: Path) -> None:
+    """A fresh scaffold's ruff hook must match the ruff uv locked, not the template's rev (#119)."""
+    from hip_cargo.core.init import _pin_precommit_ruff
+
+    (tmp_path / "uv.lock").write_text(
+        'version = 1\n\n[[package]]\nname = "rich"\nversion = "14.0.0"\n\n'
+        '[[package]]\nname = "ruff"\nversion = "0.17.5"\nsource = { registry = "https://pypi.org/simple" }\n'
+    )
+    config = tmp_path / ".pre-commit-config.yaml"
+    config.write_text(
+        "repos:\n"
+        "  - repo: https://github.com/astral-sh/ruff-pre-commit\n"
+        "    rev: v0.16.8\n"
+        "  - repo: https://github.com/pre-commit/pre-commit-hooks\n"
+        "    rev: v5.0.0\n"
+    )
+
+    _pin_precommit_ruff(tmp_path)
+
+    text = config.read_text()
+    assert "    rev: v0.17.5\n  - repo: https://github.com/pre-commit/pre-commit-hooks\n    rev: v5.0.0\n" in text

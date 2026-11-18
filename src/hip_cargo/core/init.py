@@ -1,6 +1,7 @@
 """Core logic for initializing a new hip-cargo project."""
 
 import datetime
+import re
 import subprocess
 from pathlib import Path
 
@@ -163,6 +164,7 @@ def init(
     )
     _write_file(project_dir / "tests" / "__init__.py", "")
     _write_template("test_roundtrip.py", project_dir / "tests" / "test_roundtrip.py", subs)
+    _write_template("test_precommit.py", project_dir / "tests" / "test_precommit.py", subs)
     _write_file(
         project_dir / "tests" / "test_install.py",
         f"def test_import():\n"
@@ -190,6 +192,7 @@ def init(
     print(f"\nProject created at: {project_dir}\n")
 
     _run_command(["uv", "sync", "--group", "dev"], cwd=project_dir)
+    _pin_precommit_ruff(project_dir)
     _run_command(["uv", "run", "pytest", "tests/test_install.py", "-v"], cwd=project_dir)
     _run_command(
         [
@@ -323,6 +326,25 @@ def _get_git_config(key: str) -> str | None:
         return result.stdout.strip() or None
     except subprocess.CalledProcessError:
         return None
+
+
+_LOCKED_RUFF = re.compile(r'^name = "ruff"\nversion = "([^"]+)"', re.MULTILINE)
+_RUFF_HOOK_REV = re.compile(r"(repo: https://github\.com/astral-sh/ruff-pre-commit\n\s+rev: )\S+")
+
+
+def _pin_precommit_ruff(project_dir: Path) -> None:
+    """Set the ruff-pre-commit ``rev`` to the ruff version ``uv sync`` just locked.
+
+    The template's rev is only a placeholder that ages: the scaffold locks the
+    newest ruff, and a pre-commit hook on a different ruff can format code
+    differently from ``uv run ruff`` in CI, so the two fight (#119). The
+    scaffolded ``tests/test_precommit.py`` keeps them equal from then on.
+    """
+    match = _LOCKED_RUFF.search((project_dir / "uv.lock").read_text())
+    if match is None:
+        return
+    config = project_dir / ".pre-commit-config.yaml"
+    config.write_text(_RUFF_HOOK_REV.sub(rf"\g<1>v{match.group(1)}", config.read_text(), count=1))
 
 
 def _git_init(branch: str, cwd: Path) -> None:

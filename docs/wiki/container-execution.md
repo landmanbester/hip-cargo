@@ -4,7 +4,7 @@ title: Container execution and image lifecycle
 description: The _container_image.py contract, container fallback runner, GPU passthrough, per-backend run-args, and release tag mechanics.
 tags: [containers, runner, gpu, releases]
 timestamp: 2026-11-18
-last_verified_commit: aeaaa4a
+last_verified_commit: 04c5e48
 ---
 
 # Container execution and image lifecycle
