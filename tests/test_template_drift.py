@@ -144,7 +144,7 @@ def test_template_ci_runs_lightweight_install_at_the_floor():
     assert _version_key(min(full, key=_version_key)) > _version_key(floor)
 
 
-def test_publish_container_labels_every_architecture_image():
+def test_publish_container_labels_every_architecture_image() -> None:
     """Labels live in each image's config, so the per-arch build must set them (merge only tags).
 
     Lost when the build was split per architecture (#121); tags, labels and
