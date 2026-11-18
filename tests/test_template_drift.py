@@ -158,3 +158,12 @@ def test_publish_container_labels_every_architecture_image():
     assert manifest["env"]["ANNOTATIONS"] == "${{ needs.meta.outputs.annotations }}"
     assert "--annotation" in manifest["run"]
     assert not any("metadata-action" in s.get("uses", "") for s in jobs["merge"]["steps"])
+
+
+@pytest.mark.parametrize("dockerfile", [TEMPLATES / "Dockerfile", ROOT / "Dockerfile"], ids=["template", "own"])
+def test_dockerfile_installs_from_the_lock(dockerfile: Path) -> None:
+    """Both architectures must get the locked versions, not resolve independently."""
+    text = dockerfile.read_text()
+    assert "COPY pyproject.toml uv.lock ./" in text
+    assert "uv export --locked --no-dev" in text
+    assert "uv pip install --system --no-cache --no-deps ." in text

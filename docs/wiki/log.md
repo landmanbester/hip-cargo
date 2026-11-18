@@ -13,6 +13,8 @@ last_verified_commit: 04c5e48
 - `publish-container.yml` gained a `meta` job; per-arch builds set the OCI
   labels again (lost in the #121 split) and the merge job adds index
   annotations.
+- The `Dockerfile` (own and template) installs from `uv.lock` with
+  `uv export --locked`, so both architectures get the same versions.
 
 ## 2026-11-17 — `remote-uris.md`: remote support stops at the wrapper (verified at `aeaaa4a`)
 

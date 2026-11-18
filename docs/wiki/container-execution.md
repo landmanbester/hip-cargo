@@ -51,7 +51,15 @@ once and feeds both: the OCI labels (`org.opencontainers.image.source`,
 `revision`, `version`, ...) must be passed to each per-arch build because they
 live in the image config, which `imagetools create` cannot change; the merge
 job adds the same metadata as index-level annotations. (The #121 split first
-dropped the labels; fixed before 0.5.0.) Native runners rather than QEMU because
+dropped the labels; fixed before 0.5.0.)
+
+The `Dockerfile` (hip-cargo's and the template's) installs from `uv.lock`:
+`uv export --locked --no-dev --extra <full|all> --no-emit-project` piped into
+`uv pip install -r`, then the package with `--no-deps`. Each architecture then
+gets the same, CI-tested versions instead of resolving independently, and
+`--locked` fails the build if `uv.lock` is stale (tbump re-locks on release).
+A package that pins hip-cargo through `[tool.uv.sources]` git needs `git` in
+the image, since the exported requirement is a `git+` URL. Native runners rather than QEMU because
 emulated arm64 builds are roughly 10x slower, which matters as soon as a
 dependency compiles from source. Dropping the arm64 matrix entry gives an
 amd64-only image with no other change.
