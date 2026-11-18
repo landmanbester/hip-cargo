@@ -2,11 +2,19 @@
 type: log
 title: Wiki changelog
 description: Chronological record of wiki updates.
-timestamp: 2026-11-17
-last_verified_commit: aeaaa4a
+timestamp: 2026-11-18
+last_verified_commit: 04c5e48
 ---
 
 # Wiki changelog
+
+## 2026-11-18 — `container-execution.md`: image labels on multi-arch builds (verified at `04c5e48`)
+
+- `publish-container.yml` gained a `meta` job; per-arch builds set the OCI
+  labels again (lost in the #121 split) and the merge job adds index
+  annotations.
+- The `Dockerfile` (own and template) installs from `uv.lock` with
+  `uv export --locked`, so both architectures get the same versions.
 
 ## 2026-11-17 — `remote-uris.md`: remote support stops at the wrapper (verified at `aeaaa4a`)
 

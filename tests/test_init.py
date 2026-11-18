@@ -8,6 +8,49 @@ from pathlib import Path
 
 import pytest
 
+# Each Python template and where init writes it.
+PY_TEMPLATES = {
+    "cli_single.py": "src/{pkg}/cli/__init__.py",
+    "cli_multi.py": "src/{pkg}/cli/__init__.py",
+    "onboard_cli.py": "src/{pkg}/cli/onboard.py",
+    "onboard_core.py": "src/{pkg}/core/onboard.py",
+    "test_roundtrip.py": "tests/test_roundtrip.py",
+    "test_precommit.py": "tests/test_precommit.py",
+}
+
+
+@pytest.mark.parametrize("template", sorted(PY_TEMPLATES))
+@pytest.mark.parametrize("pkg", ["demo", "pfb_model_spec"])
+def test_python_template_is_already_ruff_clean(tmp_path: Path, template: str, pkg: str) -> None:
+    """A template must pass the scaffold's own ruff without being rewritten.
+
+    hip-cargo's ruff excludes ``templates/``, and ``init`` reformats the
+    scaffold afterwards, so neither notices a template ruff would change. A
+    repo that copies a template in (e.g. to adopt the round-trip test) would.
+    """
+    from hip_cargo.core.init import TEMPLATES_DIR, _apply_substitutions
+
+    subs = {
+        "<PACKAGE_NAME>": pkg,
+        "<PROJECT_NAME>": pkg.replace("_", "-"),
+        "<CLI_COMMAND>": pkg.replace("_", "-"),
+        "<DESCRIPTION>": "A demo package",
+    }
+    pyproject = re.sub(
+        r"<[A-Z][A-Z_]+>", "x", _apply_substitutions((TEMPLATES_DIR / "pyproject.toml").read_text(), subs)
+    )
+    (tmp_path / "pyproject.toml").write_text(pyproject)
+    for package in (f"src/{pkg}", f"src/{pkg}/cli", f"src/{pkg}/core", "tests"):
+        (tmp_path / package).mkdir(parents=True, exist_ok=True)
+        (tmp_path / package / "__init__.py").touch()
+    target = tmp_path / PY_TEMPLATES[template].format(pkg=pkg)
+    target.write_text(_apply_substitutions((TEMPLATES_DIR / template).read_text(), subs))
+    relative = str(target.relative_to(tmp_path))
+
+    for command in (["ruff", "format", "--diff", relative], ["ruff", "check", "--no-fix", relative]):
+        result = subprocess.run(command, cwd=tmp_path, capture_output=True, text=True)
+        assert result.returncode == 0, f"{template}: `{' '.join(command)}` failed:\n{result.stdout}{result.stderr}"
+
 
 @pytest.mark.slow
 def test_init_produces_clean_project():

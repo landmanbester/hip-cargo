@@ -142,3 +142,28 @@ def test_template_ci_runs_lightweight_install_at_the_floor():
     assert jobs["lightweight"]["name"] == f"Lightweight install ({floor})"
     full = jobs["test"]["strategy"]["matrix"]["python-version"]
     assert _version_key(min(full, key=_version_key)) > _version_key(floor)
+
+
+def test_publish_container_labels_every_architecture_image() -> None:
+    """Labels live in each image's config, so the per-arch build must set them (merge only tags).
+
+    Lost when the build was split per architecture (#121); tags, labels and
+    annotations now come from one ``meta`` job so they cannot disagree.
+    """
+    jobs = yaml.safe_load((TEMPLATES / "workflows" / "publish-container.yml").read_text())["jobs"]
+    build = next(s for s in jobs["build"]["steps"] if s.get("id") == "build")
+    assert build["with"]["labels"] == "${{ needs.meta.outputs.labels }}"
+    assert "meta" in jobs["build"]["needs"] and "meta" in jobs["merge"]["needs"]
+    manifest = next(s for s in jobs["merge"]["steps"] if s["name"] == "Create multi-arch manifest")
+    assert manifest["env"]["ANNOTATIONS"] == "${{ needs.meta.outputs.annotations }}"
+    assert "--annotation" in manifest["run"]
+    assert not any("metadata-action" in s.get("uses", "") for s in jobs["merge"]["steps"])
+
+
+@pytest.mark.parametrize("dockerfile", [TEMPLATES / "Dockerfile", ROOT / "Dockerfile"], ids=["template", "own"])
+def test_dockerfile_installs_from_the_lock(dockerfile: Path) -> None:
+    """Both architectures must get the locked versions, not resolve independently."""
+    text = dockerfile.read_text()
+    assert "COPY pyproject.toml uv.lock ./" in text
+    assert "uv export --locked --no-dev" in text
+    assert "uv pip install --system --no-cache --no-deps ." in text

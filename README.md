@@ -59,6 +59,7 @@ hip-cargo generate-cabs --help
 ```
 The full package should be available as a container image on the [GitHub Container Registry](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry).
 The `Dockerfile` for the project should install the full package, not the lightweight version.
+Install it from `uv.lock` (`uv export --locked`, then `uv pip install --no-deps .`), as the scaffolded `Dockerfile` does, so the amd64 and arm64 images carry the versions CI tested rather than whatever each build resolves.
 This is used to build the container image that is uploaded to the registry.
 The image should be tagged with a version so that `stimela` knows how to match cab configuration to images.
 The following versioning schema is proposed:

@@ -20,7 +20,6 @@ from pathlib import Path
 
 import pytest
 import yaml
-
 from hip_cargo.core.generate_cabs import generate_cabs
 from hip_cargo.core.generate_function import generate_function
 
@@ -102,9 +101,7 @@ def test_every_generated_cab_has_a_cli_module() -> None:
 def test_every_decorated_command_has_a_committed_cab() -> None:
     """A @stimela_cab command with no cab means generate-cabs was not run."""
     missing = [
-        path.stem
-        for path in _cli_modules()
-        if _has_stimela_cab(path) and not (CABS_DIR / f"{path.stem}.yml").is_file()
+        path.stem for path in _cli_modules() if _has_stimela_cab(path) and not (CABS_DIR / f"{path.stem}.yml").is_file()
     ]
     assert not missing, f"no committed cab for {missing}; run generate-cabs"
 

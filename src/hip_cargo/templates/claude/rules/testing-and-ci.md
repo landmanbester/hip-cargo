@@ -74,8 +74,10 @@ When ruff moves in `uv.lock` (an upgrade or a Dependabot PR), set the hook's
   the same change.
 - **Container images are multi-arch:** `publish-container.yml` builds amd64 and
   arm64 on native runners, pushes each by digest, and a `merge` job publishes
-  one manifest under the real tags. Drop the arm64 build entry (and the arm64
-  test job) for an amd64-only project.
+  one manifest under the real tags. A `meta` job computes tags, labels and
+  annotations once: labels live in each image's config, so the per-arch builds
+  set them; the merge job applies tags and index annotations. Drop the arm64
+  build entry (and the arm64 test job) for an amd64-only project.
 
 ## 5. Commits
 
