@@ -103,6 +103,7 @@ def my_command(...):
             # A failed import from this package is a bug, not a missing install.
             if backend == "native" or (exc.name or "").split(".")[0] == "<PACKAGE_NAME>":
                 raise
+            typer.echo(f"Cannot run natively ({exc!r}); falling back to a container.", err=True)
         else:
             my_command_core(**params)
             return
@@ -117,7 +118,10 @@ Only the imports and the pre-flight sit inside the `try`. The core call runs in
 `else:`, so an `ImportError` raised *during* a run propagates with its real
 traceback instead of re-running the command in a container. A failed import
 whose module lies in `<PACKAGE_NAME>` itself (a renamed symbol, a deleted module)
-is re-raised too: it is a bug, not a missing install. Consequences:
+is re-raised too: it is a bug, not a missing install. Any other caught
+`ImportError` is printed to stderr before the fallback, so an unexpected
+container run (a dependency that is installed but unusable) can be diagnosed.
+Consequences:
 
 - **Put heavy imports at module scope in `core/<name>.py`.** A missing `[full]`
   install is only detected when importing `core/` fails. An import deferred into

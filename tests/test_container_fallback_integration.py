@@ -412,6 +412,25 @@ class TestFallbackScope:
         mock_run.assert_not_called()
 
     @pytest.mark.integration
+    def test_the_fallback_reports_why_native_execution_failed(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """A nameless ImportError (e.g. numba refusing its NumPy) still falls back, but says so."""
+        func = _load_generated(_write_cab_with_image(tmp_path), tmp_path)
+        unusable = ImportError("Numba needs NumPy 2.3 or less")
+        mock_run = MagicMock()
+
+        with (
+            patch.object(sys, "meta_path", [_RaisingFinder(unusable), *sys.meta_path]),
+            patch("hip_cargo.utils.config.get_container_image", MagicMock(return_value="img:latest")),
+            patch("hip_cargo.utils.runner.run_in_container", mock_run),
+        ):
+            func(input_ms=Path("/data/input.ms"), backend="auto", always_pull_images=False)
+
+        mock_run.assert_called_once()
+        assert "Numba needs NumPy 2.3 or less" in capsys.readouterr().err
+
+    @pytest.mark.integration
     def test_import_error_from_remote_preflight_still_falls_back(self, tmp_path: Path) -> None:
         """A missing fsspec backend surfaces in the preflight, before any work: fall back."""
         func = _load_generated(_write_cab_with_image(tmp_path), tmp_path)
