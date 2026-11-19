@@ -57,7 +57,12 @@ This is mandatory. Do not consider a feature complete until linting passes clean
   a PR that already passed, so it is not re-tested; this saves CI minutes. A PR
   into any other branch (e.g. a stacked PR) gets no run unless the maintainer
   opts in with `gh workflow run ci.yml --ref <branch>`. Do not add a `push`
-  trigger back.
+  trigger back. A PR is tested against its base as of the run, so the
+  ruleset should require branches to be up to date (strict required checks);
+  otherwise two PRs that pass separately can break the default branch
+  together. A merge queue instead needs a `merge_group:` trigger in `ci.yml`.
+  The tbump release commit never goes through a PR, so `publish.yml` runs the
+  test suite before uploading to PyPI.
 * **`[skip checks]` belongs to the `update-cabs` bot.** Its regenerated-cabs
   commit carries the tag so that `update-cabs` does not re-trigger on its own
   push. CI never reads it: no CI run sees that commit, and the bot (a GitHub

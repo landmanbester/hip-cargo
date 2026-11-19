@@ -3,10 +3,21 @@ type: log
 title: Wiki changelog
 description: Chronological record of wiki updates.
 timestamp: 2026-11-19
-last_verified_commit: 70b29f0
+last_verified_commit: 636fdc5
 ---
 
 # Wiki changelog
+
+## 2026-11-19 — `container-execution.md`: typer-named parameters (verified at `636fdc5`)
+
+- The fallback message imports `typer` locally, so a parameter or command
+  named `typer` no longer turns the fallback into an `AttributeError`.
+
+## 2026-11-19 — `container-execution.md`: release tests, fallback reason (verified at `1f7327c`)
+
+- `publish.yml` runs the test suite before PyPI, since CI never sees the
+  tbump release commit.
+- The generated wrapper prints the caught `ImportError` before falling back.
 
 ## 2026-11-19 — `container-execution.md`: fallback scope, CI triggers, hooks (verified at `70b29f0`)
 

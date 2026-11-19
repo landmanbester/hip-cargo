@@ -412,6 +412,54 @@ class TestFallbackScope:
         mock_run.assert_not_called()
 
     @pytest.mark.integration
+    def test_the_fallback_reports_why_native_execution_failed(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """A nameless ImportError (e.g. numba refusing its NumPy) still falls back, but says so."""
+        func = _load_generated(_write_cab_with_image(tmp_path), tmp_path)
+        unusable = ImportError("Numba needs NumPy 2.3 or less")
+        mock_run = MagicMock()
+
+        with (
+            patch.object(sys, "meta_path", [_RaisingFinder(unusable), *sys.meta_path]),
+            patch("hip_cargo.utils.config.get_container_image", MagicMock(return_value="img:latest")),
+            patch("hip_cargo.utils.runner.run_in_container", mock_run),
+        ):
+            func(input_ms=Path("/data/input.ms"), backend="auto", always_pull_images=False)
+
+        mock_run.assert_called_once()
+        assert "Numba needs NumPy 2.3 or less" in capsys.readouterr().err
+
+    @pytest.mark.integration
+    def test_a_parameter_named_typer_still_falls_back(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+        """The fallback message must not call ``.echo`` on a user value that shadows the module."""
+        cab = {
+            "cabs": {
+                "process_data": {
+                    "info": "Process input data",
+                    "command": "my_pkg.core.process_data.process_data",
+                    "image": "ghcr.io/user/my-pkg:latest",
+                    "inputs": {"typer": {"dtype": "str", "info": "A parameter that shadows the module"}},
+                    "outputs": {},
+                }
+            }
+        }
+        cab_file = tmp_path / "process_data.yml"
+        cab_file.write_text(yaml.safe_dump(cab, sort_keys=False))
+        func = _load_generated(cab_file, tmp_path)
+        mock_run = MagicMock()
+
+        with (
+            _without_full_install(),
+            patch("hip_cargo.utils.config.get_container_image", MagicMock(return_value="img:latest")),
+            patch("hip_cargo.utils.runner.run_in_container", mock_run),
+        ):
+            func(typer="user-value", backend="auto", always_pull_images=False)
+
+        assert mock_run.call_args.args[1] == {"typer": "user-value"}
+        assert "numpy" in capsys.readouterr().err
+
+    @pytest.mark.integration
     def test_import_error_from_remote_preflight_still_falls_back(self, tmp_path: Path) -> None:
         """A missing fsspec backend surfaces in the preflight, before any work: fall back."""
         func = _load_generated(_write_cab_with_image(tmp_path), tmp_path)
@@ -480,7 +528,21 @@ class TestFallbackScope:
 
 
 @pytest.mark.integration
-@pytest.mark.parametrize("command", ["params", "image", "exc"])
+@pytest.mark.parametrize(
+    "command",
+    [
+        "params",
+        "image",
+        "exc",
+        pytest.param(
+            "typer",
+            marks=pytest.mark.skipif(
+                sys.version_info >= (3, 14),
+                reason="3.14 evaluates annotations lazily, after the command has rebound typer (PEP 649)",
+            ),
+        ),
+    ],
+)
 def test_a_command_named_like_a_wrapper_local_still_dispatches(command: str, tmp_path: Path) -> None:
     """The wrapper refers to itself by name, so its locals must not reuse that name."""
     cab = {

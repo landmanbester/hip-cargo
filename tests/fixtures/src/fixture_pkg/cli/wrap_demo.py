@@ -88,6 +88,9 @@ def wrap_demo(
             # A failed import from this package is a bug, not a missing install.
             if backend == "native" or (exc.name or "").split(".")[0] == "fixture_pkg":
                 raise
+            import typer  # a parameter may be named typer
+
+            typer.echo(f"Cannot run natively ({exc!r}); falling back to a container.", err=True)
         else:
             wrap_demo_core(**params)
             return

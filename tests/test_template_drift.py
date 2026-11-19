@@ -228,3 +228,15 @@ def test_hooks_run_the_locked_hip_cargo(config: Path) -> None:
     """A global or pipx hip-cargo of another version would regenerate the cabs differently."""
     calls = [line for line in config.read_text().splitlines() if "hip-cargo generate-cabs" in line]
     assert calls and all("uv run --no-sync hip-cargo generate-cabs" in line for line in calls), calls
+
+
+@pytest.mark.parametrize(
+    "publish",
+    [TEMPLATES / "workflows" / "publish.yml", ROOT / ".github" / "workflows" / "publish.yml"],
+    ids=["template", "own"],
+)
+def test_pypi_publish_waits_for_the_test_suite(publish: Path) -> None:
+    """CI never sees the tbump release commit, so the release workflow must test it."""
+    jobs = yaml.safe_load(publish.read_text())["jobs"]
+    assert {"quality", "test"} <= set(jobs["publish"]["needs"])
+    assert any("pytest" in step.get("run", "") for step in jobs["test"]["steps"])

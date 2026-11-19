@@ -97,7 +97,12 @@ raise the cap to the next minor in the same change.
   `dev-*` integration branch), plus `workflow_dispatch`. A merge is not
   re-tested, since its PR already passed; a PR into any other branch (e.g. a
   stacked PR) runs only when the maintainer opts in with
-  `gh workflow run ci.yml --ref <branch>`. Do not add a `push` trigger back.
+  `gh workflow run ci.yml --ref <branch>`. Do not add a `push` trigger back. A PR is tested against its base as of the run, so the
+  ruleset should require branches to be up to date (strict required checks);
+  otherwise two PRs that pass separately can break the default branch
+  together. A merge queue instead needs a `merge_group:` trigger in `ci.yml`.
+  The tbump release commit never goes through a PR, so `publish.yml` runs the
+  test suite before uploading to PyPI.
 - **Container images are multi-arch:** `publish-container.yml` builds amd64 and
   arm64 on native runners, pushes each by digest, and a `merge` job publishes
   one manifest under the real tags. A `meta` job computes tags, labels and
