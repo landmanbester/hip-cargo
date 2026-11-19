@@ -4,7 +4,7 @@ title: Container execution and image lifecycle
 description: The _container_image.py contract, container fallback runner, GPU passthrough, per-backend run-args, and release tag mechanics.
 tags: [containers, runner, gpu, releases]
 timestamp: 2026-11-19
-last_verified_commit: 636fdc5
+last_verified_commit: a608aac
 ---
 
 # Container execution and image lifecycle
@@ -43,6 +43,8 @@ maintainer do.
    `publish.yml` and `publish-container.yml` both fire on the tag
    independently, so for the few minutes before the `:X.Y.Z` manifest exists,
    a lightweight install of the new release cannot pull its fallback image.
+   The image is also published when `publish.yml`'s tests fail, so `:X.Y.Z`
+   can exist without a matching PyPI release.
 3. **Feature branches (maintainer only, optional)**: pull requests build no
    image. To test a branch image the maintainer sets the tag by hand to the
    branch name with `/` → `-` (`feat/x` → `:feat-x`) and runs
@@ -113,9 +115,10 @@ missing dependency names the dependency and fsspec's missing-backend error has
 no `name`, so both still fall back; the wrapper prints the caught exception
 to stderr first, so a dependency that is installed but unusable (numba
 refusing an unsupported NumPy raises a nameless `ImportError`) shows up.
-It imports `typer` locally for that, since a parameter may be named `typer`.
-A dependency imported lazily inside `core/` still crashes mid-run rather than falling back; deciding from the `full`
-extra's metadata instead is tracked in #132. On fallback
+It re-imports `typer` locally only when a parameter or the command is named
+`typer`. A dependency imported lazily inside `core/` still crashes mid-run
+rather than falling back; deciding from the `full` extra's metadata instead
+is tracked in #132. On fallback
 `run_in_container()` reconstructs `sys.argv` from the same `params` and re-runs
 the command in the package's container. Because `params` is bound first, the
 later `image = get_container_image(...)` cannot shadow a parameter called
@@ -123,8 +126,12 @@ later `image = get_container_image(...)` cannot shadow a parameter called
 
 Consequences for package authors: heavy imports belong at module scope in
 `core/<name>.py`, since only a failing import of `core/` signals a missing
-`[full]` install; and core parameter names must match the CLI's, since the
-core function is called with `**params`. Backend
+`[full]` install; an `ImportError` meant to request the container, such as a
+check that installed libraries are compatible, must likewise be raised at
+`core/<name>` import time (one raised inside the core function propagates, as
+the wrapper cannot tell it from a failure after side effects); and core
+parameter names must match the CLI's, since the core function is called with
+`**params`. Backend
 priority: `apptainer` → `singularity` → `docker` → `podman`. Volume mounts
 resolve automatically from Path-like type hints (ro) and `@stimela_output`
 decorators (rw); an input with `StimelaMeta(writable=True)` (cab

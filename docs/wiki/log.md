@@ -3,10 +3,17 @@ type: log
 title: Wiki changelog
 description: Chronological record of wiki updates.
 timestamp: 2026-11-19
-last_verified_commit: 636fdc5
+last_verified_commit: a608aac
 ---
 
 # Wiki changelog
+
+## 2026-11-19 — `container-execution.md`: import-time fallback checks (verified at `a608aac`)
+
+- An `ImportError` meant to request the container must be raised while
+  `core/<name>` is imported; one raised in the core call propagates.
+- The wrapper re-imports `typer` only when the name is shadowed.
+- The `:X.Y.Z` image is published even when the release tests fail.
 
 ## 2026-11-19 — `container-execution.md`: typer-named parameters (verified at `636fdc5`)
 
