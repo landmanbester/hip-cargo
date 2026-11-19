@@ -240,3 +240,18 @@ def test_pypi_publish_waits_for_the_test_suite(publish: Path) -> None:
     jobs = yaml.safe_load(publish.read_text())["jobs"]
     assert {"quality", "test"} <= set(jobs["publish"]["needs"])
     assert any("pytest" in step.get("run", "") for step in jobs["test"]["steps"])
+
+
+@pytest.mark.parametrize(
+    "workflows", [TEMPLATES / "workflows", ROOT / ".github" / "workflows"], ids=["template", "own"]
+)
+def test_release_tests_run_on_the_newest_ci_python(workflows: Path) -> None:
+    """The release commit is tested once, so it gets the newest Python the PR matrix covers."""
+    newest = max(
+        yaml.safe_load((workflows / "ci.yml").read_text())["jobs"]["test"]["strategy"]["matrix"]["python-version"],
+        key=_version_key,
+    )
+    test = yaml.safe_load((workflows / "publish.yml").read_text())["jobs"]["test"]
+    setup = [s["with"]["python-version"] for s in test["steps"] if s.get("uses", "").startswith("actions/setup-python")]
+    assert test["env"]["UV_PYTHON"] == newest
+    assert setup in ([], [newest])

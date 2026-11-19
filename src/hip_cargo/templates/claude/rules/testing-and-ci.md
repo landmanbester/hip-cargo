@@ -102,7 +102,9 @@ raise the cap to the next minor in the same change.
   otherwise two PRs that pass separately can break the default branch
   together. A merge queue instead needs a `merge_group:` trigger in `ci.yml`.
   The tbump release commit never goes through a PR, so `publish.yml` runs the
-  test suite before uploading to PyPI.
+  test suite before uploading to PyPI. Its `test` job's Python (`UV_PYTHON`
+  and `setup-python`) must equal the newest Python in the `ci.yml` matrix;
+  change them together if you cap `requires-python` lower.
 - **Container images are multi-arch:** `publish-container.yml` builds amd64 and
   arm64 on native runners, pushes each by digest, and a `merge` job publishes
   one manifest under the real tags. A `meta` job computes tags, labels and
