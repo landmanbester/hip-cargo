@@ -167,3 +167,21 @@ def test_dockerfile_installs_from_the_lock(dockerfile: Path) -> None:
     assert "COPY pyproject.toml uv.lock ./" in text
     assert "uv export --locked --no-dev" in text
     assert "uv pip install --system --no-cache --no-deps ." in text
+
+
+@pytest.mark.parametrize("dockerfile", [TEMPLATES / "Dockerfile", ROOT / "Dockerfile"], ids=["template", "own"])
+def test_dockerfile_uv_is_a_stage_dependabot_can_bump(dockerfile: Path) -> None:
+    """Dependabot reads only FROM lines, so uv must be a named stage, not `COPY --from=<image>`."""
+    text = dockerfile.read_text()
+    assert re.search(r"^FROM ghcr\.io/astral-sh/uv:\d+\.\d+\.\d+ AS uv$", text, re.MULTILINE)
+    assert "COPY --from=uv " in text
+    assert "COPY --from=ghcr.io" not in text
+
+
+def test_dependabot_tracks_docker_images_but_not_the_python_minor() -> None:
+    """The uv stage gets version updates; the image's Python minor stays a deliberate choice."""
+    updates = yaml.safe_load((TEMPLATES / "dependabot.yml").read_text())["updates"]
+    docker = next(u for u in updates if u["package-ecosystem"] == "docker")
+    assert docker["open-pull-requests-limit"] > 0
+    python = next(i for i in docker["ignore"] if i["dependency-name"] == "python")
+    assert "version-update:semver-minor" in python["update-types"]

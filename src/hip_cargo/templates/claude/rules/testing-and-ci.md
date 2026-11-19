@@ -60,6 +60,13 @@ When ruff moves in `uv.lock` (an upgrade or a Dependabot PR), set the hook's
 `pre-commit run --all-files`. `tests/test_precommit.py` fails until you do.
 `hip-cargo init` pins them equal at creation.
 
+**Keep the image's uv current.** The `Dockerfile` takes uv from a named stage
+(`FROM ghcr.io/astral-sh/uv:<x.y.z> AS uv`) so Dependabot's monthly `docker`
+updates can bump it; never turn it back into `COPY --from=<image>`, which
+Dependabot cannot see. The image's uv must not lag the uv that writes
+`uv.lock`. When a bump moves uv past the `uv_build` cap in `[build-system]`,
+raise the cap to the next minor in the same change.
+
 ## 4. CI
 
 - **CI matrix is bracketed:** the full test suite runs on the oldest and newest

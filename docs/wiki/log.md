@@ -2,11 +2,18 @@
 type: log
 title: Wiki changelog
 description: Chronological record of wiki updates.
-timestamp: 2026-11-18
-last_verified_commit: 04c5e48
+timestamp: 2026-11-19
+last_verified_commit: 6aa584a
 ---
 
 # Wiki changelog
+
+## 2026-11-19 — `container-execution.md`: Dependabot-visible uv stage (verified at `6aa584a`)
+
+- uv enters the image from a named `FROM ... AS uv` stage (bumped to 0.13.9)
+  so the new `docker` Dependabot entry can update it; `python` minor/major
+  updates are ignored. `uv_build` cap raised to `<0.14.0`.
+- Repaired the multi-arch paragraph, which the previous entry had split.
 
 ## 2026-11-18 — `container-execution.md`: image labels on multi-arch builds (verified at `04c5e48`)
 
