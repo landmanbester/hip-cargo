@@ -32,7 +32,7 @@ Always run linting after adding or modifying any code:
 
 This is mandatory. Do not consider a feature complete until linting passes cleanly. If `ruff check` reports errors that `--fix` cannot auto-correct, fix them manually before proceeding.
 
-## 4. CI Workflow and `[skip checks]`
+## 4. CI Workflow
 * **CI matrix is bracketed:** tests run on the oldest and newest supported
   Python on x86 (`Tests (3.10)`, `Tests (3.14)`) plus one arm64 job at the
   newest (`Tests (3.14, arm64)`). The oldest must equal the `requires-python`
@@ -52,10 +52,13 @@ This is mandatory. Do not consider a feature complete until linting passes clean
   that writes `uv.lock`. When a bump moves uv past the `uv_build` cap in
   `[build-system]`, raise the cap (here and in the template) in the same change.
 
-The CI pipeline relies on a custom `[skip checks]` tag, which operates differently from GitHub's native `[skip ci]`.
-* The `update-cabs` workflow commits with `[skip checks]` in the message after the GitHub App regenerates cab definitions on merge to main.
-* This custom tag allows the workflow to run but skips the heavy steps. This ensures required status checks always report a success status, satisfying branch protection rules.
-* The CI workflow (`ci.yml`) evaluates the tag once at the workflow level:
-  ```yaml
-  env:
-    SKIP_CHECKS: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[skip checks]') }}
+* **CI runs on pull requests only** (into `main` or a long-lived `dev-*`
+  integration branch), plus `workflow_dispatch`. A push to main is the merge of
+  a PR that already passed, so it is not re-tested; this saves CI minutes. A PR
+  into any other branch (e.g. a stacked PR) gets no run unless the maintainer
+  opts in with `gh workflow run ci.yml --ref <branch>`. Do not add a `push`
+  trigger back.
+* **`[skip checks]` belongs to the `update-cabs` bot.** Its regenerated-cabs
+  commit carries the tag so that `update-cabs` does not re-trigger on its own
+  push. CI never reads it: no CI run sees that commit, and the bot (a GitHub
+  App) bypasses the branch ruleset. Do not add the tag to human commits.

@@ -79,6 +79,11 @@ raise the cap to the next minor in the same change.
   Python. Do not add a 3.10 leg to the full test matrix.
 - Changing job names renames required checks, so update the branch ruleset in
   the same change.
+- **CI runs on pull requests only** (into the default branch or a long-lived
+  `dev-*` integration branch), plus `workflow_dispatch`. A merge is not
+  re-tested, since its PR already passed; a PR into any other branch (e.g. a
+  stacked PR) runs only when the maintainer opts in with
+  `gh workflow run ci.yml --ref <branch>`. Do not add a `push` trigger back.
 - **Container images are multi-arch:** `publish-container.yml` builds amd64 and
   arm64 on native runners, pushes each by digest, and a `merge` job publishes
   one manifest under the real tags. A `meta` job computes tags, labels and
@@ -91,5 +96,5 @@ raise the cap to the next minor in the same change.
 - Use [Conventional Commits](https://www.conventionalcommits.org/):
   `<type>: <description>` (`feat`, `fix`, `refactor`, `perf`, `docs`, `test`,
   `ci`, `deps`, `chore`). Imperative mood, first line under 72 chars.
-- The `update-cabs` bot uses `[skip checks]` to bypass required status checks;
-  **do not** add that tag to human commits.
+- The `update-cabs` bot tags its commit `[skip checks]` so its own push does
+  not re-trigger it; **do not** add that tag to human commits.

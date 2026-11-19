@@ -200,3 +200,15 @@ def test_template_uv_build_cap_matches_hip_cargo() -> None:
     own = tomllib.loads((ROOT / "pyproject.toml").read_text())["build-system"]["requires"]
     template = tomllib.loads((TEMPLATES / "pyproject.toml").read_text())["build-system"]["requires"]
     assert template == own
+
+
+@pytest.mark.parametrize(
+    "ci", [TEMPLATES / "workflows" / "ci.yml", ROOT / ".github" / "workflows" / "ci.yml"], ids=["template", "own"]
+)
+def test_ci_runs_on_pull_requests_only(ci: Path) -> None:
+    """A merge is not re-tested (its PR passed), and only PRs into the default or dev-* branches run."""
+    text = ci.read_text()
+    triggers = yaml.safe_load(text)[True]
+    assert set(triggers) == {"pull_request", "workflow_dispatch"}
+    assert "dev-*" in triggers["pull_request"]["branches"]
+    assert "SKIP_CHECKS" not in text, "nothing CI runs on carries [skip checks]; the bot's commit is never tested"
