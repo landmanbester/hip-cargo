@@ -609,8 +609,10 @@ def generate_function_body(cab_def: dict[str, Any], inputs: dict[str, Any], outp
     lines.append("            # A failed import from this package is a bug, not a missing install.")
     lines.append(f"            if backend == 'native' or ({exc_var}.name or '').split('.')[0] == '{own_package}':")
     lines.append("                raise")
-    typer_import = "import typer" if typer_var == "typer" else f"import typer as {typer_var}"
-    lines.append(f"            {typer_import}  # a parameter may be named typer")
+    # A parameter or the command itself named typer shadows the module here.
+    if "typer" in param_names or func_name == "typer":
+        typer_import = "import typer" if typer_var == "typer" else f"import typer as {typer_var}"
+        lines.append(f"            {typer_import}  # the name typer is shadowed in this function")
     reason = f'f"Cannot run natively ({{{exc_var}!r}}); falling back to a container."'
     lines.append(f"            {typer_var}.echo({reason}, err=True)")
     lines.append("        else:")

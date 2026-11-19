@@ -103,8 +103,6 @@ def my_command(...):
             # A failed import from this package is a bug, not a missing install.
             if backend == "native" or (exc.name or "").split(".")[0] == "<PACKAGE_NAME>":
                 raise
-            import typer  # a parameter may be named typer
-
             typer.echo(f"Cannot run natively ({exc!r}); falling back to a container.", err=True)
         else:
             my_command_core(**params)
@@ -129,6 +127,13 @@ Consequences:
   install is only detected when importing `core/` fails. An import deferred into
   the core function body fails mid-run and is reported, not routed to the
   container.
+- **Raise an environment check at import time.** An `ImportError` (or a
+  subclass) that should send the command to the container, for example a
+  check that two installed libraries are compatible, must be raised while
+  `core/<name>.py` is imported: put the call at module scope, next to the
+  heavy imports. Raised from inside the core function, it fails the run like
+  any other error. Leave its `name` unset; a `name` inside `<PACKAGE_NAME>`
+  marks it as a bug and re-raises it.
 - **Core parameter names must match the CLI's.** The core function is called
   with `**params`, keyed by the CLI parameter names; `tests/test_roundtrip.py`
   fails when they disagree.
