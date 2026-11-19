@@ -185,3 +185,18 @@ def test_dependabot_tracks_docker_images_but_not_the_python_minor() -> None:
     assert docker["open-pull-requests-limit"] > 0
     python = next(i for i in docker["ignore"] if i["dependency-name"] == "python")
     assert "version-update:semver-minor" in python["update-types"]
+
+
+def test_template_dockerfile_uses_the_same_uv_as_hip_cargo() -> None:
+    """Dependabot bumps only the root Dockerfile; this fails its PR until the template follows."""
+    pattern = re.compile(r"^FROM ghcr\.io/astral-sh/uv:(\S+) AS uv$", re.MULTILINE)
+    own = pattern.search((ROOT / "Dockerfile").read_text()).group(1)
+    template = pattern.search((TEMPLATES / "Dockerfile").read_text()).group(1)
+    assert template == own, f"set the uv stage in templates/Dockerfile to {own}"
+
+
+def test_template_uv_build_cap_matches_hip_cargo() -> None:
+    """The template's [build-system] is kept aligned with hip-cargo's own."""
+    own = tomllib.loads((ROOT / "pyproject.toml").read_text())["build-system"]["requires"]
+    template = tomllib.loads((TEMPLATES / "pyproject.toml").read_text())["build-system"]["requires"]
+    assert template == own
