@@ -200,3 +200,31 @@ def test_template_uv_build_cap_matches_hip_cargo() -> None:
     own = tomllib.loads((ROOT / "pyproject.toml").read_text())["build-system"]["requires"]
     template = tomllib.loads((TEMPLATES / "pyproject.toml").read_text())["build-system"]["requires"]
     assert template == own
+
+
+@pytest.mark.parametrize(
+    "ci", [TEMPLATES / "workflows" / "ci.yml", ROOT / ".github" / "workflows" / "ci.yml"], ids=["template", "own"]
+)
+def test_ci_runs_on_pull_requests_only(ci: Path) -> None:
+    """A merge is not re-tested (its PR passed), and only PRs into the default or dev-* branches run."""
+    text = ci.read_text()
+    triggers = yaml.safe_load(text)[True]
+    assert set(triggers) == {"pull_request", "workflow_dispatch"}
+    assert "dev-*" in triggers["pull_request"]["branches"]
+    assert "SKIP_CHECKS" not in text, "nothing CI runs on carries [skip checks]; the bot's commit is never tested"
+
+
+@pytest.mark.parametrize(
+    "config",
+    [
+        TEMPLATES / "pre-commit-config.yaml",
+        ROOT / ".pre-commit-config.yaml",
+        TEMPLATES / "tbump.toml",
+        ROOT / "tbump.toml",
+    ],
+    ids=lambda p: f"{'template' if TEMPLATES in p.parents else 'own'}-{p.name}",
+)
+def test_hooks_run_the_locked_hip_cargo(config: Path) -> None:
+    """A global or pipx hip-cargo of another version would regenerate the cabs differently."""
+    calls = [line for line in config.read_text().splitlines() if "hip-cargo generate-cabs" in line]
+    assert calls and all("uv run --no-sync hip-cargo generate-cabs" in line for line in calls), calls

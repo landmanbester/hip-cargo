@@ -3,10 +3,19 @@ type: log
 title: Wiki changelog
 description: Chronological record of wiki updates.
 timestamp: 2026-11-19
-last_verified_commit: 6aa584a
+last_verified_commit: 70b29f0
 ---
 
 # Wiki changelog
+
+## 2026-11-19 — `container-execution.md`: fallback scope, CI triggers, hooks (verified at `70b29f0`)
+
+- The generated wrapper re-raises an `ImportError` named in the command's own
+  package instead of falling back; lazy `[full]` imports are #132.
+- `ci.yml` runs on pull requests only, so the `update-cabs` bot commit is
+  never tested and `[skip checks]` only stops that workflow re-triggering.
+- Hooks and tbump run `uv run --no-sync hip-cargo`; any `git+` line in the
+  lock export needs `git` in the image; noted the PyPI/image release race.
 
 ## 2026-11-19 — `container-execution.md`: Dependabot-visible uv stage (verified at `6aa584a`)
 

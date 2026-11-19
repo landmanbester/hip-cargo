@@ -539,7 +539,11 @@ def generate_function_body(cab_def: dict[str, Any], inputs: dict[str, Any], outp
     guarded by ``except ImportError``: those are how a missing ``[full]`` install
     or fsspec backend shows up, and neither has side effects. The core call runs
     outside the ``try``, so an ``ImportError`` raised during the run propagates
-    instead of silently re-running the command in a container.
+    instead of silently re-running the command in a container. An ``ImportError``
+    whose ``name`` lies in the command's own package (a renamed symbol, a deleted
+    module) is re-raised as well: that is a bug, not a missing install. A missing
+    dependency names the dependency, and fsspec's missing-backend error has no
+    ``name``, so both still fall back.
 
     Args:
         cab_def: Cab definition dictionary
@@ -561,6 +565,7 @@ def generate_function_body(cab_def: dict[str, Any], inputs: dict[str, Any], outp
     # The body refers to the wrapper by name, so its own locals must not reuse it.
     params_var = _local_name("params", func_name)
     image_var = _local_name("image", func_name)
+    exc_var = _local_name("exc", func_name)
 
     param_names = [name.replace("-", "_") for name in [*inputs, *outputs]]
     lines = []
@@ -589,15 +594,17 @@ def generate_function_body(cab_def: dict[str, Any], inputs: dict[str, Any], outp
         return lines
 
     # Derive distribution name from command: "pfb_imaging.core.grid.grid" → "pfb-imaging"
-    dist_name = command.split(".")[0].replace("_", "-") if command else ""
+    own_package = command.split(".")[0]
+    dist_name = own_package.replace("_", "-") if command else ""
 
     lines.append("    if backend == 'native' or backend == 'auto':")
     lines.append("        # Only a missing install falls back to the container, so only the")
     lines.append("        # imports and the pre-flight are guarded; the core call is not.")
     lines.append("        try:")
     lines.extend(dispatch_imports("            "))
-    lines.append("        except ImportError:")
-    lines.append("            if backend == 'native':")
+    lines.append(f"        except ImportError as {exc_var}:")
+    lines.append("            # A failed import from this package is a bug, not a missing install.")
+    lines.append(f"            if backend == 'native' or ({exc_var}.name or '').split('.')[0] == '{own_package}':")
     lines.append("                raise")
     lines.append("        else:")
     lines.append(f"            {core_func_name}_core(**{params_var})")

@@ -23,9 +23,23 @@ cabs/<cmd>.yml ──(generate-function)──► == cli/<cmd>.py     (byte for 
 Commands are discovered, not listed: a new module under `cli/` is covered with
 no change to the test file, and a `@stimela_cab` command without a committed cab
 fails `test_every_decorated_command_has_a_committed_cab`. Modules whose name
-starts with `_` are skipped. The suite needs no install: it reads
-`CONTAINER_IMAGE` from `_container_image.py` with `ast` rather than importing
-the package.
+starts with `_` are skipped. It reads `CONTAINER_IMAGE` from
+`_container_image.py` with `ast` rather than importing the package, so it needs
+no `[full]` install.
+
+The same file checks two contracts the round trip cannot see:
+
+- `test_the_core_function_accepts_what_the_wrapper_passes`: the wrapper calls
+  `<cmd>_core(**params)`, so every CLI parameter name must be a parameter of the
+  core function, and every core parameter without a default must come from the
+  CLI. It parses `core/` with `ast`, so heavy imports are not needed.
+- `test_every_cab_command_is_registered_on_the_cli`: a cab command missing from
+  `cli/__init__.py` round-trips fine but is invisible on the CLI. This one
+  imports the CLI app, which the lightweight install provides.
+
+Both scaffolded test files set `pytestmark = pytest.mark.unit`, so `pytest -m
+unit` keeps them. Mark new test files too: `--strict-markers` rejects unknown
+markers, but an unmarked file is silently deselected by `-m`.
 
 After upgrading hip-cargo, a reverse failure across every command usually means
 the emitter changed in that release: regenerate `cli/*.py` from the cabs.
@@ -79,6 +93,11 @@ raise the cap to the next minor in the same change.
   Python. Do not add a 3.10 leg to the full test matrix.
 - Changing job names renames required checks, so update the branch ruleset in
   the same change.
+- **CI runs on pull requests only** (into the default branch or a long-lived
+  `dev-*` integration branch), plus `workflow_dispatch`. A merge is not
+  re-tested, since its PR already passed; a PR into any other branch (e.g. a
+  stacked PR) runs only when the maintainer opts in with
+  `gh workflow run ci.yml --ref <branch>`. Do not add a `push` trigger back.
 - **Container images are multi-arch:** `publish-container.yml` builds amd64 and
   arm64 on native runners, pushes each by digest, and a `merge` job publishes
   one manifest under the real tags. A `meta` job computes tags, labels and
@@ -91,5 +110,5 @@ raise the cap to the next minor in the same change.
 - Use [Conventional Commits](https://www.conventionalcommits.org/):
   `<type>: <description>` (`feat`, `fix`, `refactor`, `perf`, `docs`, `test`,
   `ci`, `deps`, `chore`). Imperative mood, first line under 72 chars.
-- The `update-cabs` bot uses `[skip checks]` to bypass required status checks;
-  **do not** add that tag to human commits.
+- The `update-cabs` bot tags its commit `[skip checks]` so its own push does
+  not re-trigger it; **do not** add that tag to human commits.

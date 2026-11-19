@@ -50,7 +50,7 @@ cmd = "python -c \"import re; p = 'src/<PACKAGE_NAME>/_container_image.py'; t = 
 
 [[before_commit]]
 name = "Regenerate cab definitions with release version"
-cmd = "hip-cargo generate-cabs --module 'src/<PACKAGE_NAME>/cli/*.py' --output-dir src/<PACKAGE_NAME>/cabs"
+cmd = "uv run --no-sync hip-cargo generate-cabs --module 'src/<PACKAGE_NAME>/cli/*.py' --output-dir src/<PACKAGE_NAME>/cabs"
 
 [[before_commit]]
 name = "Stage updated cab definitions"

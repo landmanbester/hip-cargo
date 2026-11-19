@@ -12,6 +12,10 @@ COPY --from=uv /uv /uvx /usr/local/bin/
 # Install the locked dependencies first, so every architecture gets the versions
 # CI tested (and this layer is cached until uv.lock changes), then the package
 # itself without re-resolving. --locked fails the build if uv.lock is stale.
+# Any `git+` line in `uv export --no-dev --extra all` needs git in the image
+# (apt-get install git), and that includes a git pin in a dev or test group for a
+# package the extra also lists: uv keeps one source per package. A GitHub archive
+# URL (https://github.com/<owner>/<repo>/archive/<sha>.tar.gz) needs no git.
 COPY pyproject.toml uv.lock ./
 RUN uv export --locked --no-dev --extra all --no-emit-project --no-header -o /tmp/requirements.txt \
     && uv pip install --system --no-cache -r /tmp/requirements.txt \

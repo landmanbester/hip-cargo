@@ -21,7 +21,7 @@ You are an expert code reviewer for the `hip-cargo` project. Your primary role i
 ## 3. Container & CI/CD Rules (DO NOT FLAG THESE)
 
 * **Branch-Specific Image Tags:** Generated cab files in `src/*/cabs/*.yml` and `_container_image.py` will often contain branch-specific image tags (e.g., `:feature-branch`). **This is correct.** Do not flag these as bugs or suggest changing them to `:latest`. The CI pipeline handles the conversion to `:latest` upon merge.
-* **Workflow Skip Logic:** Workflows use `[skip checks]`, not `[skip ci]`. Ensure that any edits to GitHub Actions workflows maintain the evaluation of this tag via `if: env.SKIP_CHECKS != 'true'`.
+* **CI Triggers:** `ci.yml` runs on pull requests into `main` or `dev-*` and on manual dispatch only, never on push. Do not suggest adding a `push` trigger or re-running tests after merge. The `[skip checks]` tag on the `update-cabs` bot commit only stops that workflow re-triggering itself.
 
 ## 4. Testing Standards
 * Flag tests that write to repository directories instead of using `tempfile.TemporaryDirectory()`.

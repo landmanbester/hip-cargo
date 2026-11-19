@@ -3,6 +3,7 @@
 import os
 import re
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 
@@ -183,3 +184,82 @@ def test_pin_precommit_ruff_uses_the_locked_version(tmp_path: Path) -> None:
 
     text = config.read_text()
     assert "    rev: v0.17.5\n  - repo: https://github.com/pre-commit/pre-commit-hooks\n    rev: v5.0.0\n" in text
+
+
+def _contract_project(tmp_path: Path, core_signature: str, register: bool) -> Path:
+    """A one-command project with a generated wrapper, for the template's contract checks."""
+    from hip_cargo.core.generate_function import generate_function
+    from hip_cargo.core.init import TEMPLATES_DIR, _apply_substitutions
+
+    pkg = tmp_path / "src" / "demo"
+    for sub in ("cli", "core", "cabs"):
+        (pkg / sub).mkdir(parents=True)
+        (pkg / sub / "__init__.py").touch()
+    (pkg / "__init__.py").touch()
+    (pkg / "cabs" / "run.yml").write_text(
+        "cabs:\n"
+        "  run:\n"
+        "    info: Run it\n"
+        "    command: demo.core.run.run\n"
+        "    image: ghcr.io/example/demo:latest\n"
+        "    inputs:\n"
+        "      x: {dtype: int, required: true, info: X}\n"
+        "      y: {dtype: str, default: a, info: Y}\n"
+        "    outputs: {}\n"
+    )
+    generate_function(pkg / "cabs" / "run.yml", output_file=pkg / "cli" / "run.py")
+    (pkg / "core" / "run.py").write_text(f"def run({core_signature}):\n    pass\n")
+    registration = 'app.command(name="run")(run)\n' if register else ""
+    (pkg / "cli" / "__init__.py").write_text(
+        f"import typer\n\napp = typer.Typer()\n\nfrom demo.cli.run import run  # noqa: E402\n\n{registration}"
+    )
+    tests = tmp_path / "tests"
+    tests.mkdir()
+    subs = {"<PACKAGE_NAME>": "demo"}
+    (tests / "test_roundtrip.py").write_text(
+        _apply_substitutions((TEMPLATES_DIR / "test_roundtrip.py").read_text(), subs)
+    )
+    return tmp_path
+
+
+@pytest.mark.parametrize(
+    ("core_signature", "register", "failure"),
+    [
+        ("x, y='a'", True, None),
+        ("x, **kwargs", True, None),
+        ("x, y, z", True, "requires ['z']"),
+        ("x", True, "does not accept ['y']"),
+        ("x, /, y='a'", True, "positional-only"),
+        ("x, y='a'", False, "not registered in cli/__init__.py: ['run']"),
+    ],
+    ids=["binds", "var-kwargs", "missing-required", "unexpected", "positional-only", "unregistered"],
+)
+def test_template_contract_checks_fail_on_a_broken_contract(
+    tmp_path: Path, core_signature: str, register: bool, failure: str | None
+) -> None:
+    """The scaffold only exercises ``onboard`` (no parameters, registered), so prove the checks can fail."""
+    project = _contract_project(tmp_path, core_signature, register)
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "-q",
+            "-p",
+            "no:cacheprovider",
+            "tests/test_roundtrip.py",
+            "-k",
+            "core_function or registered",
+        ],
+        cwd=project,
+        env={**os.environ, "PYTHONPATH": str(project / "src")},
+        capture_output=True,
+        text=True,
+    )
+    output = result.stdout + result.stderr
+    if failure is None:
+        assert result.returncode == 0, output
+        assert "2 passed" in output, output
+    else:
+        assert result.returncode == 1, output
+        assert failure in output, output

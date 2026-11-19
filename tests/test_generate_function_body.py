@@ -62,7 +62,7 @@ class TestGenerateFunctionBodyWithImage:
 
         assert "if backend == 'native' or backend == 'auto':" in code
         assert "try:" in code
-        assert "except ImportError:" in code
+        assert "except ImportError as exc:" in code
 
     @pytest.mark.unit
     def test_native_backend_reraises(self):
@@ -77,7 +77,7 @@ class TestGenerateFunctionBodyWithImage:
         lines = generate_function_body(cab_def, inputs, outputs)
         code = "\n".join(lines)
 
-        assert "if backend == 'native':" in code
+        assert "if backend == 'native' or (exc.name or '').split('.')[0] == 'pfb_imaging':" in code
         assert "raise" in code
 
     @pytest.mark.unit
@@ -164,7 +164,11 @@ class TestGenerateFunctionBodyWithImage:
         lines = generate_function_body(cab_def, {"x": {"dtype": "int"}}, {})
 
         stripped = [line.strip() for line in lines]
-        assert stripped.index("except ImportError:") < stripped.index("else:") < stripped.index("run_core(**params)")
+        assert (
+            stripped.index("except ImportError as exc:")
+            < stripped.index("else:")
+            < stripped.index("run_core(**params)")
+        )
 
     @pytest.mark.unit
     def test_params_dict_is_built_once(self) -> None:
