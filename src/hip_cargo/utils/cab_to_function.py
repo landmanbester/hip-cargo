@@ -568,6 +568,7 @@ def generate_function_body(cab_def: dict[str, Any], inputs: dict[str, Any], outp
     params_var = _local_name("params", func_name)
     image_var = _local_name("image", func_name)
     exc_var = _local_name("exc", func_name)
+    typer_var = _local_name("typer", func_name)
 
     param_names = [name.replace("-", "_") for name in [*inputs, *outputs]]
     lines = []
@@ -608,9 +609,10 @@ def generate_function_body(cab_def: dict[str, Any], inputs: dict[str, Any], outp
     lines.append("            # A failed import from this package is a bug, not a missing install.")
     lines.append(f"            if backend == 'native' or ({exc_var}.name or '').split('.')[0] == '{own_package}':")
     lines.append("                raise")
-    lines.append(
-        f'            typer.echo(f"Cannot run natively ({{{exc_var}!r}}); falling back to a container.", err=True)'
-    )
+    typer_import = "import typer" if typer_var == "typer" else f"import typer as {typer_var}"
+    lines.append(f"            {typer_import}  # a parameter may be named typer")
+    reason = f'f"Cannot run natively ({{{exc_var}!r}}); falling back to a container."'
+    lines.append(f"            {typer_var}.echo({reason}, err=True)")
     lines.append("        else:")
     lines.append(f"            {core_func_name}_core(**{params_var})")
     lines.append("            return")
