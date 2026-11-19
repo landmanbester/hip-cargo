@@ -528,7 +528,21 @@ class TestFallbackScope:
 
 
 @pytest.mark.integration
-@pytest.mark.parametrize("command", ["params", "image", "exc", "typer"])
+@pytest.mark.parametrize(
+    "command",
+    [
+        "params",
+        "image",
+        "exc",
+        pytest.param(
+            "typer",
+            marks=pytest.mark.skipif(
+                sys.version_info >= (3, 14),
+                reason="3.14 evaluates annotations lazily, after the command has rebound typer (PEP 649)",
+            ),
+        ),
+    ],
+)
 def test_a_command_named_like_a_wrapper_local_still_dispatches(command: str, tmp_path: Path) -> None:
     """The wrapper refers to itself by name, so its locals must not reuse that name."""
     cab = {
