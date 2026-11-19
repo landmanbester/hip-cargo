@@ -3,8 +3,8 @@ type: reference
 title: Container execution and image lifecycle
 description: The _container_image.py contract, container fallback runner, GPU passthrough, per-backend run-args, and release tag mechanics.
 tags: [containers, runner, gpu, releases]
-timestamp: 2026-11-18
-last_verified_commit: 04c5e48
+timestamp: 2026-11-19
+last_verified_commit: 6aa584a
 ---
 
 # Container execution and image lifecycle
@@ -46,12 +46,17 @@ maintainer do.
 Images are multi-arch (amd64 + arm64). Each architecture builds on its own
 native runner (`ubuntu-latest`, `ubuntu-24.04-arm`) and is pushed by digest; a
 `merge` job applies the tags to one manifest and fails if any built
-architecture is missing from it. A `meta` job runs `docker/metadata-action`
-once and feeds both: the OCI labels (`org.opencontainers.image.source`,
-`revision`, `version`, ...) must be passed to each per-arch build because they
-live in the image config, which `imagetools create` cannot change; the merge
-job adds the same metadata as index-level annotations. (The #121 split first
-dropped the labels; fixed before 0.5.0.)
+architecture is missing from it. Native runners rather than QEMU because
+emulated arm64 builds are roughly 10x slower, which matters as soon as a
+dependency compiles from source. Dropping the arm64 matrix entry gives an
+amd64-only image with no other change.
+
+A `meta` job runs `docker/metadata-action` once and feeds both: the OCI labels
+(`org.opencontainers.image.source`, `revision`, `version`, ...) must be passed
+to each per-arch build because they live in the image config, which
+`imagetools create` cannot change; the merge job adds the same metadata as
+index-level annotations. (The #121 split first dropped the labels; fixed
+before 0.5.0.)
 
 The `Dockerfile` (hip-cargo's and the template's) installs from `uv.lock`:
 `uv export --locked --no-dev --extra <full|all> --no-emit-project` piped into
@@ -59,10 +64,18 @@ The `Dockerfile` (hip-cargo's and the template's) installs from `uv.lock`:
 gets the same, CI-tested versions instead of resolving independently, and
 `--locked` fails the build if `uv.lock` is stale (tbump re-locks on release).
 A package that pins hip-cargo through `[tool.uv.sources]` git needs `git` in
-the image, since the exported requirement is a `git+` URL. Native runners rather than QEMU because
-emulated arm64 builds are roughly 10x slower, which matters as soon as a
-dependency compiles from source. Dropping the arm64 matrix entry gives an
-amd64-only image with no other change.
+the image, since the exported requirement is a `git+` URL.
+
+uv enters the image from a named stage (`FROM ghcr.io/astral-sh/uv:<x.y.z> AS
+uv`, then `COPY --from=uv`), not `COPY --from=<image>`: Dependabot's Docker
+parser reads only `FROM` lines. The `docker` entry in `dependabot.yml` bumps it
+monthly. It must not lag the uv that writes `uv.lock`, because the build's
+`--locked` re-checks the lock with the image's uv. The same entry ignores minor
+and major updates to `python`: the image's Python minor is chosen by hand, and
+the `-slim` tag already floats patch releases. `uv_build` in `[build-system]`
+is capped at the next uv minor (hip-cargo's and the template's move together),
+so bump the cap when Dependabot moves uv past it; a newer uv still builds,
+with a warning, by fetching an in-range `uv_build`.
 
 The `hip-cargo init` templates (`templates/workflows/publish-container.yml`,
 `templates/claude/rules/architecture.md`, `templates/CLAUDE.md`,

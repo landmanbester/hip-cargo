@@ -61,3 +61,27 @@ updates:
         applies-to: version-updates
         patterns:
           - "*"
+
+  # Docker base images: the uv build stage and python. Monthly, like actions:
+  # these are build tools, so a limit of 0 would freeze them, and an old uv can
+  # misread a uv.lock written by a newer one. Python's minor version is the
+  # image's runtime and is chosen by hand; the -slim tag already floats patches.
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    open-pull-requests-limit: 1
+    commit-message:
+      prefix: "deps"
+    ignore:
+      - dependency-name: "python"
+        update-types: ["version-update:semver-major", "version-update:semver-minor"]
+    groups:
+      docker-security:
+        applies-to: security-updates
+        patterns:
+          - "*"
+      docker:
+        applies-to: version-updates
+        patterns:
+          - "*"

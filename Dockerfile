@@ -1,9 +1,13 @@
+# uv is a named stage, not `COPY --from=<image>`, because Dependabot only reads
+# FROM lines; .github/dependabot.yml bumps it. Keep it no older than the uv that
+# writes uv.lock, since `uv export --locked` below re-checks the lock with it.
+FROM ghcr.io/astral-sh/uv:0.13.9 AS uv
+
 FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install uv for fast package installation
-COPY --from=ghcr.io/astral-sh/uv:0.9.8 /uv /usr/local/bin/uv
+COPY --from=uv /uv /uvx /usr/local/bin/
 
 # Install the locked dependencies first, so every architecture gets the versions
 # CI tested (and this layer is cached until uv.lock changes), then the package
@@ -13,7 +17,7 @@ RUN uv export --locked --no-dev --extra all --no-emit-project --no-header -o /tm
     && uv pip install --system --no-cache -r /tmp/requirements.txt \
     && rm /tmp/requirements.txt
 
-COPY README.md ./
+COPY README.md LICENSE ./
 COPY src/ src/
 RUN uv pip install --system --no-cache --no-deps .
 

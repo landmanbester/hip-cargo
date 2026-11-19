@@ -46,6 +46,11 @@ This is mandatory. Do not consider a feature complete until linting passes clean
   annotations once: labels live in each image's config, so the per-arch builds
   set them; the merge job applies tags and index annotations. Drop the arm64
   build entry (and the arm64 test job) for an amd64-only project.
+* **The image's uv is a named Dockerfile stage** (`FROM ghcr.io/astral-sh/uv:<x.y.z> AS uv`)
+  so Dependabot's monthly `docker` updates can bump it; never use
+  `COPY --from=<image>`, which Dependabot cannot see. It must not lag the uv
+  that writes `uv.lock`. When a bump moves uv past the `uv_build` cap in
+  `[build-system]`, raise the cap (here and in the template) in the same change.
 
 The CI pipeline relies on a custom `[skip checks]` tag, which operates differently from GitHub's native `[skip ci]`.
 * The `update-cabs` workflow commits with `[skip checks]` in the message after the GitHub App regenerates cab definitions on merge to main.

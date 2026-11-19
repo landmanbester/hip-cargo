@@ -167,3 +167,36 @@ def test_dockerfile_installs_from_the_lock(dockerfile: Path) -> None:
     assert "COPY pyproject.toml uv.lock ./" in text
     assert "uv export --locked --no-dev" in text
     assert "uv pip install --system --no-cache --no-deps ." in text
+
+
+@pytest.mark.parametrize("dockerfile", [TEMPLATES / "Dockerfile", ROOT / "Dockerfile"], ids=["template", "own"])
+def test_dockerfile_uv_is_a_stage_dependabot_can_bump(dockerfile: Path) -> None:
+    """Dependabot reads only FROM lines, so uv must be a named stage, not `COPY --from=<image>`."""
+    text = dockerfile.read_text()
+    assert re.search(r"^FROM ghcr\.io/astral-sh/uv:\d+\.\d+\.\d+ AS uv$", text, re.MULTILINE)
+    assert "COPY --from=uv " in text
+    assert "COPY --from=ghcr.io" not in text
+
+
+def test_dependabot_tracks_docker_images_but_not_the_python_minor() -> None:
+    """The uv stage gets version updates; the image's Python minor stays a deliberate choice."""
+    updates = yaml.safe_load((TEMPLATES / "dependabot.yml").read_text())["updates"]
+    docker = next(u for u in updates if u["package-ecosystem"] == "docker")
+    assert docker["open-pull-requests-limit"] > 0
+    python = next(i for i in docker["ignore"] if i["dependency-name"] == "python")
+    assert "version-update:semver-minor" in python["update-types"]
+
+
+def test_template_dockerfile_uses_the_same_uv_as_hip_cargo() -> None:
+    """Dependabot bumps only the root Dockerfile; this fails its PR until the template follows."""
+    pattern = re.compile(r"^FROM ghcr\.io/astral-sh/uv:(\S+) AS uv$", re.MULTILINE)
+    own = pattern.search((ROOT / "Dockerfile").read_text()).group(1)
+    template = pattern.search((TEMPLATES / "Dockerfile").read_text()).group(1)
+    assert template == own, f"set the uv stage in templates/Dockerfile to {own}"
+
+
+def test_template_uv_build_cap_matches_hip_cargo() -> None:
+    """The template's [build-system] is kept aligned with hip-cargo's own."""
+    own = tomllib.loads((ROOT / "pyproject.toml").read_text())["build-system"]["requires"]
+    template = tomllib.loads((TEMPLATES / "pyproject.toml").read_text())["build-system"]["requires"]
+    assert template == own
