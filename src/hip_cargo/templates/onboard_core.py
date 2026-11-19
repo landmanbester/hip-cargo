@@ -112,7 +112,11 @@ Follow these steps to complete the CI/CD and publishing setup for your project.
     Target:            Default branch
     Rules to enable:
       - Require a pull request before merging
-      - Require status checks to pass (add: "Code Quality", "Tests")
+      - Require status checks to pass (add: "Code Quality", "Tests (3.11)",
+        "Tests (3.14)", "Tests (3.14, arm64)", "Lightweight install (3.10)")
+        and tick "Require branches to be up to date before merging": CI
+        runs on pull requests only, so a PR must be tested against the
+        current <DEFAULT_BRANCH>, not the one it was branched from
       - Block force pushes
 
     Bypass list:
