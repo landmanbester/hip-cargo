@@ -255,3 +255,13 @@ def test_release_tests_run_on_the_newest_ci_python(workflows: Path) -> None:
     setup = [s["with"]["python-version"] for s in test["steps"] if s.get("uses", "").startswith("actions/setup-python")]
     assert test["env"]["UV_PYTHON"] == newest
     assert setup in ([], [newest])
+
+
+@pytest.mark.parametrize(
+    "config", [TEMPLATES / "pre-commit-config.yaml", ROOT / ".pre-commit-config.yaml"], ids=["template", "own"]
+)
+def test_hooks_run_once_per_commit(config: Path) -> None:
+    """With two installed hook types, a hook without ``stages`` would also run again at commit-msg."""
+    data = yaml.safe_load(config.read_text())
+    assert data["default_install_hook_types"] == ["pre-commit", "commit-msg"]
+    assert data["default_stages"] == ["pre-commit"]
