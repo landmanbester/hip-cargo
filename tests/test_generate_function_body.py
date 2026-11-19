@@ -191,6 +191,23 @@ class TestGenerateFunctionBodyWithImage:
         assert "    params = {}" in generate_function_body(cab_def, {}, {})
 
     @pytest.mark.unit
+    @pytest.mark.parametrize(
+        ("name", "inputs", "expected"),
+        [
+            ("grid", {"ms": {"dtype": "MS"}}, None),
+            ("grid", {"typer": {"dtype": "str"}}, "import typer"),
+            ("typer", {"ms": {"dtype": "MS"}}, "import typer as typer_"),
+        ],
+        ids=["unshadowed", "parameter", "command"],
+    )
+    def test_typer_is_reimported_only_when_shadowed(self, name: str, inputs: dict, expected: str | None) -> None:
+        """The module-level ``import typer`` serves the fallback message unless the name is taken."""
+        cab_def = {"command": f"pkg.core.{name}.{name}", "image": "img:latest", "_name": name}
+        code = "\n".join(generate_function_body(cab_def, inputs, {}))
+        imports = [line.strip() for line in code.splitlines() if line.strip().startswith("import typer")]
+        assert [line.split("  #")[0] for line in imports] == ([] if expected is None else [expected])
+
+    @pytest.mark.unit
     def test_hyphenated_names_sanitized(self):
         """Hyphens in param names should be converted to underscores."""
         cab_def = {
