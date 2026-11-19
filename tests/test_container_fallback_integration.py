@@ -4,6 +4,7 @@ Tests the full flow: cab YAML with image → generate function → verify genera
 compiles and the fallback pattern works correctly when dependencies are missing.
 """
 
+import sys
 import tempfile
 from collections.abc import Callable
 from pathlib import Path
@@ -14,6 +15,24 @@ import pytest
 import yaml
 
 from hip_cargo.core.generate_function import generate_function
+
+
+class _RaisingFinder:
+    """Meta-path finder that makes every ``my_pkg`` import raise ``error``."""
+
+    def __init__(self, error: ImportError) -> None:
+        self.error = error
+
+    def find_spec(self, fullname: str, path: Any = None, target: Any = None) -> None:
+        if fullname.split(".")[0] == "my_pkg":
+            raise self.error
+        return None
+
+
+def _without_full_install() -> Any:
+    """Fail ``my_pkg`` imports the way a lightweight install does: naming the dependency."""
+    missing = ModuleNotFoundError("No module named 'numpy'", name="numpy")
+    return patch.object(sys, "meta_path", [_RaisingFinder(missing), *sys.meta_path])
 
 
 def _write_cab_with_image(cab_dir: Path) -> Path:
@@ -107,8 +126,8 @@ class TestGeneratedFallbackCodeStructure:
             # ruff may normalize quotes to double quotes
             assert 'if backend == "native" or backend == "auto":' in code
             assert "try:" in code
-            assert "except ImportError:" in code
-            assert 'if backend == "native":' in code
+            assert "except ImportError as exc:" in code
+            assert 'if backend == "native" or (exc.name or "").split(".")[0] == "my_pkg":' in code
 
             # Verify container fallback imports
             assert "from hip_cargo.utils.config import get_container_image" in code
@@ -216,12 +235,7 @@ class TestFallbackExecutionPath:
 
             # Patch the lazy import to raise ImportError, and mock the fallback
             with (
-                patch.dict(
-                    "sys.modules",
-                    {
-                        "my_pkg": None,  # causes ImportError
-                    },
-                ),
+                _without_full_install(),
                 patch("hip_cargo.utils.config.get_container_image", mock_get_image),
                 patch("hip_cargo.utils.runner.run_in_container", mock_run),
             ):
@@ -255,7 +269,7 @@ class TestFallbackExecutionPath:
             func = namespace["process_data"]
 
             with (
-                patch.dict("sys.modules", {"my_pkg": None}),
+                _without_full_install(),
                 pytest.raises(ImportError),
             ):
                 func(
@@ -282,7 +296,7 @@ class TestFallbackExecutionPath:
             mock_get_image = MagicMock(return_value=None)
 
             with (
-                patch.dict("sys.modules", {"my_pkg": None}),
+                _without_full_install(),
                 patch("hip_cargo.utils.config.get_container_image", mock_get_image),
                 pytest.raises(RuntimeError, match="No Container URL"),
             ):
@@ -382,6 +396,22 @@ class TestFallbackScope:
         mock_run.assert_not_called()
 
     @pytest.mark.integration
+    def test_a_broken_import_inside_the_package_is_raised_not_run_in_a_container(self, tmp_path: Path) -> None:
+        """A renamed symbol in the package's own code is a bug, so ``auto`` must not hide it."""
+        func = _load_generated(_write_cab_with_image(tmp_path), tmp_path)
+        broken = ImportError("cannot import name 'helper' from 'my_pkg.utils'", name="my_pkg.utils")
+        mock_run = MagicMock()
+
+        with (
+            patch.object(sys, "meta_path", [_RaisingFinder(broken), *sys.meta_path]),
+            patch("hip_cargo.utils.runner.run_in_container", mock_run),
+            pytest.raises(ImportError, match="helper"),
+        ):
+            func(input_ms=Path("/data/input.ms"), backend="auto", always_pull_images=False)
+
+        mock_run.assert_not_called()
+
+    @pytest.mark.integration
     def test_import_error_from_remote_preflight_still_falls_back(self, tmp_path: Path) -> None:
         """A missing fsspec backend surfaces in the preflight, before any work: fall back."""
         func = _load_generated(_write_cab_with_image(tmp_path), tmp_path)
@@ -438,7 +468,7 @@ class TestFallbackScope:
         mock_run = MagicMock()
 
         with (
-            patch.dict("sys.modules", {"my_pkg": None}),
+            _without_full_install(),
             patch("hip_cargo.utils.config.get_container_image", MagicMock(return_value="ghcr.io/user/my-pkg:latest")),
             patch("hip_cargo.utils.runner.run_in_container", mock_run),
         ):
@@ -450,7 +480,7 @@ class TestFallbackScope:
 
 
 @pytest.mark.integration
-@pytest.mark.parametrize("command", ["params", "image"])
+@pytest.mark.parametrize("command", ["params", "image", "exc"])
 def test_a_command_named_like_a_wrapper_local_still_dispatches(command: str, tmp_path: Path) -> None:
     """The wrapper refers to itself by name, so its locals must not reuse that name."""
     cab = {
@@ -475,7 +505,7 @@ def test_a_command_named_like_a_wrapper_local_still_dispatches(command: str, tmp
 
     mock_run = MagicMock()
     with (
-        patch.dict("sys.modules", {"my_pkg": None}),
+        _without_full_install(),
         patch("hip_cargo.utils.config.get_container_image", MagicMock(return_value="img:latest")),
         patch("hip_cargo.utils.runner.run_in_container", mock_run),
     ):

@@ -71,8 +71,9 @@ def generate_schemas(
 
             # Pre-flight must_exist for remote URIs before dispatching.
             preflight_remote_must_exist(generate_schemas, params)
-        except ImportError:
-            if backend == "native":
+        except ImportError as exc:
+            # A failed import from this package is a bug, not a missing install.
+            if backend == "native" or (exc.name or "").split(".")[0] == "hip_cargo":
                 raise
         else:
             generate_schemas_core(**params)

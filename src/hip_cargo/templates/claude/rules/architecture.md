@@ -99,8 +99,9 @@ def my_command(...):
             from hip_cargo.utils.runner import preflight_remote_must_exist
             from <PACKAGE_NAME>.core.my_command import my_command as my_command_core
             preflight_remote_must_exist(my_command, params)
-        except ImportError:
-            if backend == "native":
+        except ImportError as exc:
+            # A failed import from this package is a bug, not a missing install.
+            if backend == "native" or (exc.name or "").split(".")[0] == "<PACKAGE_NAME>":
                 raise
         else:
             my_command_core(**params)
@@ -114,14 +115,17 @@ def my_command(...):
 
 Only the imports and the pre-flight sit inside the `try`. The core call runs in
 `else:`, so an `ImportError` raised *during* a run propagates with its real
-traceback instead of re-running the command in a container. Consequences:
+traceback instead of re-running the command in a container. A failed import
+whose module lies in `<PACKAGE_NAME>` itself (a renamed symbol, a deleted module)
+is re-raised too: it is a bug, not a missing install. Consequences:
 
 - **Put heavy imports at module scope in `core/<name>.py`.** A missing `[full]`
   install is only detected when importing `core/` fails. An import deferred into
   the core function body fails mid-run and is reported, not routed to the
   container.
 - **Core parameter names must match the CLI's.** The core function is called
-  with `**params`, keyed by the CLI parameter names.
+  with `**params`, keyed by the CLI parameter names; `tests/test_roundtrip.py`
+  fails when they disagree.
 
 ### How `--backend` flows
 

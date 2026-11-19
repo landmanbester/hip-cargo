@@ -84,8 +84,9 @@ def wrap_demo(
 
             # Pre-flight must_exist for remote URIs before dispatching.
             preflight_remote_must_exist(wrap_demo, params)
-        except ImportError:
-            if backend == "native":
+        except ImportError as exc:
+            # A failed import from this package is a bug, not a missing install.
+            if backend == "native" or (exc.name or "").split(".")[0] == "fixture_pkg":
                 raise
         else:
             wrap_demo_core(**params)
