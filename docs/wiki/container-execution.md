@@ -4,7 +4,7 @@ title: Container execution and image lifecycle
 description: The _container_image.py contract, container fallback runner, GPU passthrough, per-backend run-args, and release tag mechanics.
 tags: [containers, runner, gpu, releases]
 timestamp: 2026-11-19
-last_verified_commit: 1f7327c
+last_verified_commit: 636fdc5
 ---
 
 # Container execution and image lifecycle
@@ -112,8 +112,9 @@ renamed symbol, a deleted module): that is a bug, not a missing install. A
 missing dependency names the dependency and fsspec's missing-backend error has
 no `name`, so both still fall back; the wrapper prints the caught exception
 to stderr first, so a dependency that is installed but unusable (numba
-refusing an unsupported NumPy raises a nameless `ImportError`) shows up. A dependency imported lazily inside `core/`
-still crashes mid-run rather than falling back; deciding from the `full`
+refusing an unsupported NumPy raises a nameless `ImportError`) shows up.
+It imports `typer` locally for that, since a parameter may be named `typer`.
+A dependency imported lazily inside `core/` still crashes mid-run rather than falling back; deciding from the `full`
 extra's metadata instead is tracked in #132. On fallback
 `run_in_container()` reconstructs `sys.argv` from the same `params` and re-runs
 the command in the package's container. Because `params` is bound first, the
