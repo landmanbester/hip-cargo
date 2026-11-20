@@ -226,7 +226,8 @@ def _module_bindings(tree: ast.Module, name: str) -> list[ast.stmt]:
             if any((alias.asname or alias.name.split(".")[0]) == name for alias in node.names):
                 found.append(node)
             continue
-        targets = [node.target] if isinstance(node, ast.AnnAssign) else getattr(node, "targets", [])
+        # A bare annotation (`run: Callable`) binds nothing at run time.
+        targets = [node.target] if isinstance(node, ast.AnnAssign) and node.value else getattr(node, "targets", [])
         if any(isinstance(t, ast.Name) and t.id == name for t in targets):
             found.append(node)
         for field in ("body", "orelse", "finalbody", "handlers"):
