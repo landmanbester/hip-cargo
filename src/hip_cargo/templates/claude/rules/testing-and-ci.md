@@ -32,7 +32,11 @@ The same file checks two contracts the round trip cannot see:
 - `test_the_core_function_accepts_what_the_wrapper_passes`: the wrapper calls
   `<cmd>_core(**params)`, so every CLI parameter name must be a parameter of the
   core function, and every core parameter without a default must come from the
-  CLI. It parses `core/` with `ast`, so heavy imports are not needed.
+  CLI. It parses `core/` with `ast`, so heavy imports are not needed. A
+  generated import whose module or function no longer exists fails the test;
+  it skips only a hand-written wrapper, a core function from another package,
+  or one that `core/<cmd>.py` re-exports, aliases or defines conditionally
+  (e.g. in a `try`/`except ImportError`) rather than with a single `def`.
 - `test_every_cab_command_is_registered_on_the_cli`: a cab command missing from
   `cli/__init__.py` round-trips fine but is invisible on the CLI. This one
   imports the CLI app, which the lightweight install provides.

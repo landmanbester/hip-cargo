@@ -186,7 +186,7 @@ def test_pin_precommit_ruff_uses_the_locked_version(tmp_path: Path) -> None:
     assert "    rev: v0.17.5\n  - repo: https://github.com/pre-commit/pre-commit-hooks\n    rev: v5.0.0\n" in text
 
 
-def _contract_project(tmp_path: Path, core_signature: str, register: bool) -> Path:
+def _contract_project(tmp_path: Path, core_source: str | None, register: bool) -> Path:
     """A one-command project with a generated wrapper, for the template's contract checks."""
     from hip_cargo.core.generate_function import generate_function
     from hip_cargo.core.init import TEMPLATES_DIR, _apply_substitutions
@@ -208,7 +208,8 @@ def _contract_project(tmp_path: Path, core_signature: str, register: bool) -> Pa
         "    outputs: {}\n"
     )
     generate_function(pkg / "cabs" / "run.yml", output_file=pkg / "cli" / "run.py")
-    (pkg / "core" / "run.py").write_text(f"def run({core_signature}):\n    pass\n")
+    if core_source is not None:
+        (pkg / "core" / "run.py").write_text(core_source)
     registration = 'app.command(name="run")(run)\n' if register else ""
     (pkg / "cli" / "__init__.py").write_text(
         f"import typer\n\napp = typer.Typer()\n\nfrom demo.cli.run import run  # noqa: E402\n\n{registration}"
@@ -222,23 +223,52 @@ def _contract_project(tmp_path: Path, core_signature: str, register: bool) -> Pa
     return tmp_path
 
 
+def _core(signature: str) -> str:
+    return f"def run({signature}):\n    pass\n"
+
+
 @pytest.mark.parametrize(
-    ("core_signature", "register", "failure"),
+    ("core_source", "register", "outcome"),
     [
-        ("x, y='a'", True, None),
-        ("x, **kwargs", True, None),
-        ("x, y, z", True, "requires ['z']"),
-        ("x", True, "does not accept ['y']"),
-        ("x, /, y='a'", True, "positional-only"),
-        ("x, y='a'", False, "not registered in cli/__init__.py: ['run']"),
+        (_core("x, y='a'"), True, "2 passed"),
+        (_core("x, **kwargs"), True, "2 passed"),
+        ("from demo.core._impl import run  # noqa: F401\n", True, "1 passed, 1 skipped"),
+        ("from collections.abc import Callable\n\nrun: Callable[..., None] = print\n", True, "1 passed, 1 skipped"),
+        (
+            "try:\n    from demo.core._fast import run\nexcept ImportError:\n\n    def run(x, y='a'):\n        pass\n",
+            True,
+            "1 passed, 1 skipped",
+        ),
+        ("from collections.abc import Callable\n\nrun: Callable[..., None]\n", True, "which does not define it"),
+        ("if True:\n\n    def run(x, y='a'):\n        pass\n", True, "2 passed"),
+        (_core("x, y, z"), True, "requires ['z']"),
+        (_core("x"), True, "does not accept ['y']"),
+        (_core("x, /, y='a'"), True, "positional-only"),
+        (None, True, "imports run from demo.core.run, which does not exist"),
+        (_core("x, y='a'").replace("def run", "def walk"), True, "which does not define it"),
+        (_core("x, y='a'"), False, "not registered in cli/__init__.py: ['run']"),
     ],
-    ids=["binds", "var-kwargs", "missing-required", "unexpected", "positional-only", "unregistered"],
+    ids=[
+        "binds",
+        "var-kwargs",
+        "re-exported",
+        "annotated-alias",
+        "conditional",
+        "bare-annotation",
+        "nested-def",
+        "missing-required",
+        "unexpected",
+        "positional-only",
+        "stale-module",
+        "stale-function",
+        "unregistered",
+    ],
 )
 def test_template_contract_checks_fail_on_a_broken_contract(
-    tmp_path: Path, core_signature: str, register: bool, failure: str | None
+    tmp_path: Path, core_source: str | None, register: bool, outcome: str
 ) -> None:
     """The scaffold only exercises ``onboard`` (no parameters, registered), so prove the checks can fail."""
-    project = _contract_project(tmp_path, core_signature, register)
+    project = _contract_project(tmp_path, core_source, register)
     result = subprocess.run(
         [
             sys.executable,
@@ -257,9 +287,5 @@ def test_template_contract_checks_fail_on_a_broken_contract(
         text=True,
     )
     output = result.stdout + result.stderr
-    if failure is None:
-        assert result.returncode == 0, output
-        assert "2 passed" in output, output
-    else:
-        assert result.returncode == 1, output
-        assert failure in output, output
+    assert result.returncode == (0 if "passed" in outcome else 1), output
+    assert outcome in output, output
