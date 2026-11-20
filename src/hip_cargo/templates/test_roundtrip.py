@@ -148,7 +148,10 @@ def test_the_committed_cli_is_what_generate_function_emits(command: str, tmp_pat
 def _core_binding(command: str) -> tuple[set[str], ast.FunctionDef] | None:
     """The keys the wrapper passes as ``**params`` and the core function it calls.
 
-    None when the wrapper is not in the generated shape (a hand-written command).
+    None when the wrapper is not in the generated shape (a hand-written command),
+    or when the core function lives outside this package or is re-exported rather
+    than defined. Fails when the generated import points at a module or function
+    that does not exist: a stale import must not turn the check into a skip.
     """
     wrapper = _cab_function(CLI_DIR / f"{command}.py")
     if wrapper is None:
@@ -192,20 +195,25 @@ def _core_binding(command: str) -> tuple[set[str], ast.FunctionDef] | None:
     if keys is None or source is None:
         return None
     module, name = source
+    if module.split(".")[0] != CLI_DIR.parent.name:
+        return None
     core_file = REPO_ROOT / "src" / f"{module.replace('.', '/')}.py"
     if not core_file.is_file():
         core_file = core_file.with_suffix("") / "__init__.py"
     if not core_file.is_file():
-        return None
-    core = next(
-        (
-            node
-            for node in ast.parse(core_file.read_text()).body
-            if isinstance(node, ast.FunctionDef) and node.name == name
-        ),
-        None,
+        pytest.fail(f"{command} imports {name} from {module}, which does not exist")
+    body = ast.parse(core_file.read_text()).body
+    core = next((node for node in body if isinstance(node, ast.FunctionDef) and node.name == name), None)
+    if core is not None:
+        return keys, core
+    reexported = any(
+        (isinstance(node, ast.ImportFrom) and any((alias.asname or alias.name) == name for alias in node.names))
+        or (isinstance(node, ast.Assign) and any(isinstance(t, ast.Name) and t.id == name for t in node.targets))
+        for node in body
     )
-    return (keys, core) if core is not None else None
+    if reexported:
+        return None
+    pytest.fail(f"{command} imports {name} from {module}, which does not define it")
 
 
 @pytest.mark.parametrize("command", COMMANDS)
