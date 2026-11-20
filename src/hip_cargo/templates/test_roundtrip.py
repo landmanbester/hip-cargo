@@ -202,18 +202,36 @@ def _core_binding(command: str) -> tuple[set[str], ast.FunctionDef] | None:
         core_file = core_file.with_suffix("") / "__init__.py"
     if not core_file.is_file():
         pytest.fail(f"{command} imports {name} from {module}, which does not exist")
-    body = ast.parse(core_file.read_text()).body
-    core = next((node for node in body if isinstance(node, ast.FunctionDef) and node.name == name), None)
-    if core is not None:
-        return keys, core
-    reexported = any(
-        (isinstance(node, ast.ImportFrom) and any((alias.asname or alias.name) == name for alias in node.names))
-        or (isinstance(node, ast.Assign) and any(isinstance(t, ast.Name) and t.id == name for t in node.targets))
-        for node in body
-    )
-    if reexported:
+    bindings = _module_bindings(ast.parse(core_file.read_text()), name)
+    if not bindings:
+        pytest.fail(f"{command} imports {name} from {module}, which does not define it")
+    core = bindings[0]
+    # A re-export, an alias or a conditional definition cannot be followed with ast.
+    if len(bindings) > 1 or not isinstance(core, ast.FunctionDef):
         return None
-    pytest.fail(f"{command} imports {name} from {module}, which does not define it")
+    return keys, core
+
+
+def _module_bindings(tree: ast.Module, name: str) -> list[ast.stmt]:
+    """Module-scope statements that bind ``name``, including inside ``if``/``try``/``with`` blocks."""
+    found = []
+    pending = list(tree.body)
+    while pending:
+        node = pending.pop(0)
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            if node.name == name:
+                found.append(node)
+            continue
+        if isinstance(node, (ast.Import, ast.ImportFrom)):
+            if any((alias.asname or alias.name.split(".")[0]) == name for alias in node.names):
+                found.append(node)
+            continue
+        targets = [node.target] if isinstance(node, ast.AnnAssign) else getattr(node, "targets", [])
+        if any(isinstance(t, ast.Name) and t.id == name for t in targets):
+            found.append(node)
+        for field in ("body", "orelse", "finalbody", "handlers"):
+            pending.extend(getattr(node, field, []))
+    return found
 
 
 @pytest.mark.parametrize("command", COMMANDS)

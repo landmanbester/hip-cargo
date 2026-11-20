@@ -35,7 +35,8 @@ The same file checks two contracts the round trip cannot see:
   CLI. It parses `core/` with `ast`, so heavy imports are not needed. A
   generated import whose module or function no longer exists fails the test;
   it skips only a hand-written wrapper, a core function from another package,
-  or one re-exported rather than defined in `core/<cmd>.py`.
+  or one that `core/<cmd>.py` re-exports, aliases or defines conditionally
+  (e.g. in a `try`/`except ImportError`) rather than with a single `def`.
 - `test_every_cab_command_is_registered_on_the_cli`: a cab command missing from
   `cli/__init__.py` round-trips fine but is invisible on the CLI. This one
   imports the CLI app, which the lightweight install provides.
