@@ -367,9 +367,12 @@ def generate_function(cab_file: Path, output_file: Path, config_file: Path | Non
     # Run ruff from the config file's directory so it infers first-party imports correctly
     ruff_cwd = None
     if config_file:
-        check_cmd.extend(["--config", str(config_file)])
-        format_cmd.extend(["--config", str(config_file)])
-        ruff_cwd = str(Path(config_file).resolve().parent)
+        # Absolute, because ruff runs from the config's directory: a relative path
+        # would be resolved twice and miss, silently skipping formatting.
+        config_path = Path(config_file).resolve()
+        check_cmd.extend(["--config", str(config_path)])
+        format_cmd.extend(["--config", str(config_path)])
+        ruff_cwd = str(config_path.parent)
 
     try:
         # First Pass: Lint and Fix

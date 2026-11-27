@@ -181,9 +181,11 @@ def _ruff_format(source: str, config_file: Path | None) -> str:
     format_cmd = ["ruff", "format", "--stdin-filename", "schema.py", "-"]
     cwd = None
     if config_file is not None:
-        check_cmd.extend(["--config", str(config_file)])
-        format_cmd.extend(["--config", str(config_file)])
-        cwd = str(Path(config_file).resolve().parent)
+        # Absolute, because ruff runs from the config's directory (see generate_function).
+        config_path = Path(config_file).resolve()
+        check_cmd.extend(["--config", str(config_path)])
+        format_cmd.extend(["--config", str(config_path)])
+        cwd = str(config_path.parent)
 
     try:
         lint = subprocess.run(check_cmd, input=source, capture_output=True, text=True, check=True, cwd=cwd)
