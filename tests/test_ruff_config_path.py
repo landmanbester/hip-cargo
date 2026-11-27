@@ -1,19 +1,22 @@
 """A relative ruff config path must work from any working directory.
 
 Both generators run ruff from the config file's directory, so the path they pass
-to ``--config`` has to be absolute; a relative one used to miss and silently
-skip formatting.
+to ``--config`` has to be absolute; a relative one used to miss and leave the code
+unformatted with only a warning. A remote config is rejected outright.
 """
 
 import warnings
 from pathlib import Path
 
 import pytest
+from upath import UPath
 
 from hip_cargo.core.generate_function import generate_function
-from hip_cargo.core.generate_schemas import _ruff_format
+from hip_cargo.core.generate_schemas import _ruff_format, generate_schemas
 
-CAB = Path(__file__).parents[1] / "src" / "hip_cargo" / "cabs" / "generate_cabs.yml"
+REPO = Path(__file__).parents[1]
+CAB = REPO / "src" / "hip_cargo" / "cabs" / "generate_cabs.yml"
+FIXTURE_CLI = REPO / "tests" / "fixtures" / "src" / "fixture_pkg" / "cli" / "tunable_demo.py"
 
 
 @pytest.fixture
@@ -67,3 +70,22 @@ def test_generate_function_warns_when_the_config_directory_is_missing(tmp_path: 
     with pytest.warns(UserWarning, match="ruff failed"):
         generate_function(CAB, output_file=output, config_file=tmp_path / "nope" / "pyproject.toml")
     assert output.exists()
+
+
+@pytest.mark.parametrize("uri", ["memory://configs/pyproject.toml", "s3://bucket/pyproject.toml"])
+def test_a_remote_config_is_rejected_before_any_output(uri: str, tmp_path: Path) -> None:
+    """ruff reads only local files, so a remote config is an error, not an unformatted fallback."""
+    output = tmp_path / "out.py"
+    with pytest.raises(ValueError, match="must be a local file"):
+        generate_function(CAB, output_file=output, config_file=UPath(uri))
+    assert not output.exists()
+    with pytest.raises(ValueError, match="must be a local file"):
+        generate_schemas([FIXTURE_CLI], output_dir=tmp_path / "schemas", config_file=UPath(uri))
+    assert not (tmp_path / "schemas").exists()
+
+
+def test_a_file_uri_config_is_read_as_a_local_path(relative_config: Path) -> None:
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        uri = UPath(relative_config.absolute().as_uri())
+        assert _ruff_format("x = 'a'\n", config_file=uri) == 'x = "a"\n'
