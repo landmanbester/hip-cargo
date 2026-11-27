@@ -45,3 +45,25 @@ def test_generate_schemas_formats_with_a_relative_config(relative_config: Path) 
     with warnings.catch_warnings():
         warnings.simplefilter("error")
         assert _ruff_format("x = 'a'\n", config_file=relative_config) == 'x = "a"\n'
+
+
+def test_a_symlinked_config_keeps_its_relative_extend(tmp_path: Path) -> None:
+    """The config is passed as given, not resolved, so `extend` is read next to the link."""
+    real = tmp_path / "real"
+    real.mkdir()
+    (real / "ruff.toml").write_text('extend = "base.toml"\n')
+    project = tmp_path / "project"
+    project.mkdir()
+    (project / "base.toml").write_text('[format]\nquote-style = "double"\n')
+    (project / "ruff.toml").symlink_to(real / "ruff.toml")
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        assert _ruff_format("x = 'a'\n", config_file=project / "ruff.toml") == 'x = "a"\n'
+
+
+def test_generate_function_warns_when_the_config_directory_is_missing(tmp_path: Path) -> None:
+    """A config in a missing directory is an invalid ruff cwd; fall back with a warning, don't crash."""
+    output = tmp_path / "out.py"
+    with pytest.warns(UserWarning, match="ruff failed"):
+        generate_function(CAB, output_file=output, config_file=tmp_path / "nope" / "pyproject.toml")
+    assert output.exists()

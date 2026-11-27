@@ -181,8 +181,9 @@ def _ruff_format(source: str, config_file: Path | None) -> str:
     format_cmd = ["ruff", "format", "--stdin-filename", "schema.py", "-"]
     cwd = None
     if config_file is not None:
-        # Absolute, because ruff runs from the config's directory (see generate_function).
-        config_path = Path(config_file).resolve()
+        # Absolute but not resolved, because ruff runs from the config's directory
+        # (see generate_function).
+        config_path = Path(config_file).absolute()
         check_cmd.extend(["--config", str(config_path)])
         format_cmd.extend(["--config", str(config_path)])
         cwd = str(config_path.parent)

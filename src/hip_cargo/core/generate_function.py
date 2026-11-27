@@ -368,8 +368,11 @@ def generate_function(cab_file: Path, output_file: Path, config_file: Path | Non
     ruff_cwd = None
     if config_file:
         # Absolute, because ruff runs from the config's directory: a relative path
-        # would be resolved twice and miss, silently skipping formatting.
-        config_path = Path(config_file).resolve()
+        # would be read against that directory and miss, leaving the code
+        # unformatted with only a warning. absolute(), not resolve(): a symlinked
+        # config keeps its own location, so its relative `extend` and the
+        # first-party root stay where the user put them.
+        config_path = Path(config_file).absolute()
         check_cmd.extend(["--config", str(config_path)])
         format_cmd.extend(["--config", str(config_path)])
         ruff_cwd = str(config_path.parent)
@@ -400,6 +403,10 @@ def generate_function(cab_file: Path, output_file: Path, config_file: Path | Non
     except subprocess.CalledProcessError as e:
         warnings.warn("Code formatting with ruff failed; using unformatted code. Error details:\n" + e.stderr)
         formatted_code = function_code  # Fallback to unformatted code
+    except OSError as e:
+        # ruff missing, or the config's directory does not exist (invalid cwd)
+        warnings.warn(f"Code formatting with ruff failed; using unformatted code: {e}")
+        formatted_code = function_code
 
     if output_file:
         output_file.parent.mkdir(parents=True, exist_ok=True)
