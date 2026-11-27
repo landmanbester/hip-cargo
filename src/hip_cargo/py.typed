@@ -1,0 +1,5 @@
+# PEP 561 marker: hip_cargo ships inline type hints. Its presence in the wheel
+# lets mypy and pyright check code that imports hip_cargo (decorators, path
+# types, parsers) against those hints, instead of treating the package as
+# untyped (Any). Type checkers only test whether this file exists; keep this
+# comment free of the word that marks a stub-only package.

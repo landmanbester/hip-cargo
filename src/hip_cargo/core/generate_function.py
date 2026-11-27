@@ -15,7 +15,31 @@ from hip_cargo.utils.cab_to_function import (
     generate_parameter_signature,
     split_info_at_periods,
 )
+from hip_cargo.utils.runner import _is_remote_upath
 from hip_cargo.utils.yaml_comments import extract_yaml_comments
+
+
+def ruff_config_path(config_file: Path) -> Path:
+    """Return a ruff config as the absolute local path ruff's ``--config`` and ``cwd`` need.
+
+    Absolute, because ruff runs from the config's directory: a relative path would
+    be read against that directory and miss, leaving the code unformatted with only
+    a warning. ``absolute()``, not ``resolve()``: a symlinked config keeps its own
+    location, so its relative ``extend`` and the first-party root stay where the
+    user put them. A ``file://`` UPath becomes its local path.
+
+    Args:
+        config_file: The ruff config (``pyproject.toml`` or ``ruff.toml``).
+
+    Returns:
+        The config's absolute path.
+
+    Raises:
+        ValueError: If ``config_file`` is a remote URI; ruff reads only local files.
+    """
+    if _is_remote_upath(config_file):
+        raise ValueError(f"The ruff config must be a local file; ruff cannot read {config_file}")
+    return Path(config_file).absolute()
 
 
 def generate_function(cab_file: Path, output_file: Path, config_file: Path | None = None) -> None:
@@ -29,8 +53,10 @@ def generate_function(cab_file: Path, output_file: Path, config_file: Path | Non
 
     Raises:
         FileNotFoundError: If the cab file doesn't exist
-        ValueError: If the cab file is invalid
+        ValueError: If the cab file is invalid, or ``config_file`` is a remote URI
     """
+    # Check the config first, so a remote one fails before any work is done.
+    config_path = ruff_config_path(config_file) if config_file else None
 
     if not isinstance(cab_file, Path):
         cab_file = Path(cab_file)
@@ -366,10 +392,10 @@ def generate_function(cab_file: Path, output_file: Path, config_file: Path | Non
 
     # Run ruff from the config file's directory so it infers first-party imports correctly
     ruff_cwd = None
-    if config_file:
-        check_cmd.extend(["--config", str(config_file)])
-        format_cmd.extend(["--config", str(config_file)])
-        ruff_cwd = str(Path(config_file).resolve().parent)
+    if config_path:
+        check_cmd.extend(["--config", str(config_path)])
+        format_cmd.extend(["--config", str(config_path)])
+        ruff_cwd = str(config_path.parent)
 
     try:
         # First Pass: Lint and Fix
@@ -397,6 +423,10 @@ def generate_function(cab_file: Path, output_file: Path, config_file: Path | Non
     except subprocess.CalledProcessError as e:
         warnings.warn("Code formatting with ruff failed; using unformatted code. Error details:\n" + e.stderr)
         formatted_code = function_code  # Fallback to unformatted code
+    except OSError as e:
+        # ruff missing, or the config's directory does not exist (invalid cwd)
+        warnings.warn(f"Code formatting with ruff failed; using unformatted code: {e}")
+        formatted_code = function_code
 
     if output_file:
         output_file.parent.mkdir(parents=True, exist_ok=True)

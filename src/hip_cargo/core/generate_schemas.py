@@ -14,6 +14,7 @@ import subprocess
 import warnings
 from pathlib import Path
 
+from hip_cargo.core.generate_function import ruff_config_path
 from hip_cargo.utils.introspector import parse_module
 from hip_cargo.utils.spec import CommandSpec, ParamSpec
 from hip_cargo.utils.types import parse_list_float, parse_list_int, parse_list_str
@@ -176,14 +177,18 @@ def _ruff_format(source: str, config_file: Path | None) -> str:
 
     Falls back to the unformatted source on subprocess failure (with a
     warning) so generation never silently fails.
+
+    Raises:
+        ValueError: If ``config_file`` is a remote URI; ruff reads only local files.
     """
     check_cmd = ["ruff", "check", "--fix", "--stdin-filename", "schema.py", "-"]
     format_cmd = ["ruff", "format", "--stdin-filename", "schema.py", "-"]
     cwd = None
     if config_file is not None:
-        check_cmd.extend(["--config", str(config_file)])
-        format_cmd.extend(["--config", str(config_file)])
-        cwd = str(Path(config_file).resolve().parent)
+        config_path = ruff_config_path(config_file)
+        check_cmd.extend(["--config", str(config_path)])
+        format_cmd.extend(["--config", str(config_path)])
+        cwd = str(config_path.parent)
 
     try:
         lint = subprocess.run(check_cmd, input=source, capture_output=True, text=True, check=True, cwd=cwd)
@@ -214,7 +219,11 @@ def generate_schemas(
     Raises:
         TunableTypeError: If any tunable parameter has an unsupported type.
         RuntimeError: If module paths are invalid or yield no files.
+        ValueError: If ``config_file`` is a remote URI; ruff reads only local files.
     """
+    # Check the config first, so a remote one fails before any work is done.
+    if config_file is not None:
+        ruff_config_path(config_file)
     modlist: list[Path] = []
     for modpath in module:
         modpath = Path(modpath)
