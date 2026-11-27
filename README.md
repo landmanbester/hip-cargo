@@ -300,7 +300,8 @@ To associate the container image with your repository:
 ### 5. Using the Container with `stimela`
 
 Once published, users should be able to simply include the cab definitions in their recipes.
-This only requires installing the lightweight version of the package, so it shouldn't clash with any other packages, in particular `stimela` and `cult-cargo`.
+This only requires installing the lightweight version of the package, which depends on none of `stimela`, `cult-cargo` or `pydantic`, so it doesn't constrain them.
+The exception is an environment that also needs Pydantic 2 (see [Installing alongside `stimela` and `cult-cargo` with Pydantic 2](#installing-alongside-stimela-and-cult-cargo-with-pydantic-2)).
 Use the following syntax to include a cab in a recipe
 ```yaml
 _include:
@@ -314,6 +315,35 @@ If the lightweight version if the package is installed it should be possible to 
 ```python
 stimela run 'mypackage.recipes::killer_recipe.yml' recipe_name option1=option1...
 ```
+
+#### Installing alongside `stimela` and `cult-cargo` with Pydantic 2
+
+The latest stable `stimela` (2.1.4) requires `pydantic<2`. Anything that needs Pydantic 2 in the same environment therefore conflicts with it. That includes the schemas `generate-schemas` emits (and `pydantic-ai`, which consumes them), as well as `fastapi` and `pydantic-settings`. See [caracal-pipeline/stimela#609](https://github.com/caracal-pipeline/stimela/issues/609).
+
+Checked with `uv` on 2026-11-27 (Python 3.11):
+
+| Requirements | Resolves to | Result |
+|---|---|---|
+| `stimela cult-cargo "pydantic>=2"` | stimela 1.8.4, cult-cargo 0.0.1 | Silently ancient |
+| `--prerelease=allow stimela cult-cargo "pydantic>=2"` | stimela 2.2.0rc1, cult-cargo 0.3.0rc0, scabha 2.2.0rc4 | Broken: cult-cargo's cabs fail to load (`config error at cabs.pfb.degrid`, [cult-cargo#175](https://github.com/caracal-pipeline/cult-cargo/issues/175)). The fix is not in 0.3.0rc0. |
+| `--prerelease=allow stimela cult-cargo "pydantic>=2" "scabha<2.2.0rc4"` | stimela 2.2.0rc1, cult-cargo 0.3.0rc0, scabha 2.2.0rc2 | Works |
+
+So allow pre-releases and keep `scabha` below `2.2.0rc4`:
+
+```bash
+uv pip install --prerelease=allow stimela cult-cargo "scabha<2.2.0rc4" "pydantic>=2"
+```
+
+or, in a project's `pyproject.toml`:
+
+```toml
+[tool.uv]
+prerelease = "allow"
+constraint-dependencies = ["scabha<2.2.0rc4"]
+```
+
+Revisit this once `stimela` 2.2 and a `cult-cargo` release that includes the fix are out.
+`hip-cargo generate-schemas` itself does not need Pydantic installed; only the code that imports the generated schemas does.
 
 ## Type Inference
 
@@ -376,6 +406,7 @@ class TunableDemoTunables(BaseModel):
 ```
 
 These models are designed to be passed as `output_type` to a [`pydantic-ai`](https://ai.pydantic.dev/) agent so an LLM can emit structured, validated tuning proposals.
+Code that imports them needs Pydantic 2. To install that next to `stimela` and `cult-cargo`, see [Installing alongside `stimela` and `cult-cargo` with Pydantic 2](#installing-alongside-stimela-and-cult-cargo-with-pydantic-2).
 
 ### Allowed tunable types
 
