@@ -23,7 +23,7 @@ body = """
 {% for group, commits in commits | group_by(attribute="group") %}
     ### {{ group | striptags | trim }}
     {% for commit in commits %}
-        - {% if commit.scope %}**{{ commit.scope }}**: {% endif %}{{ commit.message | upper_first }}\
+        - {% if commit.breaking %}**BREAKING:** {% endif %}{% if commit.scope %}**{{ commit.scope }}**: {% endif %}{{ commit.message | split(pat="\n") | first | trim | upper_first }}\
           {% if commit.remote.pr_number %} ([#{{ commit.remote.pr_number }}]({{ self::remote_url() }}/pull/{{ commit.remote.pr_number }})){% endif %}\
     {% endfor %}
 {% endfor %}
@@ -54,6 +54,15 @@ trim = true
 conventional_commits = true
 filter_unconventional = false
 split_commits = false
+# Unconventional commits (kept by filter_unconventional = false) carry their whole
+# message, which for a squash merge can run to hundreds of lines; the body template
+# renders only the first line. The body is not stripped here, because git-cliff
+# parses after preprocessing and a `BREAKING CHANGE:` footer must survive.
+commit_preprocessors = [
+    # GitHub appends "(#N)" to squash-merge subjects; the body template already
+    # links the PR, so drop the bare reference to avoid doubling it.
+    { pattern = "(?m) \\(#[0-9]+\\)$", replace = "" },
+]
 commit_parsers = [
     { message = "^feat", group = "Added" },
     { message = "^fix", group = "Fixed" },
@@ -73,7 +82,9 @@ commit_parsers = [
     # Catch-all for non-conventional commits
     { message = ".*", group = "Other" },
 ]
-protect_breaking_commits = false
+# A breaking commit (`type!:` or a `BREAKING CHANGE:` footer) is never dropped by a
+# skip parser, and the body template prefixes it with **BREAKING:**.
+protect_breaking_commits = true
 filter_commits = false
 tag_pattern = "v[0-9].*"
 skip_tags = ""
